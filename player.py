@@ -46,55 +46,175 @@ def popularity_tier(p: float) -> str:
     if p >= 0.20: return "Obscure"
     return "Unknown"
 
+def durability_label(d: float) -> str:
+    if d >= 0.88: return "Iron"
+    if d >= 0.75: return "Sturdy"
+    if d >= 0.62: return "Average"
+    return "Glass"
+
 # ── Name generator ────────────────────────────────────────────────────────────
 
-_FIRST = [
+_FIRST_MALE = [
+    # North American
     "Marcus", "Tyler", "Deon", "Jamison", "Kevin", "Andre", "Chris",
-    "DeShawn", "Malik", "Jordan", "Anthony", "Brandon", "Trevor", "Kyle",
-    "Isaiah", "Darius", "Corey", "Terrell", "Ryan", "Justin", "Aaron",
-    "Derrick", "Lance", "Marvin", "Todd", "Keith", "Gary", "Eric",
-    "DaQuan", "Tremaine", "Javon", "Kofi", "Aleksei", "Luka", "Mateo",
-    "Dante", "Elijah", "Zion", "Cade", "Scottie", "Miles", "Tyrese",
-    "Jaylen", "Donovan", "Shai", "Franz", "Moritz", "Precious", "Tari",
-    "Dyson", "Hamidou", "Obi", "Jalen", "Evan", "Nassir", "Naz",
-    "Keegan", "Ochai", "Bennedict", "Wendell", "Tre", "Goga", "Alperen",
-    "Luguentz", "Mamadi", "Bol", "Sekou", "Killian", "Leandro", "Bruno",
+    "DeShawn", "Malik", "Anthony", "Brandon", "Trevor", "Isaiah", "Darius",
+    "Corey", "Terrell", "Justin", "Aaron", "Derrick", "Lance", "Marvin",
+    "Todd", "Keith", "Gary", "Eric", "DaQuan", "Tremaine", "Javon", "Kofi",
+    "DeAndre", "Jarrett", "Draymond", "Jaylen", "Donovan", "Tyrese",
+    "Tre", "Wendell", "Ochai", "Bennedict", "Keegan", "Nassir", "Naz",
+    "Jalen", "Obi", "Hamidou", "Dyson", "Tari", "Precious", "Scottie",
+    "Cade", "Zion", "Elijah", "Dante", "Miles", "Dominique", "Travis",
+    "Davion", "Amen", "Scoot", "Ausar", "Jabari", "Jalen", "Keyonte",
+    "Bilal", "Cam", "Jerami", "Kira", "Luguentz", "Mamadi", "Sekou",
+    "Xavier", "Alonzo", "Rajon", "Chauncey", "Monta", "Amar'e", "Udonis",
+    "Thaddeus", "Joakim", "Luol", "Serge", "Bismack", "Clint", "Gorgui",
+    # European / International
+    "Luka", "Aleksei", "Mateo", "Franz", "Moritz", "Goga", "Alperen",
+    "Killian", "Leandro", "Bruno", "Shai", "Bol", "Deni", "Nikola",
+    "Jusuf", "Bojan", "Bogdan", "Nemanja", "Vladimir", "Milos", "Vasilije",
+    "Danilo", "Kristaps", "Rodions", "Lauri", "Svi", "Mateusz", "Domas",
+    "Jonas", "Ivica", "Ante", "Mario", "Goran", "Ricky", "Rudy", "Evan",
+    "Theis", "Maxi", "Isaiah", "Usman", "Nerlens", "Cheick", "Moussa",
+    # Asian — East Asian, South Asian, Southeast Asian
+    "Yuki", "Rui", "Kai", "Wei", "Jae", "Sung", "Jin", "Hiro",
+    "Kei", "Takuma", "Daiki", "Yuta", "Satoshi", "Ren", "Kenji",
+    "Jun", "Tao", "Zhen", "Mingyu", "Seung", "Doyeon", "Hyun",
+    "Rohan", "Arjun", "Vikram", "Preet", "Kiran", "Raj", "Dev",
+    "Thanh", "Minh", "Linh", "Khoa",
+    # Latin American
+    "Carlos", "Diego", "Juan", "Rafael", "Luis", "Alejandro", "Sergio",
+    "Pablo", "Thiago", "Facundo", "Gonzalo", "Eduardo", "Ricardo",
+    "Gabriel", "Braian", "Nicolás", "Cristian",
+    # East / Horn of Africa
+    "Dawit", "Tesfaye", "Yonas", "Belay", "Abdi", "Otieno", "Kamau",
+    "Emeka", "Hakim", "Karim", "Ndidi",
+]
+
+_FIRST_FEMALE = [
+    # North American
+    "Breanna", "Diana", "Maya", "Candace", "Elena", "Brittney", "Nneka",
+    "Jonquel", "Arike", "Napheesa", "Chiney", "Chelsea", "Kelsey", "Tina",
+    "Tamika", "Chamique", "Lisa", "Cynthia", "Tasha", "Jasmine", "Alicia",
+    "Monique", "Imani", "Simone", "Alexis", "Brianna", "Aaliyah", "Riquna",
+    "Betnijah", "Teaira", "Destinee", "Layshia", "Essence", "Lexie",
+    "Chennedy", "Dearica", "Aerial", "Crystal", "Kayla", "Kiara", "Tiara",
+    "Sierra", "Amaya", "Nyla", "Kyla", "Liz", "Rhyne", "A'ja", "Azurá",
+    "Sylvia", "Kylee", "Cierra", "Shakia", "Kia", "Reshanda", "Shakira",
+    "Dominique", "Didi", "Tanisha", "LaToya", "Swin", "Seimone", "Cheyenne",
+    "Odyssey", "Kalani", "Deja", "Alysha", "Lexie", "Allisha", "Aerial",
+    "Michaela", "Natasha", "Stefanie", "Isabelle", "Marina", "Sandrine",
+    "Sabrina", "Erica", "Tiffany", "Courtney", "Tierra", "Roneeka",
+    "Kristi", "Jantel", "Nnemkadi", "Reshanda", "Marissa", "Danielle",
+    "Destinee", "Alana", "Kalani", "Leilani", "Asjha", "Ivory", "Epiphanny",
+    # International
+    "Sika", "Astou", "Awak", "Éva", "Sandrine", "Cayla", "Endy",
+    "Clarissa", "Gabby", "Marine", "Marième", "Sonja", "Jonquel",
+    "Stephanie", "Kiah", "Colleen", "Jenna", "Laia", "Ezi", "Shakyla",
+    # Asian — East Asian, South Asian, Southeast Asian
+    "Yuna", "Miku", "Hana", "Sora", "Aoi", "Mei", "Rin", "Yui",
+    "Jiyeon", "Sooyeon", "Hyuna", "Chaeyoung", "Jisoo", "Minji",
+    "Lan", "Huong", "Tuyen", "Bao", "Linh", "Phuong",
+    "Priya", "Ananya", "Divya", "Neha", "Pooja", "Riya", "Shreya",
+    "Xiu", "Fang", "Yanmei", "Ying", "Zhen",
+    # Latin American
+    "Valentina", "Camila", "Gabriela", "Fernanda", "Mariana", "Juliana",
+    "Daniela", "Leticia", "Bruna", "Carolina", "Tatiana", "Raquel",
+    "Adriana", "Luciana", "Sofia",
+    # East / Horn of Africa
+    "Tigist", "Hiwot", "Selam", "Meron", "Adaeze", "Ngozi",
+    "Wanjiru", "Achieng", "Ifunanya", "Amara",
+]
+
+_FIRST_SWING = [
+    "Jordan", "Taylor", "Cameron", "Riley", "Devon", "Morgan", "Quinn",
+    "Avery", "Peyton", "Skylar", "Kendall", "Reese", "Dana", "Jamie",
+    "Harley", "Sidney", "Ryan", "Kyle", "Chris", "Pat",
+    "Alex", "Drew", "Casey", "Sage", "Emery", "Lennon", "Remy", "Rowan",
+    "Finley", "Parker", "Hayden", "Blake", "Shea", "Bryn", "Dylan", "Logan",
+    "River", "Tatum", "Oakley", "Haven",
 ]
 
 _LAST_REAL = [
+    # Common American surnames
     "Johnson", "Williams", "Davis", "Thompson", "Anderson", "Jackson",
     "Harris", "Martin", "Thomas", "White", "Robinson", "Walker",
     "Mitchell", "Carter", "Morgan", "Collins", "Richardson", "Howard",
     "Taylor", "Moore", "Hall", "Allen", "Young", "Green", "Adams",
     "Baker", "Nelson", "Hill", "Wright", "Scott", "Washington",
+    # Additional common American surnames
+    "James", "Brown", "Jones", "Miller", "Wilson", "Evans", "Turner",
+    "Parker", "Cook", "Cooper", "Reed", "Bell", "Murphy", "Price",
+    "Foster", "Bryant", "Jordan", "Pierce", "Ross", "Holmes", "Webb",
+    "Dixon", "Simmons", "Hayes", "Graham", "Woods", "Cole",
+    "Spencer", "Sanders", "Ingram", "Leonard", "George", "Bridges",
+    "Powell", "Coleman", "Payne", "Gilmore", "Booker", "Hardaway",
+    # Asian surnames
+    "Kim", "Park", "Lee", "Choi",
+    "Tanaka", "Suzuki", "Sato", "Nakamura",
+    "Wang", "Zhang", "Chen", "Lin",
+    "Nguyen", "Tran", "Pham",
+    "Sharma", "Singh", "Patel", "Rao",
+    # Latin American surnames
+    "Rodriguez", "Gonzalez", "Martinez", "Herrera", "Rivera", "Reyes",
+    "Cruz", "Torres", "Ramos", "Delgado", "Mendoza", "Perez", "Flores",
+    "Suarez", "Vargas", "Castillo", "Morales", "Vega",
+    # African surnames
+    "Okafor", "Diallo", "Mensah", "Okonkwo", "Kamara", "Traore",
+    "Coulibaly", "Dembele", "Keita", "Adetokunbo",
 ]
 
 _LAST_STEMS = [
+    # Original stems
     "Bond", "Bon", "Tal", "Verd", "Stromb", "Kazl", "Volz",
     "Okon", "Mbay", "Thorn", "Stall", "Griff", "Crom", "Blunt",
     "Wynn", "Fletch", "Chid", "Bram", "Quint", "Treff", "Drex",
     "Snell", "Przyk", "Kond", "Bjelk", "Oluw", "Adey", "Diall",
+    # African stems
+    "Nwak", "Chuk", "Emek", "Osei", "Aban", "Koff", "Asant",
+    # Slavic / Eastern European stems
+    "Zubk", "Koval", "Havel", "Novak", "Petrov", "Ivanov", "Sorok",
+    # Invented / generic stems
+    "Var", "Dur", "Pelk", "Fend", "Grav", "Holt", "Krel", "Mord",
+    "Strax", "Velk", "Brask", "Colm", "Rand", "Spen", "Torr", "Phelp",
+    # Spanish / Latin American stems (combine with -ez, -ez, -irez, -zalez etc.)
+    "Gonz", "Ram", "Rodr", "Fern", "Alv", "Gut", "Jim", "Lop",
+    "Dom", "Garc", "Ort", "Cas", "Nav", "Agu", "Esp", "Mir",
 ]
 
 _LAST_SUFFIXES = [
+    # Original suffixes
     "zalez", "irez", "nguez", "tinez",
     "ski", "wicz", "beck", "berg",
     "son", "ston", "ford", "wood", "well",
     "ović", "ić",
     "ombe", "aylo", "ofor",
     "field", "ington", "worth", "ley",
+    # New suffixes — broader phonetic range
+    "man", "mond", "low", "shaw", "dale",
+    "enko", "chuk", "enko", "vich", "itch",
+    "ara", "ema", "olu", "ade", "ike",
+    "ez", "oz", "az", "ux", "ax",
+    "ton", "den", "ven", "ken", "ren",
+    "ard", "ert", "olt", "ist", "ast",
 ]
 
 _used_names: set[str] = set()
 
 
-def _make_name() -> str:
+def _make_name() -> tuple[str, str]:
+    """Return (full_name, gender). Gender is 50/50."""
+    gender = random.choice(["female", "male"])
     for _ in range(30):
-        first = random.choice(_FIRST)
         r = random.random()
-        if r < 0.35:
+        if r < 0.80:
+            first = random.choice(_FIRST_FEMALE if gender == "female" else _FIRST_MALE)
+        else:
+            first = random.choice(_FIRST_SWING)
+
+        r2 = random.random()
+        if r2 < 0.35:
             last = random.choice(_LAST_REAL)
-        elif r < 0.80:
+        elif r2 < 0.80:
             last = random.choice(_LAST_STEMS) + random.choice(_LAST_SUFFIXES)
         else:
             last = (random.choice(_LAST_REAL) + "-"
@@ -102,11 +222,11 @@ def _make_name() -> str:
         name = f"{first} {last}"
         if name not in _used_names:
             _used_names.add(name)
-            return name
-    # Fallback: accept duplicate with suffix
-    name = f"{first} {last} Jr."
+            return name, gender
+    # Fallback
+    name = f"{first} {last} II"
     _used_names.add(name)
-    return name
+    return name, gender
 
 
 # ── Career arc math ───────────────────────────────────────────────────────────
@@ -135,7 +255,7 @@ def _career_mult(seasons_played: int, peak_season: int,
 # computing team style from player rosters.
 
 _ZONE_DISTS: dict[str, tuple] = {
-    ZONE_FT:    (0.50, 0.20, 0.20, 0.10),
+    ZONE_FT:    (0.25, 0.35, 0.25, 0.15),  # was (0.50,...) — 50% FT rate was unrealistically high
     ZONE_PAINT: (0.10, 0.55, 0.20, 0.15),
     ZONE_MID:   (0.08, 0.20, 0.52, 0.20),
     ZONE_3PT:   (0.05, 0.10, 0.20, 0.65),
@@ -163,6 +283,7 @@ def _new_id() -> int:
 class Player:
     player_id:   int
     name:        str
+    gender:      str    # "female" | "male"
     position:    str    # Guard | Wing | Big
     age:         int
     preferred_zone: str # ft | paint | mid | 3pt
@@ -179,6 +300,7 @@ class Player:
     peak_season:   int     # seasons_played value when peak is reached
     start_mult:    float   # rating multiplier at career start (0.70–0.85)
     ceiling_noise: float   # baked-in noise offset for ceiling label
+    durability:    float   # injury resistance (0.50–1.00); partially hidden
 
     # ── Mutable state ─────────────────────────────────────────────────────────
     seasons_played: int = 0
@@ -188,6 +310,8 @@ class Player:
     happiness: float = 0.5         # 0.0–1.0; recomputed each offseason
     popularity: float = 0.0        # 0.0–1.0; updated each season
     seasons_with_team: int = 0     # resets on team change; drives loyalty happiness
+    fatigue: float = 0.0           # accumulated playoff load (0.0–1.0); decays each offseason
+    crossed_picket: bool = False   # True if player signed a scab/replacement contract (Type C)
 
     # ── Computed: current ratings ─────────────────────────────────────────────
 
@@ -354,9 +478,11 @@ def generate_player(
         elif a <= 30: cl = random.randint(2, 4)
         else:         cl = random.randint(2, 3)
 
+    name, gender = _make_name()
     return Player(
         player_id              = _new_id(),
-        name                   = _make_name(),
+        name                   = name,
+        gender                 = gender,
         position               = pos,
         age                    = a,
         preferred_zone         = zone,
@@ -370,6 +496,7 @@ def generate_player(
         peak_season            = peak_s,
         start_mult             = start_m,
         ceiling_noise          = random.gauss(0, 2.0),
+        durability             = random.uniform(0.50, 1.00),
         seasons_played         = seasons_already,
         seasons_with_team      = seasons_already,  # founding players have tenure
     )

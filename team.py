@@ -5,6 +5,7 @@ from franchises import Franchise
 
 if TYPE_CHECKING:
     from config import Config
+    from owner import Owner
     from player import Player
 
 
@@ -32,11 +33,14 @@ class Team:
         self.franchise = franchise
         self.franchise_history: list[tuple[int, Franchise]] = [(joined_season, franchise)]
 
-        self.market_engagement: float = 0.03
+        self.market_engagement: float = 0.11
 
         self._consecutive_losing_seasons: int = 0
         self._bottom2_in_streak: int = 0
         self._protected_until: int = 0
+
+        # Owner
+        self.owner: Owner | None = None
 
         # Player roster: [star, co-star, starter] — None = empty slot
         self.roster: list[Player | None] = [None, None, None]
@@ -77,38 +81,44 @@ class Team:
         self.style_ft, self.style_paint, self.style_mid, self.style_3pt = [r / s for r in raw]
         self.popularity *= 0.6
         self.legacy *= 0.75
-        self.market_engagement = 0.03
+        self.market_engagement = 0.11
         return old
 
     def slot_label(self, idx: int) -> str:
         return ["Star", "Co-Star", "Starter"][idx]
 
     def compute_chemistry(self, cfg: Config) -> float:
-        """Return 0.80–1.10 chemistry multiplier based on fit and continuity."""
-        from player import GUARD, WING, BIG  # local import avoids circular dep at module level
+        """Return a bonus-only chemistry multiplier in [chemistry_min, chemistry_max].
+
+        Chemistry is purely additive — it can only help, never hurt. Bad roster
+        construction (duplicate positions, redundant zones) means no bonus, not a penalty;
+        the talent/rating hit from suboptimal construction is punishment enough.
+
+        Three components:
+          fit_bonus       — positional variety + zone diversity (static given roster)
+          continuity_bonus — saturating curve on average pair-seasons together
+          chemistry = 1.00 + fit_bonus + continuity_bonus, clamped to [min, max]
+        """
+        import math
         players = [p for p in self.roster if p is not None]
         n = len(players)
         if n == 0:
-            return cfg.chemistry_min
+            return cfg.chemistry_min   # = 1.00; empty roster gets no bonus
 
-        chem = 1.0
+        fit_bonus = 0.0
 
         if n >= 2:
-            # Positional fit
+            # Positional fit — bonus only when all filled slots have distinct positions
             positions = [p.position for p in players]
             if len(set(positions)) == n:
-                chem += cfg.chemistry_positional_bonus
-            elif len(set(positions)) < n:
-                chem -= cfg.chemistry_positional_penalty
+                fit_bonus += cfg.chemistry_positional_bonus
 
-            # Zone diversity
+            # Zone diversity — bonus only when all filled slots prefer different zones
             zones = [p.preferred_zone for p in players]
             if len(set(zones)) == n:
-                chem += cfg.chemistry_zone_bonus
-            elif len(set(zones)) == 1:
-                chem -= cfg.chemistry_zone_penalty
+                fit_bonus += cfg.chemistry_zone_bonus
 
-            # Continuity bonus
+            # Continuity — saturating curve: max × (1 − e^(−k × avg_pair_seasons))
             pairs, total_seasons = 0, 0
             for i in range(n):
                 for j in range(i + 1, n):
@@ -116,11 +126,14 @@ class Team:
                            max(players[i].player_id, players[j].player_id))
                     total_seasons += self._pair_seasons.get(key, 0)
                     pairs += 1
-            if pairs:
-                avg = total_seasons / pairs
-                chem += min(3.0, avg) * cfg.chemistry_continuity_per_season
+            avg_pair_seasons = total_seasons / pairs if pairs else 0.0
+            continuity_bonus = cfg.chemistry_continuity_max * (
+                1.0 - math.exp(-cfg.chemistry_continuity_k * avg_pair_seasons)
+            )
+        else:
+            continuity_bonus = 0.0
 
-        return max(cfg.chemistry_min, min(cfg.chemistry_max, chem))
+        return max(cfg.chemistry_min, min(cfg.chemistry_max, 1.0 + fit_bonus + continuity_bonus))
 
     def update_pair_seasons(self) -> None:
         """Call each offseason to record another season of continuity for each pair."""

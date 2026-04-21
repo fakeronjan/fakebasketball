@@ -6,11 +6,66 @@ from functools import cmp_to_key
 from typing import TYPE_CHECKING
 
 from config import Config
-from game import GameResult, play_game, play_series
+from game import GameResult, PlayerGameLog, _BENCH_ID, play_game, play_series
 from team import Team
 
 if TYPE_CHECKING:
     from player import Player
+
+
+# ── Per-player season statistics ──────────────────────────────────────────────
+
+@dataclass
+class PlayerSeasonStats:
+    """Accumulated per-player stats for one season (regular season only)."""
+    player_id: int
+    games:         int = 0
+    games_missed:  int = 0   # games missed due to injury
+    points:        int = 0
+    fga:           int = 0
+    fgm:           int = 0
+    fga_3:         int = 0
+    fgm_3:         int = 0
+    fta:           int = 0
+    ftm:           int = 0
+    poss_defended: int = 0
+    pts_allowed:   int = 0
+
+    def absorb(self, log: PlayerGameLog) -> None:
+        """Merge a single game log into season totals."""
+        self.games         += 1
+        self.points        += log.points
+        self.fga           += log.fga
+        self.fgm           += log.fgm
+        self.fga_3         += log.fga_3
+        self.fgm_3         += log.fgm_3
+        self.fta           += log.fta
+        self.ftm           += log.ftm
+        self.poss_defended += log.poss_defended
+        self.pts_allowed   += log.pts_allowed
+
+    # ── Derived stats ─────────────────────────────────────────────────────────
+
+    @property
+    def ppg(self) -> float:
+        return self.points / self.games if self.games else 0.0
+
+    @property
+    def fg_pct(self) -> float:
+        return self.fgm / self.fga if self.fga else 0.0
+
+    @property
+    def fg3_pct(self) -> float:
+        return self.fgm_3 / self.fga_3 if self.fga_3 else 0.0
+
+    @property
+    def ft_pct(self) -> float:
+        return self.ftm / self.fta if self.fta else 0.0
+
+    @property
+    def def_rtg(self) -> float:
+        """Points allowed per 100 possessions defended."""
+        return self.pts_allowed / self.poss_defended * 100 if self.poss_defended else 0.0
 
 
 def _playoff_count(n_teams: int) -> int:
@@ -105,6 +160,23 @@ class Season:
         self.playoff_rounds: list[list[PlayoffSeries]] = []
         self.champion: Team | None = None
 
+        # ── Player statistics (regular season) ────────────────────────────────
+        self.player_stats: dict[int, PlayerSeasonStats] = {}  # player_id → stats
+        # Name/team registry: snapshot at season start while rosters are intact.
+        # Survives retirements/releases that mutate rosters later.
+        self.player_names: dict[int, str] = {
+            p.player_id: p.name
+            for t in teams
+            for p in t.roster
+            if p is not None
+        }
+        self.player_teams: dict[int, str] = {
+            p.player_id: t.franchise_at(number).nickname[:16]
+            for t in teams
+            for p in t.roster
+            if p is not None
+        }
+
         # ── Season awards ─────────────────────────────────────────────────────
         self.mvp:        Player | None = None
         self.mvp_team:   Team   | None = None
@@ -191,11 +263,62 @@ class Season:
         total = sum(g.home_score + g.away_score for g in self.regular_season_games)
         return total / (2 * len(self.regular_season_games))
 
+    def _absorb_game_logs(self, result: GameResult) -> None:
+        """Merge per-player game logs from a GameResult into season totals."""
+        for pid, log in result.home_logs.items():
+            if pid not in self.player_stats:
+                self.player_stats[pid] = PlayerSeasonStats(player_id=pid)
+            self.player_stats[pid].absorb(log)
+        for pid, log in result.away_logs.items():
+            if pid not in self.player_stats:
+                self.player_stats[pid] = PlayerSeasonStats(player_id=pid)
+            self.player_stats[pid].absorb(log)
+
     def play_regular_season(self) -> None:
+        cfg = self.cfg
+
+        # ── Pre-season injury rolls ───────────────────────────────────────────
+        # Each rostered player rolls for injury once. If injured, they miss a
+        # contiguous block of games distributed through the season.
+        injury_remaining: dict[int, int] = {}  # player_id → games still to miss
+        for team in self.teams:
+            for player in team.roster:
+                if player is None:
+                    continue
+                prob = min(0.80,
+                    cfg.player_injury_base_prob
+                    + (1.0 - player.durability) * cfg.player_injury_durability_scale
+                    + player.fatigue * cfg.player_injury_fatigue_scale
+                    + max(0, player.age - cfg.player_injury_age_threshold) * cfg.player_injury_age_scale
+                )
+                if random.random() < prob:
+                    injury_remaining[player.player_id] = random.randint(
+                        cfg.player_injury_games_min, cfg.player_injury_games_max
+                    )
+
         for home, away in _generate_schedule(self.teams, self.cfg.games_per_pair):
-            result = play_game(home, away, self.cfg, league_meta=self.league_meta)
+            # Determine which players are out for this game
+            out_home = frozenset(
+                p.player_id for p in home.roster
+                if p is not None and injury_remaining.get(p.player_id, 0) > 0
+            )
+            out_away = frozenset(
+                p.player_id for p in away.roster
+                if p is not None and injury_remaining.get(p.player_id, 0) > 0
+            )
+            # Decrement counters and record misses in season stats
+            for pid in out_home | out_away:
+                injury_remaining[pid] -= 1
+                if pid not in self.player_stats:
+                    self.player_stats[pid] = PlayerSeasonStats(player_id=pid)
+                self.player_stats[pid].games_missed += 1
+
+            result = play_game(home, away, cfg, league_meta=self.league_meta,
+                               out_home=out_home, out_away=out_away)
             self.regular_season_games.append(result)
             self._record(result)
+            self._absorb_game_logs(result)
+
         self.regular_season_standings = self.standings()
         # Snapshot records before playoffs inflate the counts
         self._reg_wins = dict(self._wins)
@@ -213,7 +336,7 @@ class Season:
                 s2 = bracket[len(bracket) - 1 - i]
                 winner, games = play_series(
                     s1, s2, self.cfg,
-                    home_advantage=self.cfg.playoff_home_pscore_bonus,
+                    home_advantage=None,   # computed per-game from home team's popularity
                     league_meta=self.league_meta,
                     seed_bonus=self.cfg.playoff_seed_pscore_bonus,
                 )
@@ -229,33 +352,49 @@ class Season:
         self._compute_finals_mvp()
 
     def _compute_regular_season_awards(self) -> None:
-        """Compute MVP and DPOY from the playoff-team pool. Call after play_regular_season()."""
-        playoff_set = set(self.regular_season_standings[:self.playoff_teams])
+        """Compute MVP, OPOY, and DPOY from the full league player pool.
+
+        All rostered players are eligible — a dominant player on a lottery team
+        can still win if their production is exceptional enough. Win% weighting
+        naturally rewards players on better teams without hard-excluding others.
+
+        MVP and OPOY use actual simulated PPG weighted by team win%.
+        DPOY uses individual defensive rating (pts allowed per 100 poss defended),
+        falling back to drtg_contrib if stats are unavailable.
+        """
         pool = [
             (p, t)
-            for t in playoff_set
+            for t in self.teams
             for p in t.roster
             if p is not None
         ]
         if not pool:
             return
 
-        # MVP: best overall weighted by team's regular-season win pct so a star
-        # on a lottery team doesn't edge an equal peer on a 55-win team.
+        def _ppg(p: Player) -> float:
+            s = self.player_stats.get(p.player_id)
+            return s.ppg if s else 0.0
+
+        def _def_rtg(p: Player) -> float:
+            s = self.player_stats.get(p.player_id)
+            # Lower def_rtg = better defender; fall back to attribute if no stats
+            return s.def_rtg if (s and s.poss_defended > 0) else (110.0 + p.drtg_contrib)
+
+        # MVP: highest PPG weighted by team's regular-season win pct
         self.mvp, self.mvp_team = max(
             pool,
-            key=lambda pt: pt[0].overall * (0.7 + 0.6 * self.reg_win_pct(pt[1]))
+            key=lambda pt: _ppg(pt[0]) * (0.7 + 0.6 * self.reg_win_pct(pt[1]))
         )
 
-        # OPOY: pure offensive contribution leader — MVP is ineligible
+        # OPOY: highest PPG scorer who is not the MVP
         opoy_pool = [(p, t) for p, t in pool if p is not self.mvp]
         if opoy_pool:
-            self.opoy, self.opoy_team = max(opoy_pool, key=lambda pt: pt[0].ortg_contrib)
+            self.opoy, self.opoy_team = max(opoy_pool, key=lambda pt: _ppg(pt[0]))
 
-        # DPOY: best defensive suppressor — MVP and OPOY are ineligible
+        # DPOY: lowest defensive rating (MVP and OPOY ineligible)
         dpoy_pool = [(p, t) for p, t in pool if p is not self.mvp and p is not self.opoy]
         if dpoy_pool:
-            self.dpoy, self.dpoy_team = min(dpoy_pool, key=lambda pt: pt[0].drtg_contrib)
+            self.dpoy, self.dpoy_team = min(dpoy_pool, key=lambda pt: _def_rtg(pt[0]))
 
     def _compute_finals_mvp(self) -> None:
         """Compute Finals MVP after the champion is set."""
