@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fake Basketball — Commissioner Mode</title>
+
+  <!-- xterm.js v5.3 — full VT100/ANSI terminal emulator -->
+  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #141414;
+      overflow: hidden;
+    }
+
+    #terminal-wrap {
+      width: 100%; height: 100%;
+      padding: 8px;
+    }
+
+    /* Loading overlay */
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #141414;
+      z-index: 50;
+      gap: 12px;
+    }
+    #loading-title {
+      font-family: 'Cascadia Mono', 'Fira Mono', 'Courier New', monospace;
+      font-size: 24px;
+      color: #e8c56d;
+      letter-spacing: 0.04em;
+    }
+    #loading-status {
+      font-family: 'Cascadia Mono', 'Fira Mono', 'Courier New', monospace;
+      font-size: 13px;
+      color: #888;
+    }
+    #loading-error {
+      font-family: 'Cascadia Mono', 'Fira Mono', 'Courier New', monospace;
+      font-size: 13px;
+      color: #f47174;
+      max-width: 520px;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* Hide the xterm scroll-bar gap */
+    .xterm-viewport { overflow-y: hidden !important; }
+  </style>
+</head>
+<body>
+
+<!-- Loading screen (hidden when worker posts 'ready') -->
+<div id="loading">
+  <div id="loading-title">🏀 Fake Basketball</div>
+  <div id="loading-status">Checking browser compatibility…</div>
+  <div id="loading-error" style="display:none"></div>
+</div>
+
+<div id="terminal-wrap"></div>
+
+<script>
+// ── Cross-origin isolation setup ─────────────────────────────────────────────
+// SharedArrayBuffer (needed for blocking Python input) requires the page to be
+// cross-origin isolated: both COOP and COEP headers must be set on the HTML
+// response. On hosts we don't control (GitHub Pages), we use a service worker
+// to add those headers. On localhost, run serve.py which sets them directly.
+//
+// How the SW reload works:
+//   1. First visit: SW not yet active → register it → when it activates and
+//      claims the page, controllerchange fires → we reload.
+//   2. Second load: SW IS active → it intercepts the HTML fetch and adds
+//      COOP/COEP → crossOriginIsolated is true → this block is skipped.
+//   3. Subsequent visits: SW already active → page loads isolated from the start.
+//
+// The sessionStorage guard prevents an infinite reload loop in the rare case
+// where the SW is active but COOP/COEP still aren't taking effect.
+
+(function setupCOI() {
+  function showErr(msg) {
+    document.getElementById('loading-status').style.display = 'none';
+    const el = document.getElementById('loading-error');
+    el.style.display  = 'block';
+    el.style.whiteSpace = 'pre-wrap';
+    el.textContent    = msg;
+  }
+
+  // Already isolated — nothing to do.
+  if (crossOriginIsolated) return;
+
+  // file:// protocol: service workers can't register here at all.
+  if (location.protocol === 'file:') {
+    showErr(
+      'Open this page through a web server, not as a local file.\n\n' +
+      'Quick local server (from the repo folder):\n' +
+      '  python3 serve.py\n\n' +
+      'Then open: http://localhost:8000'
+    );
+    return;
+  }
+
+  // Browser too old or service workers blocked.
+  if (!('serviceWorker' in navigator)) {
+    showErr('Service workers are unavailable in this browser.\nTry Chrome 92+, Edge 92+, or Firefox 79+.');
+    return;
+  }
+
+  // SW already controlling this page but still not isolated → one forced reload.
+  // (Rare: SW was registered in a prior session but headers didn't apply yet.)
+  if (navigator.serviceWorker.controller) {
+    if (!sessionStorage.getItem('coi-reload')) {
+      sessionStorage.setItem('coi-reload', '1');
+      location.reload();
+    } else {
+      sessionStorage.removeItem('coi-reload');
+      showErr(
+        'Could not establish cross-origin isolation.\n\n' +
+        'For local testing, run:\n  python3 serve.py\n' +
+        'then open http://localhost:8000\n\n' +
+        'For hosted use, deploy to GitHub Pages (HTTPS).'
+      );
+    }
+    return;
+  }
+
+  // First visit: register SW and wait for it to take control, then reload.
+  // controllerchange fires exactly once when the SW becomes the active controller.
+  navigator.serviceWorker.register('./coi-serviceworker.js')
+    .catch((err) => showErr('Service worker registration failed:\n' + err));
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+})();
+</script>
+
+<script>
+// ── Only proceed if cross-origin isolated ────────────────────────────────────
+// If not isolated, the block above either showed an error (and we stop here)
+// or registered the SW and is waiting for the controllerchange reload.
+// Either way, there is nothing for us to do until the page reloads isolated.
+if (!crossOriginIsolated) {
+  // Show a holding message while waiting for the SW to take control.
+  if (typeof document.getElementById('loading-error').style !== 'undefined' &&
+      document.getElementById('loading-error').style.display === 'none') {
+    document.getElementById('loading-status').textContent = 'Initializing security context…';
+  }
+  // Stop — the reload (triggered by controllerchange) will restart the page.
+  throw new Error('Not yet cross-origin isolated — waiting for SW reload.');
+}
+
+// ── xterm.js terminal ────────────────────────────────────────────────────────
+const term = new Terminal({
+  convertEol:   true,       // \n → \r\n (needed for proper line wrapping)
+  cursorBlink:  true,
+  cursorStyle:  'block',
+  scrollback:   10000,
+  fontSize:     14,
+  fontFamily:   "'Cascadia Mono', 'Cascadia Code', 'Fira Mono', 'DejaVu Sans Mono', 'Courier New', monospace",
+  theme: {
+    background:   '#141414',
+    foreground:   '#d4d4d4',
+    cursor:       '#e8c56d',
+    cursorAccent: '#141414',
+    // Standard 16 colors — mapped to the ANSI sequences the game already uses
+    black:        '#1e1e1e',
+    brightBlack:  '#555555',
+    red:          '#f47174',   // \033[91m — RED
+    brightRed:    '#f47174',
+    green:        '#73d08a',   // \033[92m — GREEN
+    brightGreen:  '#73d08a',
+    yellow:       '#e8c56d',   // \033[93m — GOLD
+    brightYellow: '#e8c56d',
+    blue:         '#6fa0dc',   // \033[94m — BLUE
+    brightBlue:   '#6fa0dc',
+    cyan:         '#5dbbc1',   // \033[96m — CYAN
+    brightCyan:   '#5dbbc1',
+    white:        '#d4d4d4',
+    brightWhite:  '#ffffff',
+  },
+});
+
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.open(document.getElementById('terminal-wrap'));
+fitAddon.fit();
+window.addEventListener('resize', () => fitAddon.fit());
+
+// ── Shared buffers ────────────────────────────────────────────────────────────
+// controlSAB: Int32Array(1)
+//   0 = worker is blocked waiting for input
+//   1 = input text is ready in inputSAB; worker will read and reset to 0
+//
+// inputSAB layout:
+//   bytes 0–3:  Int32  — byte-length of the encoded text
+//   bytes 4+:   Uint8  — UTF-8 encoded text (up to 4092 bytes)
+const controlSAB  = new SharedArrayBuffer(4);
+const inputSAB    = new SharedArrayBuffer(4 + 4092);
+const controlArr  = new Int32Array(controlSAB);
+const inputLenI32 = new Int32Array(inputSAB, 0, 1);
+const inputDataU8 = new Uint8Array(inputSAB, 4);
+const enc         = new TextEncoder();
+
+// ── Input state ───────────────────────────────────────────────────────────────
+let awaitingInput = false;  // true while Python is blocked in webReadInput()
+let inputBuf      = '';     // typed characters since last Enter
+
+/** Called when the user presses Enter. Encodes the line and wakes the worker. */
+function sendInput(text) {
+  if (!awaitingInput) return;
+  awaitingInput = false;
+  term.write('\r\n');   // visual newline in terminal
+
+  const encoded = enc.encode(text);
+  const len = Math.min(encoded.length, 4092);
+  inputLenI32[0] = len;
+  inputDataU8.set(encoded.subarray(0, len));
+  Atomics.store(controlArr, 0, 1);
+  Atomics.notify(controlArr, 0, 1);
+}
+
+term.onKey(({ key, domEvent }) => {
+  if (!awaitingInput) return;
+
+  if (domEvent.key === 'Enter') {
+    sendInput(inputBuf);
+    inputBuf = '';
+  } else if (domEvent.key === 'Backspace') {
+    if (inputBuf.length > 0) {
+      inputBuf = inputBuf.slice(0, -1);
+      term.write('\b \b');
+    }
+  } else if (
+    !domEvent.ctrlKey && !domEvent.altKey && !domEvent.metaKey &&
+    key.length === 1
+  ) {
+    inputBuf += key;
+    term.write(key);
+  }
+});
+
+// ── Web Worker ────────────────────────────────────────────────────────────────
+const savedData = localStorage.getItem('fakebb_save') || null;
+const worker    = new Worker('./worker.js');
+
+worker.onmessage = function (e) {
+  const msg = e.data;
+
+  switch (msg.type) {
+
+    case 'print':
+      // Python wrote to stdout/stderr — pass straight to xterm (ANSI-aware).
+      term.write(msg.text);
+      break;
+
+    case 'input_needed':
+      // Python is blocked in webReadInput() — enable keyboard input.
+      awaitingInput = true;
+      break;
+
+    case 'status':
+      // Update the loading overlay status line.
+      document.getElementById('loading-status').textContent = msg.text;
+      break;
+
+    case 'ready':
+      // Python is about to start. Hide the loading overlay, focus terminal.
+      document.getElementById('loading').style.display = 'none';
+      term.focus();
+      break;
+
+    case 'save':
+      // Python completed an autosave — persist to localStorage.
+      try { localStorage.setItem('fakebb_save', msg.data); } catch (_) {}
+      break;
+
+    case 'done':
+      term.write('\r\n\x1b[93m── Game ended. Refresh the page to start a new league. ──\x1b[0m\r\n');
+      awaitingInput = false;
+      break;
+
+    case 'error': {
+      document.getElementById('loading').style.display = 'none';
+      term.write('\r\n\x1b[91m── Python error ──\x1b[0m\r\n');
+      term.write('\x1b[90m' + msg.text.replace(/\n/g, '\r\n') + '\x1b[0m\r\n');
+      awaitingInput = false;
+      break;
+    }
+  }
+};
+
+worker.onerror = function (e) {
+  document.getElementById('loading').style.display = 'none';
+  term.write('\r\n\x1b[91mWorker error: ' + (e.message || 'unknown') + '\x1b[0m\r\n');
+};
+
+// Start the worker.
+worker.postMessage({
+  type:          'init',
+  controlBuffer: controlSAB,
+  inputBuffer:   inputSAB,
+  savedData,
+});
+</script>
+
+</body>
+</html>
