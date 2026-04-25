@@ -15,6 +15,7 @@ from rival import (RivalLeague, strength_label as rival_strength_label,
 from owner import (Owner, generate_buyers,
                    MOT_MONEY, MOT_WINNING as OWNER_MOT_WINNING, MOT_LOCAL_HERO,
                    THREAT_QUIET, THREAT_LEAN, THREAT_DEMAND,
+                   PERS_RENEGADE, LOY_LOW,
                    happiness_label as owner_happiness_label)
 from player import (Player, GUARD, WING, BIG, POSITIONS, ZONES,
                     MOT_WINNING, MOT_MARKET, MOT_LOYALTY,
@@ -154,6 +155,29 @@ def _show_risk_reward(cost: str, risk: str, reward: str, note: str = "") -> None
     if note:
         print(f"  {MUTED}{note}{RESET}")
     print()
+
+
+def _owner_breaking_point_prob(owner: "Owner", denial_count: int) -> float:
+    """Probability of a breaking point after denial_count total denials.
+
+    The first denial (count=1) is always safe — the owner is furious but not yet
+    at breaking point. From the 2nd denial onward, risk scales with personality
+    and loyalty. Renegade + low-loyalty owners can snap on the 2nd denial (50%);
+    steady + loyal owners have much more patience but risk keeps climbing.
+    """
+    if denial_count <= 1:
+        return 0.0
+    renegade = owner.personality == PERS_RENEGADE
+    disloyal  = owner.loyalty    == LOY_LOW
+    if renegade and disloyal:
+        base, scale = 0.50, 0.25   # 50% / 75% / 100% on 2nd / 3rd / 4th denial
+    elif renegade:
+        base, scale = 0.30, 0.20   # 30% / 50% / 70%
+    elif disloyal:
+        base, scale = 0.25, 0.20   # 25% / 45% / 65%
+    else:
+        base, scale = 0.15, 0.15   # 15% / 30% / 45%
+    return min(1.0, base + (denial_count - 2) * scale)
 
 # ── Global quit / reports ─────────────────────────────────────────────────────
 # Typing "quit" or "q" at any prompt saves and exits.
@@ -5332,13 +5356,16 @@ class CommissionerGame:
             options.append(f"Grant league subsidy  {MUTED}($10M — buys patience){RESET}")
             actions.append(("subsidy", 10.0))
 
-        denials_so_far = owner.relocation_blocked
-        if denials_so_far >= 2:
-            deny_label = f"{RED}Deny — ⚠ one more denial triggers an ownership transition{RESET}"
-        elif denials_so_far == 1:
-            deny_label = f"{MUTED}Deny — owner will remember this ({denials_so_far}/2 denials){RESET}"
+        next_denial_count = owner.relocation_blocked + 1
+        bp_prob = _owner_breaking_point_prob(owner, next_denial_count)
+        if bp_prob == 0.0:
+            deny_label = f"{MUTED}Deny — first denial, no immediate breaking point risk{RESET}"
+        elif bp_prob >= 0.60:
+            deny_label = f"{RED}Deny — {bp_prob:.0%} chance of breaking point{RESET}"
+        elif bp_prob >= 0.30:
+            deny_label = f"{GOLD}Deny — {bp_prob:.0%} chance of breaking point{RESET}"
         else:
-            deny_label = f"{MUTED}Deny — take the consequences{RESET}"
+            deny_label = f"{MUTED}Deny — {bp_prob:.0%} chance of breaking point{RESET}"
         options.append(deny_label)
         actions.append(("deny", 0.0))
 
@@ -5387,11 +5414,10 @@ class CommissionerGame:
         else:  # deny
             owner.relocation_blocked += 1
             print(f"\n  {RED}Request denied.{RESET} {owner.name} is not pleased.")
-            if owner.relocation_blocked >= 3:
-                print(f"  {RED}⚠  {owner.name} has been denied too many times. "
-                      f"Ownership transition incoming.{RESET}")
+            bp_prob = _owner_breaking_point_prob(owner, owner.relocation_blocked)
+            if bp_prob > 0 and random.random() < bp_prob:
                 press_enter()
-                self._handle_ownership_transition(team, owner, season, forced=True)
+                self._handle_owner_breaking_point(team, owner, season)
                 return
             press_enter()
 
@@ -5426,9 +5452,10 @@ class CommissionerGame:
         if not eligible:
             print(f"\n  {MUTED}No eligible destinations available right now.{RESET}")
             owner.relocation_blocked += 1
-            if owner.relocation_blocked >= 3:
+            bp_prob = _owner_breaking_point_prob(owner, owner.relocation_blocked)
+            if bp_prob > 0 and random.random() < bp_prob:
                 press_enter()
-                self._handle_ownership_transition(team, owner, season, forced=True)
+                self._handle_owner_breaking_point(team, owner, season)
             else:
                 press_enter()
             return
@@ -5500,13 +5527,91 @@ class CommissionerGame:
             team._protected_until = max(team._protected_until, sn + 3)
             owner.relocation_blocked += 1
             print(f"\n  {MUTED}Relocation blocked. Protection granted through Season {sn+3}.{RESET}")
-            if owner.relocation_blocked >= 3:
-                print(f"  {RED}⚠  {owner.name} has reached the limit. Ownership transition incoming.{RESET}")
+            bp_prob = _owner_breaking_point_prob(owner, owner.relocation_blocked)
+            if bp_prob > 0 and random.random() < bp_prob:
                 press_enter()
-                self._handle_ownership_transition(team, owner, season, forced=True)
+                self._handle_owner_breaking_point(team, owner, season)
                 return
 
         press_enter()
+
+    def _handle_owner_breaking_point(self, team: Team, owner: Owner, season: Season) -> None:
+        """Owner has hit a breaking point after repeated denials.
+
+        Two paths: facilitate an immediate sale (clean exit, no breakaway risk) or
+        let it play out (owner stays, either sells alone if they can't recruit allies,
+        or becomes a Type B ringleader if the league climate is unhappy enough).
+        """
+        league = self.league
+        sn     = season.number
+        cfg    = league.cfg
+        fname  = team.franchise_at(sn).name
+
+        renegade = owner.personality == PERS_RENEGADE
+        disloyal  = owner.loyalty    == LOY_LOW
+
+        if renegade and disloyal:
+            risk_c     = RED
+            risk_label = "HIGH"
+            risk_note  = "Renegade + low loyalty — likely to recruit disgruntled owners."
+        elif renegade or disloyal:
+            risk_c     = GOLD
+            risk_label = "MEDIUM"
+            risk_note  = ("Renegade personality — may look for allies."
+                          if renegade else
+                          "Low loyalty — may not go quietly.")
+        else:
+            risk_c     = MUTED
+            risk_label = "LOW"
+            risk_note  = "Steady + loyal — more likely to sell and move on."
+
+        other_demand = sum(1 for t in league.teams
+                           if t is not team and t.owner
+                           and t.owner.threat_level == THREAT_DEMAND)
+        other_lean   = sum(1 for t in league.teams
+                           if t is not team and t.owner
+                           and t.owner.threat_level == THREAT_LEAN)
+
+        clear()
+        header("OWNER AT BREAKING POINT", f"After Season {sn}")
+        print(f"\n  {RED}{BOLD}{owner.name}{RESET}  {MUTED}— {fname}{RESET}\n")
+        print(f"  {owner.name} has been denied one too many times.")
+        print(f"  The next move is theirs — but you can influence which path they take.\n")
+        print(f"  Owner profile     {owner.personality}  ·  {owner.loyalty}")
+        print(f"  Breakaway risk    {risk_c}{risk_label}{RESET}  —  {risk_note}")
+
+        if other_demand or other_lean:
+            print(f"\n  {GOLD}League climate:{RESET}  "
+                  f"{other_demand} owner(s) demanding  ·  {other_lean} watching  "
+                  f"— potential recruits exist.")
+        else:
+            print(f"\n  {MUTED}League climate: no other owners at crisis level — "
+                  f"limited recruiting pool.{RESET}")
+
+        print(f"\n  {BOLD}Two paths forward:{RESET}\n")
+        print(f"  {CYAN}[1]{RESET}  Facilitate an immediate sale")
+        print(f"       {MUTED}{owner.name} leaves. You choose the new ownership group.{RESET}")
+        print(f"       {MUTED}Clean break — no breakaway risk. Could be a fresh start for {fname}.{RESET}")
+        print()
+        print(f"  {CYAN}[2]{RESET}  Let it play out")
+        print(f"       {MUTED}{owner.name} stays for now. Whether they sell or recruit")
+        print(f"       depends on how many allies they can find in the ownership group.{RESET}")
+        print(f"       {MUTED}Watch next season's owner meeting closely.{RESET}")
+
+        choice = choose(["Facilitate an immediate sale", "Let it play out"], default=0)
+
+        if choice == 0:
+            self._handle_ownership_transition(team, owner, season, forced=True)
+        else:
+            # Wire directly into Type B ringleader machinery.
+            # Set demand_seasons to the warning threshold so the warning fires
+            # next offseason check, and defection potentially resolves the season after.
+            league._ringleader_team_id       = team.team_id
+            league._ringleader_demand_seasons = cfg.rival_b_ringleader_seasons
+            league._defection_warning_season  = None
+            print(f"\n  {GOLD}Understood.{RESET} {owner.name} remains — for now.")
+            print(f"  {MUTED}Keep an eye on the owner meeting next season.{RESET}")
+            press_enter()
 
     def _handle_ownership_transition(self, team: Team, owner: Owner, season: Season,
                                       forced: bool = False) -> None:
@@ -5523,9 +5628,11 @@ class CommissionerGame:
 
         clear()
         if forced:
-            header("OWNERSHIP CRISIS", f"After Season {sn}")
-            print(f"\n  {RED}{BOLD}{owner.name}{RESET} is selling {fname} and leaving the league.\n"
-                  f"  Three ownership groups have expressed interest.\n")
+            header("OWNERSHIP TRANSITION", f"After Season {sn}")
+            print(f"\n  {RED}{BOLD}{owner.name}{RESET} is selling {fname} and leaving the league.\n")
+            print(f"  Three ownership groups have expressed interest.")
+            print(f"  {MUTED}A change in ownership brings new priorities — review each group carefully.")
+            print(f"  For {fname}, this could be a genuine fresh start.{RESET}\n")
         else:
             header("OWNERSHIP TRANSITION", f"After Season {sn}")
             print(f"\n  {owner.name}'s tenure with {fname} has run its course.\n")
