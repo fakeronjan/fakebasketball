@@ -431,8 +431,10 @@ def generate_player(
         )[0]
 
     # Peak contributions by tier
+    # Tier floors are chosen so peak_overall (p_ortg − p_drtg) ranges never overlap:
+    #   elite ≥ 17  (10−(−7))  ·  high ≤ 16 (9−(−7))  ·  mid ≤ 10 (6−(−4))  ·  low ≥ 0 (enforced below)
     if tier == "elite":
-        p_ortg = random.uniform(9.0, 12.0)
+        p_ortg = random.uniform(10.0, 12.0)   # was 9.0 — raised floor to close overlap with High
         p_drtg = random.uniform(-10.0, -7.0)
     elif tier == "high":
         p_ortg = random.uniform(6.0, 9.0)
@@ -443,6 +445,10 @@ def generate_player(
     else:  # low
         p_ortg = random.uniform(-2.0, 3.0)
         p_drtg = random.uniform(-2.0, 4.0)
+        # Floor: no rostered player should be a net negative overall.
+        # A zero-scorer who locks down their match-up (Rodman) is fine at 0.
+        # Clamp p_drtg so peak_overall = p_ortg − p_drtg ≥ 0.
+        p_drtg = min(p_drtg, p_ortg)
 
     # Career arc
     seasons_already = max(0, a - 22) if founding else 0

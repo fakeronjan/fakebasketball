@@ -3600,8 +3600,14 @@ class CommissionerGame:
                   f"{t.franchise.effective_metro:>6.1f}  {net:>+5.1f}  {pct:>4.0f}%  "
                   f"{MUTED}{league.teams[0].slot_label(slot)} slot open{RESET}")
 
+        legit = league.legitimacy
+        legit_c = RED if legit < 0.50 else MUTED
         print(f"\n  {MUTED}Treasury: ${self._treasury:.0f}M  ·  "
-              f"Legitimacy: {league.legitimacy:.0%}{RESET}\n")
+              f"Legitimacy: {legit_c}{legit:.0%}{RESET}")
+        if legit < 0.50:
+            print(f"  {RED}⚠ Low legitimacy — rival leagues gain strength faster "
+                  f"and fan trust erodes each season.{RESET}")
+        print()
 
         can_nudge = self._treasury >= NUDGE_COST
         can_rig   = self._treasury >= RIG_COST and league.legitimacy >= RIG_LEG + 0.01
@@ -4210,8 +4216,22 @@ class CommissionerGame:
         for i, (city, teams) in enumerate(cities, 1):
             avg_eng   = sum(t.market_engagement for t in teams) / len(teams)
             nicknames = " & ".join(t.franchise.nickname for t in teams)
-            grudge_tag = f"  {RED}grudge{RESET}" if city in league.market_grudges else ""
-            print(f"  {i:>2}. {city:<20} {nicknames:<26} {pop_bar(avg_eng, 10)}{grudge_tag}")
+            tags = []
+            if city in league.market_grudges:
+                tags.append(f"{RED}grudge{RESET}")
+            for t in teams:
+                if t._consecutive_losing_seasons >= cfg.relocation_threshold - 3:
+                    tags.append(f"{RED}relocation risk{RESET}")
+                    break
+            for t in teams:
+                if t.owner and t.owner.threat_level == THREAT_DEMAND:
+                    tags.append(f"{RED}owner demanding{RESET}")
+                    break
+                elif t.owner and t.owner.threat_level == THREAT_LEAN:
+                    tags.append(f"{GOLD}owner watching{RESET}")
+                    break
+            tag_str = ("  " + "  ".join(tags)) if tags else ""
+            print(f"  {i:>2}. {city:<20} {nicknames:<26} {pop_bar(avg_eng, 10)}{tag_str}")
 
         print()
         raw = prompt("Choose a market by number, or Enter to cancel:")
@@ -5312,7 +5332,14 @@ class CommissionerGame:
             options.append(f"Grant league subsidy  {MUTED}($10M — buys patience){RESET}")
             actions.append(("subsidy", 10.0))
 
-        options.append(f"{MUTED}Deny — take the consequences{RESET}")
+        denials_so_far = owner.relocation_blocked
+        if denials_so_far >= 2:
+            deny_label = f"{RED}Deny — ⚠ one more denial triggers an ownership transition{RESET}"
+        elif denials_so_far == 1:
+            deny_label = f"{MUTED}Deny — owner will remember this ({denials_so_far}/2 denials){RESET}"
+        else:
+            deny_label = f"{MUTED}Deny — take the consequences{RESET}"
+        options.append(deny_label)
         actions.append(("deny", 0.0))
 
         # Show franchise context
