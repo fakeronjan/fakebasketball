@@ -228,13 +228,14 @@ class League:
     def _roster_happiness_modifier(self, owner: Owner, team: Team) -> float:
         """Roster-context modifier added on top of the motivation-based happiness base.
 
-        Owners now sense impending roster instability — not just last season's results.
-        Winning owners are the most sensitive; all owners notice acute risks.
+        Only signals the owner genuinely couldn't control — flight risk of an unhappy
+        star, a closing championship window, and a complete talent desert. Normal
+        contract cycling (expiring deals) is the owner's business to manage and does
+        NOT count against commissioner happiness.
 
         Signals checked:
-          • Franchise player (slot 0) is expiring and a likely flight risk
-          • Franchise player is past prime (age ≥ 33)
-          • Two or more contracts expiring at once
+          • Franchise player (slot 0) is expiring AND is a clear flight risk
+          • Franchise player is past prime (age ≥ 33) — window closing
           • Roster has no player above replacement level
         """
         roster = [p for p in team.roster if p is not None]
@@ -244,28 +245,22 @@ class League:
         delta = 0.0
         star = team.roster[0]   # slot 0 is the franchise star
 
-        # Expiring franchise player who looks like a flight risk
+        # Expiring franchise player who is a clear flight risk — real alarm
         if star is not None and star.contract_years_remaining <= 1:
             flight_risk = star.happiness < 0.55 and star.motivation != MOT_LOYALTY
             if flight_risk:
                 delta -= 0.12 if owner.motivation == OWNER_MOT_WINNING else 0.06
-            else:
-                delta -= 0.04   # uncertainty even without clear flight risk
+            # Normal expiry without flight risk: owner's responsibility, no penalty
 
         # Aging franchise player — window is closing
         if star is not None and star.age >= 33:
             delta -= 0.07 if owner.motivation == OWNER_MOT_WINNING else 0.03
 
-        # Mass contract expiration: 2+ players coming off the books at once
-        expiring = sum(1 for p in roster if p.contract_years_remaining <= 1)
-        if expiring >= 2:
-            delta -= 0.05 * (expiring - 1)   # -0.05 for 2, -0.10 for all 3
-
         # Talent desert: no player above replacement level anywhere on the roster
         if not any(p.overall >= 6 for p in roster):
             delta -= 0.08 if owner.motivation == OWNER_MOT_WINNING else 0.04
 
-        return max(-0.25, delta)
+        return max(-0.20, delta)
 
     def _compute_owner_happiness(self, owner: Owner, team: Team, season: Season) -> float:
         """Return 0.0–1.0 season happiness score based on motivation and result."""
@@ -283,9 +278,12 @@ class League:
                      for rnd in season.playoff_rounds for sr in rnd):
                 base = 0.65   # Playoff appearance
             else:
-                # Progressive penalty for missing playoffs
+                # Drought-driven penalty: one bad season is tolerable; a sustained
+                # drought is what should push an owner toward LEAN/DEMAND.
+                # Base 0.52 keeps owners quiet after a single miss; scales down
+                # meaningfully only after 2+ consecutive seasons out of playoffs.
                 streak = team._consecutive_losing_seasons
-                base = max(0.10, 0.42 - 0.04 * min(8, streak))
+                base = max(0.10, 0.52 - 0.05 * max(0, streak - 1))
 
         else:  # MOT_LOCAL_HERO
             local_score = 0.5 * team.popularity + 0.5 * team.market_engagement
@@ -324,11 +322,6 @@ class League:
             return (f"{p} knows the window is closing. {pp.capitalize()} best player won't be "
                     f"at this level much longer, and the pipeline behind them looks thin.")
 
-        expiring = sum(1 for pl in roster if pl.contract_years_remaining <= 1)
-        if expiring >= 2:
-            return (f"{p} is looking at a roster that is almost entirely up for renewal. "
-                    f"The uncertainty is making it hard to plan anything.")
-
         if roster and not any(pl.overall >= 6 for pl in roster):
             if owner.motivation == OWNER_MOT_WINNING:
                 return (f"{p} does not see a player on this roster capable of carrying a game. "
@@ -347,9 +340,15 @@ class League:
 
         elif owner.motivation == OWNER_MOT_WINNING:
             streak = team._consecutive_losing_seasons
-            if streak >= 3:
+            if streak >= 5:
+                return (f"{p} has had enough. {streak} seasons without a playoff appearance "
+                        f"is unacceptable. {p} did not invest in this franchise to watch losing basketball.")
+            elif streak >= 3:
                 return (f"{p} has watched this team miss the playoffs for {streak} straight seasons. "
-                        f"A contender is the only acceptable path forward.")
+                        f"A turnaround needs to happen soon or patience will run out.")
+            elif streak >= 1:
+                return (f"{p} expects this team to be competitive. Missing the playoffs is not the plan "
+                        f"and {owner.pronoun} will be watching closely next season.")
             return f"{p} expects more. This team isn't competing at the level {p} signed up for."
 
         else:  # local_hero
