@@ -107,8 +107,8 @@ class Config:
     popularity_miss_playoffs_max: float = 0.05
     popularity_bottom2:       float = 0.03
     # ── League popularity ─────────────────────────────────────────────────────
-    league_pop_engagement_pull: float = 0.15
-    league_pop_drama_max: float = 0.08
+    league_pop_engagement_pull: float = 0.07   # was 0.15 — reduced so narrative signals aren't drowned out
+    league_pop_drama_max: float = 0.025        # was 0.08 — rescaled to match peer signal magnitudes
     league_pop_entertainment_max: float = 0.015
     league_pop_balance_window: int = 8
     league_pop_balance_penalty: float = 0.025

@@ -268,7 +268,7 @@ class League:
     def _compute_owner_happiness(self, owner: Owner, team: Team, season: Season) -> float:
         """Return 0.0–1.0 season happiness score based on motivation and result."""
         if owner.motivation == MOT_MONEY:
-            base = max(0.05, min(0.95, 0.50 + owner.last_net_profit * 0.06))
+            base = max(0.05, min(0.95, 0.50 + owner.last_net_profit * 0.008))  # was 0.06 — old scale hit ceiling at $7.5M profit
 
         elif owner.motivation == OWNER_MOT_WINNING:
             if season.champion is team:
@@ -287,7 +287,7 @@ class League:
 
         else:  # MOT_LOCAL_HERO
             local_score = 0.5 * team.popularity + 0.5 * team.market_engagement
-            base = max(0.10, min(0.90, 0.15 + local_score * 1.40))
+            base = max(0.10, min(0.90, 0.10 + local_score * 1.00))  # was 0.15 + score*1.40 — average team read as 0.85 (nearly maxed)
 
         # Roster context: owners now sense roster risk, not just last season's results
         base += self._roster_happiness_modifier(owner, team)
@@ -1167,8 +1167,10 @@ class League:
             finals = season.playoff_rounds[-1][0]
             avg_engagement = (finals.seed1.market_engagement
                               + finals.seed2.market_engagement) / 2.0
-            # Neutral at 0.30 engagement; above → positive buzz, below → muted
-            finals_delta = cfg.league_pop_finals_interest_scale * (avg_engagement - 0.30) / 0.30
+            # Neutral at league avg engagement; above → positive buzz, below → muted.
+            # Using dynamic avg_eng (not fixed 0.30) so early seasons aren't always negative.
+            neutral = avg_eng if avg_eng > 0 else 0.30
+            finals_delta = cfg.league_pop_finals_interest_scale * (avg_engagement - neutral) / neutral
         signals["Finals buzz"] = finals_delta
         delta += finals_delta
 

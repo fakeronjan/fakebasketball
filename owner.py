@@ -268,7 +268,7 @@ class Owner:
     @property
     def lean_patience(self) -> int:
         """Seasons stuck in LEAN before slow-escalating to DEMAND."""
-        return 5 if self.personality == PERS_RENEGADE else 8
+        return 5 if self.personality == PERS_RENEGADE else 6   # was 8 — 8 seasons was nearly half a 20-season game
 
     # ── Threat escalation ─────────────────────────────────────────────────────
 
