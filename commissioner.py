@@ -285,59 +285,18 @@ class CommissionerGame:
         clear()
         header("FAKE BASKETBALL", "Commissioner Mode")
         print(f"""
-  You are the Commissioner of a fictional basketball league.
-  The simulation runs — players age, teams rise and fall, stars
-  chase rings or chase markets. Your job is to intervene at the
-  right moments: keep owners happy, steer franchises to better
-  cities, shape the rules, decide when the league is ready to
-  grow, and pull strings when a star hits free agency.
-  You won't control outcomes. You'll influence them.
+  {BOLD}You are the Commissioner of a fictional basketball league.{RESET}
+  Players develop, age, and retire. Owners push back. Rivals
+  emerge. You won't control outcomes — you'll influence them.
 """)
-        print(f"  {BOLD}{GREEN}✓  IMPLEMENTED{RESET}")
-        solids = [
-            "Season simulation  (schedule, standings, pace, shot style, era dynamics)",
-            "Playoffs  (bracket, series, home court, interactive round-by-round)",
-            "Player model  (Star / Co-Star / Starter, career arcs, positions, zones)",
-            "Player roster  (50/50 gender split, 400+ first names across 6 world regions)",
-            "Player happiness & popularity  (emoji scale, re-sign probability)",
-            "Chemistry  (positional fit, zone diversity, continuity bonus)",
-            "Injury & fatigue  (durability, pre-season rolls, games missed, dynasty decay)",
-            "Awards  (MVP, OPOY, DPOY, Finals MVP — all distinct)",
-            "Draft  (annual class, lottery influence, Invest in Talent)",
-            "Free agency  (contracts, expirations, star FA event w/ nudge / rig)",
-            "Market system  (effective metro, draw factor, fan base)",
-            "Revenue  (20% commissioner / 80% owners; P&L varies by market & competence)",
-            "Owner system  (motivation, personality, happiness, P&L, threat levels)",
-            "Owner meeting  (room read → agenda → ownership transitions each offseason)",
-            "CBA / labor  (union proposals, counter-offers, work stoppage risk)",
-            "Relocation  (owner-driven demand → commissioner picks city)",
-            "Meta / era  (rule change tool, escalating costs, fan weariness)",
-            "Rival league  (Type A: external investors · Type B: owner defection · Type C: player walkout)",
-            "Dynasty decay  (champion entropy · fatigue compounding · scoring calibrated ~28 PPG)",
-            "Reports  (league history, team history, rosters, rivalries, playoff analysis…)",
-            "Save / load  (single slot, autosave after every season)",
+        cols = [
+            ("Season & playoff simulation",    "Owner system & CBA"),
+            ("Player arcs, injuries & fatigue", "Rival leagues  (3 types)"),
+            ("Chemistry, awards & draft",       "Expansion & relocation"),
+            ("Free agency & star FA events",    "Revenue, era & reports"),
         ]
-        for s in solids:
-            print(f"    {GREEN}•{RESET}  {s}")
-
-        print(f"\n  {BOLD}{GOLD}~  WORKS BUT NEEDS REFINEMENT{RESET}")
-        roughs = [
-            "Expansion  (triggers correctly, destination logic is thin)",
-            "Owner happiness calibration  (formulas in place, tuning TBD)",
-            "Showcase event  (present, stakes feel low)",
-        ]
-        for r in roughs:
-            print(f"    {GOLD}•{RESET}  {r}")
-
-        print(f"\n  {BOLD}{MUTED}○  NOT YET BUILT{RESET}")
-        todos = [
-            "Hall of Fame  (career stat accumulation, eligibility, enshrinement)",
-            "League sponsorships  (TV deals, naming rights, gambling partnerships)",
-            "Expansion bidding  (franchise fees, market research, owner vetting)",
-        ]
-        for t in todos:
-            print(f"    {MUTED}•  {t}{RESET}")
-
+        for left, right in cols:
+            print(f"  {GREEN}✓{RESET}  {left:<36}  {GREEN}✓{RESET}  {right}")
         print()
         input("\n  Press Enter to start a new league...")
 
@@ -400,23 +359,30 @@ class CommissionerGame:
         while True:
             clear()
             header("FOUNDING FRANCHISES", "Select your starting markets")
-            print(f"""
-  The league begins with franchises you choose. Larger markets
-  provide more fan stability; smaller markets are harder to grow
-  but create more dramatic underdog stories.
+            print(f"\n  Larger markets give more fan stability; smaller markets are harder")
+            print(f"  to grow but create more dramatic underdog stories.  {GOLD}★{RESET} = co-tenant available\n")
 
-  You may also add a {GOLD}co-tenant{RESET} (second team in a city) from day one —
-  a high-variance bet on intracity rivalry generating early buzz,
-  at the cost of both teams starting with split market popularity.
-
-  {MUTED}Market = relative metro size · Draw = climate/entertainment/marketability · ★ = co-tenant{RESET}
-""")
-            print(f"  {'#':>2}  {'Market':<28} {'Metro':>6}  {'Draw':>4}")
-            divider()
-            for i, f in enumerate(all_primaries, 1):
-                metro = f.effective_metro
-                cotenant_tag = f"  {GOLD}★{RESET}" if f.city in all_secondaries else ""
-                print(f"  {i:>2}. {f.city:<28} {metro:>6.1f}  {f.draw_factor:>4.2f}{cotenant_tag}")
+            # Two-column layout
+            half = (len(all_primaries) + 1) // 2
+            left_col  = list(enumerate(all_primaries[:half],        1))
+            right_col = list(enumerate(all_primaries[half:], half + 1))
+            col_w = 26
+            for (li, lf), rc in zip(left_col, right_col + [(None, None)]):
+                lm  = f"{lf.effective_metro:>4.0f}M"
+                lst = f"{GOLD}★{RESET}" if lf.city in all_secondaries else " "
+                left  = f"  {li:>2}. {lf.city:<{col_w}} {lm} {lst}"
+                if rc[0] is not None:
+                    ri, rf = rc
+                    rm  = f"{rf.effective_metro:>4.0f}M"
+                    rst = f"{GOLD}★{RESET}" if rf.city in all_secondaries else " "
+                    right = f"   {ri:>2}. {rf.city:<{col_w}} {rm} {rst}"
+                else:
+                    right = ""
+                print(left + right)
+            for (li, lf) in left_col[len(right_col):]:
+                lm  = f"{lf.effective_metro:>4.0f}M"
+                lst = f"{GOLD}★{RESET}" if lf.city in all_secondaries else " "
+                print(f"  {li:>2}. {lf.city:<{col_w}} {lm} {lst}")
 
             print()
             raw = prompt("Enter team numbers separated by spaces (min 6, max 16), or Enter for default (top 8):")
@@ -1459,23 +1425,24 @@ class CommissionerGame:
                       f"  {MUTED}{p.position} · {tname:<18}{RESET}"
                       f"  {stat_str}  {p.trend}")
 
-        # Standings
-        print(f"\n  {'TEAM':<30} {'RECORD':<14} {'ORtg':>4}  {'DRtg':>4}  {'Pace':>4}  PLAYOFF")
+        # Standings (single table: record + scoring + playoff result)
+        print(f"\n  {'TEAM':<30} {'RECORD':<13} {'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  PLAYOFF")
         divider()
         standings = season.regular_season_standings
         n_playoff = season.playoff_teams
         playoff_result = self._playoff_results(season)
-        cfg = season.cfg
 
         for i, team in enumerate(standings):
             rank = i + 1
             rw, rl = season.reg_wins(team), season.reg_losses(team)
-            fname = team.franchise_at(sn).name
+            fname  = team.franchise_at(sn).name
             result = playoff_result.get(team, "")
-            ortg, drtg, pace, _ = season._start_ratings.get(team, (team.ortg, team.drtg, team.pace, team.style_3pt))
-            record   = _wl(rw, rl)
+            record = _wl(rw, rl)
+            ppg    = season.team_ppg(team)
+            papg   = season.team_papg(team)
+            diff   = ppg - papg
+            diff_c = GREEN if diff > 0 else (RED if diff < 0 else MUTED)
 
-            # Pad the raw name first, then wrap with color — avoids ANSI width issues
             padded = f"{fname:<28}"
             if team is champ:
                 name_str   = f"{GOLD}{BOLD}{padded}{RESET}"
@@ -1494,20 +1461,7 @@ class CommissionerGame:
                 result_str = f"{MUTED}—{RESET}"
 
             seed_str = f"{CYAN}({rank}){RESET}" if rank <= n_playoff else "    "
-            print(f"  {rank:>2}. {name_str}  {record:<14} {ortg:>4.0f}  {drtg:>4.0f}  {pace:>4.0f}  {seed_str} {result_str}")
-
-        # Points scored / allowed
-        print()
-        print(f"  {'TEAM':<30} {'PS/G':>5}  {'PA/G':>5}  Diff")
-        divider()
-        for i, team in enumerate(standings):
-            fname = team.franchise_at(sn).name
-            padded = f"{fname:<28}"
-            ppg  = season.team_ppg(team)
-            papg = season.team_papg(team)
-            diff = ppg - papg
-            diff_c = GREEN if diff > 0 else (RED if diff < 0 else MUTED)
-            print(f"  {i+1:>2}. {padded}  {ppg:>5.1f}  {papg:>5.1f}  {diff_c}{diff:+.1f}{RESET}")
+            print(f"  {rank:>2}. {name_str}  {record:<13} {ppg:>5.1f}  {papg:>5.1f}  {diff_c}{diff:>+5.1f}{RESET}  {seed_str} {result_str}")
 
         # Playoff bracket recap
         if season.playoff_rounds:
