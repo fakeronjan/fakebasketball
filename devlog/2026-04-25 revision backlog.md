@@ -17,6 +17,9 @@
 - **Ownership transition redesign** — probabilistic breaking point (replaces hard 3-denial cap); sell-vs-breakaway choice; $20M buyout roll; reframed as "transition" not "crisis."
 - **Work stoppage hangover extended** — 3 seasons → 5 seasons; steeper early curve (-7%/-4.5%/-2.5%/-1%/-0.5%); 5 annotation phases.
 - **Four-pillar league health framework** — Integrity / Parity / Drama / Entertainment composite scores computed each season; pillar_history stored on League; letter-grade display (A+ through F) with top 3 drivers shown in season summary; [H] full drill-down screen; League Health report in Reports menu with season-by-season trend table.
+- **Owner meeting noise reduction** — removed contract-cycling grievance (multi-expiry penalty); raised playoff-miss happiness base from 0.42 → 0.52; drought curve now explicit (tolerable for first miss, LEAN threshold around 4 consecutive misses). Result: ~20% restless after 5 seasons vs ~50% before.
+- **Elite player / star system** — three-part system: (1) Players' Meeting now shows only elite/high-tier players (peak_overall ≥ 12) with a summary line for the rest ("23 other rostered players — 2 unhappy"); (2) Season summary adds "Stars to Watch" block showing top 8 stars by tier with mood/contract/declining flags; (3) Draft screen fires a dedicated "Generational Draft Class" splash when an elite-ceiling prospect is on the board; (4) Star FA event upgrades to "MARQUEE FREE AGENCY" header for elite players with "⭐ THE LEAGUE IS WATCHING" banner.
+- **#29 Elite player visibility** — ✅ Shipped as part of star system above.
 
 ---
 
@@ -93,7 +96,7 @@
 | 26 | **In-game box scores** | Per-game stat display during playoff interactive mode |
 | 27 | **Mobile number pad** | Row of 1–9 + Enter + Backspace buttons overlaid on terminal for phone users |
 | 28 | ~~**Four-pillar league health framework**~~ | ✅ **Shipped 2026-04-25.** Integrity/Parity/Drama/Entertainment composite scores; letter grades A+–F; top-3 drivers in summary; [H] drill-down; League Health trend report. |
-| 29 | **Elite player visibility** | Commissioner dashboard should surface elite-tier players prominently — happiness, current market size, injury status. Commissioner should be able to see if marquee players are in small markets and act on it. |
+| 29 | ~~**Elite player visibility**~~ | ✅ **Shipped 2026-04-25.** Stars to Watch in summary; player meeting filtered to elite/high only; generational draft splash; marquee FA upgrade. |
 | 30 | **Generational draft prospect event** | When a draft class contains a player with projected peak_overall ≥ 16+, flag them the season *before* as a "generational prospect." Creates pre-draft anticipation Entertainment boost; lottery drama becomes the storyline. (LeBron 2003 / Wemby 2023 model.) |
 | 31 | **Big FA transition as league-wide event** | Star FA events (peak_overall > `star_fa_threshold`) should register as a significant Entertainment + Drama spike for the whole league, not just a commissioner decision. "LeBron is on the market" is appointment television regardless of destination. |
 | 32 | **Regular season stakes signal** | `playoff_fraction = playoff_teams / total_teams` as a moderate Entertainment signal. Sweet spot ~33–40%. Above 50% (current NBA criticism) regular season loses stakes. Creates tension with Parity — more playoff teams = more inclusive but less meaningful regular season. |

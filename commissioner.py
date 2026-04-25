@@ -1537,6 +1537,31 @@ class CommissionerGame:
                     print(f"    {wname:<26} def. {lname:<26} {w_wins}–{l_wins}  "
                           f"{MUTED}clinch {w_score}–{l_score}{RESET}")
 
+        # Stars to Watch
+        all_stars: list[tuple] = []
+        for _team in league.teams:
+            for _p in _team.roster:
+                if _p is not None and _p.peak_overall >= 12:
+                    all_stars.append((_p, _team))
+        all_stars.sort(key=lambda x: -x[0].peak_overall)
+
+        if all_stars:
+            print(f"\n  {BOLD}Stars to Watch{RESET}")
+            divider()
+            for _p, _team in all_stars[:8]:
+                _tier_c   = GOLD if _p.peak_overall >= 18 else CYAN
+                _tier_lbl = "Elite" if _p.peak_overall >= 18 else " High"
+                _exp_flag = f"  {RED}EXP{RESET}" if _p.contract_years_remaining <= 1 else ""
+                _dec_flag = f"  {MUTED}↓{RESET}"  if _p.is_declining else ""
+                _ps       = season.player_stats.get(_p.player_id)
+                _ppg_str  = f"{_ps.ppg:.1f} PPG" if _ps and _ps.games > 0 else ""
+                _tname    = _team.franchise_at(sn).name
+                print(f"  {happiness_emoji(_p.happiness)} {_tier_c}{_p.name:<22}{RESET}"
+                      f"  {MUTED}{_tname:<26}{RESET}"
+                      f"  {_tier_c}{_tier_lbl}{RESET}"
+                      f"{_exp_flag}{_dec_flag}"
+                      f"  {MUTED}{_ppg_str}{RESET}")
+
         # League health
         print()
         divider()
@@ -1633,19 +1658,6 @@ class CommissionerGame:
                 sc = GREEN if s >= 0.70 else (RED if s < 0.45 else GOLD)
                 contribution = w * s
                 print(f"  {sc}{bar}{RESET}  {MUTED}w={w:.2f}{RESET}  {clabel}")
-
-        # Show raw popularity signals at bottom for reference
-        if self._last_pop_signals:
-            print(f"\n  {BOLD}Popularity signals this season{RESET}  {MUTED}(underlying drivers){RESET}")
-            divider()
-            annotations = self._pop_signal_annotations(season)
-            for sig_name, sig_delta in self._last_pop_signals.items():
-                if abs(sig_delta) >= 0.0005:
-                    color = GREEN if sig_delta > 0 else RED
-                    sign  = "+" if sig_delta >= 0 else ""
-                    note  = annotations.get(sig_name, "")
-                    note_str = f"  {MUTED}{note}{RESET}" if note else ""
-                    print(f"    {MUTED}{sig_name:<22}{RESET} {color}{sign}{sig_delta:.1%}{RESET}{note_str}")
 
         press_enter()
 
@@ -3776,12 +3788,18 @@ class CommissionerGame:
         probs  = {t: scores[t] / total for t in candidates}
 
         clear()
-        header("STAR FREE AGENT", f"After Season {sn}")
-        mot_c = GREEN if player.motivation == MOT_WINNING else (GOLD if player.motivation == MOT_MARKET else CYAN)
-        tier_c = GOLD if player.peak_overall >= 18 else CYAN
+        is_generational = player.peak_overall >= 18
+        fa_headline = "MARQUEE FREE AGENCY" if is_generational else "STAR FREE AGENT"
+        header(fa_headline, f"After Season {sn}")
+        mot_c  = GREEN if player.motivation == MOT_WINNING else (GOLD if player.motivation == MOT_MARKET else CYAN)
+        tier_c = GOLD if is_generational else CYAN
+
+        if is_generational:
+            print(f"\n  {GOLD}{BOLD}⭐ THE LEAGUE IS WATCHING{RESET}")
+            print(f"  {MUTED}An elite-tier player is on the open market.{RESET}")
         print(f"\n  {happiness_emoji(player.happiness)} {tier_c}{BOLD}{player.name}{RESET}  "
               f"{MUTED}{player.position} · Age {player.age} · "
-              f"Ceiling {player.ceiling_tier}{RESET}\n"
+              f"Ceiling {player.ceiling_tier} · {player.career_length - player.seasons_played} seasons left{RESET}\n"
               f"  ORtg {player.ortg_contrib:+.1f}  DRtg {player.drtg_contrib:+.1f}  "
               f"{player.trend}  Motivation: {mot_c}{player.motivation}{RESET}\n")
 
@@ -3883,6 +3901,20 @@ class CommissionerGame:
             league.free_agent_pool.extend(league.draft_pool)
             league.draft_pool = []
             return
+
+        # Generational prospect alert — fire before the main draft screen
+        elite_prospects = [p for p in league.draft_pool if p.ceiling_tier == TIER_ELITE]
+        if elite_prospects:
+            clear()
+            header("GENERATIONAL DRAFT CLASS", f"After Season {sn}")
+            print(f"\n  {GOLD}{BOLD}⭐ A GENERATIONAL TALENT IS IN THIS DRAFT CLASS{RESET}\n")
+            for _ep in elite_prospects:
+                print(f"  {GOLD}{BOLD}{_ep.name}{RESET}  "
+                      f"{MUTED}{_ep.position} · Age {_ep.age} · Elite ceiling{RESET}")
+            print(f"\n  {MUTED}Scouts are calling this one of the most anticipated drafts")
+            print(f"  in league history. Every team without a slot open is envious.")
+            print(f"  Lottery influence ($10M) has never mattered more.{RESET}")
+            press_enter()
 
         clear()
         header("DRAFT", f"After Season {sn}")
@@ -4796,9 +4828,26 @@ class CommissionerGame:
         league = self.league
         sn     = season.number
 
-        reps = [(t, t.roster[0]) for t in league.teams
-                if t.roster and t.roster[0] is not None]
-        if not reps:
+        # Collect all elite/high players (peak_overall >= 12) across all roster slots.
+        # Mid/low players get a single summary line — their issues are team-level, not
+        # commissioner-level decisions.
+        star_reps: list[tuple] = []
+        other_count = 0
+        other_unhappy = 0
+        for t in league.teams:
+            for p in t.roster:
+                if p is None:
+                    continue
+                if p.peak_overall >= 12:
+                    star_reps.append((t, p))
+                else:
+                    other_count += 1
+                    if p.happiness < 0.40:
+                        other_unhappy += 1
+        star_reps.sort(key=lambda x: -x[1].peak_overall)
+        reps = star_reps
+
+        if not reps and other_count == 0:
             return
 
         marketing_used = False
@@ -4807,8 +4856,11 @@ class CommissionerGame:
             clear()
             header("PLAYERS' MEETING", f"After Season {sn}")
 
-            print(f"\n  {MUTED}{'':4}{'Player':<22} {'Team':<22} {'Mot':<4} "
-                  f"{'Mood':<10} {'Ctr':>4}  Ask{RESET}\n")
+            if reps:
+                print(f"\n  {MUTED}{'':4}{'Player':<22} {'Team':<22} {'Mot':<4} "
+                      f"{'Mood':<10} {'Ctr':>4}  Ask{RESET}\n")
+            else:
+                print(f"\n  {MUTED}No elite or high-tier players in the league yet.{RESET}\n")
 
             n_content = n_restless = n_unhappy = n_asks = 0
             for i, (team, player) in enumerate(reps, 1):
@@ -4840,7 +4892,7 @@ class CommissionerGame:
                       f"{mood_c}{mood_str:<10}{RESET} "
                       f"{ctr_str} {exp_tag}  {ask_str}")
 
-            # Summary
+            # Summary — star players
             print()
             parts = []
             if n_content:  parts.append(f"{GREEN}{n_content} content{RESET}")
@@ -4848,7 +4900,14 @@ class CommissionerGame:
             if n_unhappy:  parts.append(f"{RED}{n_unhappy} unhappy{RESET}")
             if n_asks and not season.meta_shock:
                 parts.append(f"{GOLD}{n_asks} requesting rule change{RESET}")
-            print(f"  {' · '.join(parts)}")
+            if parts:
+                print(f"  {' · '.join(parts)}")
+            # Summarize mid/low players in one line
+            if other_count:
+                o_str = f"{other_count} other rostered players"
+                if other_unhappy:
+                    o_str += f"  {RED}{other_unhappy} unhappy{RESET}"
+                print(f"  {MUTED}{o_str}{RESET}")
             print()
 
             raw = prompt(
