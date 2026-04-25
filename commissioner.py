@@ -421,10 +421,10 @@ class CommissionerGame:
                 pull = f.effective_metro * 0.5
                 print(f"  {CYAN}[{i}]{RESET} {f.city:<28} {MUTED}~{pull:.1f}M{RESET}")
             print(f"""
-  {MUTED}Trade-off: both teams launch with split popularity. The primary
-  keeps 80% of its starting pop; the secondary gets 20%. Market
-  pull targets are 70%/50% of baseline. A city championship or
-  Finals run steals 25% of that boost from the co-tenant.{RESET}
+  {MUTED}Trade-off: both teams launch with split popularity — 50/50,
+  since neither has history in this league yet. Market pull targets
+  are 70%/50% of baseline. A city championship or Finals run steals
+  25% of that boost from the co-tenant.{RESET}
 """)
             raw = prompt("Add co-tenants by number (e.g. 1 3), or Enter to skip:")
             parts = raw.split()
