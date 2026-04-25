@@ -1762,12 +1762,18 @@ class CommissionerGame:
         # ── Work stoppage hangover ────────────────────────────────────────────
         # Counter is decremented during evolution, so h reflects seasons still remaining
         h = league._stoppage_hangover
-        if h == 2:
-            annotations["Work stoppage hangover"] = "fans furious — engagement crashed"
+        if h == 5:
+            annotations["Work stoppage hangover"] = "catastrophic — season cancelled, fans furious"
+        elif h == 4:
+            annotations["Work stoppage hangover"] = "severe — trust not rebuilt"
+        elif h == 3:
+            annotations["Work stoppage hangover"] = "moderate — scars still visible"
+        elif h == 2:
+            annotations["Work stoppage hangover"] = "lingering fan resentment"
         elif h == 1:
-            annotations["Work stoppage hangover"] = "fans still resentful"
+            annotations["Work stoppage hangover"] = "trace — needs something special to fully heal"
         elif h == 0 and "Work stoppage hangover" in self._last_pop_signals:
-            annotations["Work stoppage hangover"] = "lingering fan distrust — last year"
+            annotations["Work stoppage hangover"] = "recovered — fans have moved on"
 
         return annotations
 
@@ -6343,7 +6349,7 @@ class CommissionerGame:
         if roll <= risk_pct:
             league._work_stoppages += 1
             league.work_stoppage_this_season = True
-            league._stoppage_hangover = 3   # 3-season fan resentment arc
+            league._stoppage_hangover = 5   # 5-season fan resentment arc
             if risk_pct >= 55:
                 print(f"  {RED}{BOLD}✗ WORK STOPPAGE — Season {sn + 1} cancelled{RESET}")
                 print(f"  {RED}Players refuse to play. No games. No champion this year.{RESET}")

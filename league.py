@@ -1212,9 +1212,16 @@ class League:
         self.legitimacy = min(1.0, self.legitimacy + cfg.legitimacy_recovery)
 
         # ── Work stoppage hangover: multi-season fan resentment ───────────────
-        # Fades over 3 seasons: strong → moderate → lingering
+        # Fades over 5 seasons: catastrophic → severe → moderate → lingering → trace
+        # Modelled on 1994 MLB strike — took the '98 home run chase to fully recover.
         if self._stoppage_hangover > 0:
-            hangover_delta = {3: -0.040, 2: -0.025, 1: -0.010}.get(self._stoppage_hangover, 0.0)
+            hangover_delta = {
+                5: -0.070,   # year 1: catastrophic — season cancelled, fans furious
+                4: -0.045,   # year 2: severe — trust not rebuilt
+                3: -0.025,   # year 3: moderate — scars still visible
+                2: -0.010,   # year 4: lingering resentment
+                1: -0.005,   # year 5: trace — needs something special to fully heal
+            }.get(self._stoppage_hangover, 0.0)
             signals["Work stoppage hangover"] = hangover_delta
             delta += hangover_delta
             self._stoppage_hangover -= 1
