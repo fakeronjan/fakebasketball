@@ -756,8 +756,8 @@ class CommissionerGame:
     def run(self):
         global _game_ref
         _game_ref = self
-        self._start_menu()
         try:
+            self._start_menu()
             while True:
                 self.season_num += 1
                 season = self._run_one_season()
