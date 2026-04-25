@@ -5538,10 +5538,12 @@ class CommissionerGame:
     def _handle_owner_breaking_point(self, team: Team, owner: Owner, season: Season) -> None:
         """Owner has hit a breaking point after repeated denials.
 
-        Two paths: facilitate an immediate sale (clean exit, no breakaway risk) or
-        let it play out (owner stays, either sells alone if they can't recruit allies,
-        or becomes a Type B ringleader if the league climate is unhappy enough).
+        Two paths: facilitate an immediate sale (costs $20M, rolls for acceptance
+        based on owner profile) or let it play out (free, but wires owner into
+        Type B ringleader machinery — may sell quietly or recruit allies).
         """
+        BUYOUT_COST = 20.0
+
         league = self.league
         sn     = season.number
         cfg    = league.cfg
@@ -5551,19 +5553,22 @@ class CommissionerGame:
         disloyal  = owner.loyalty    == LOY_LOW
 
         if renegade and disloyal:
-            risk_c     = RED
-            risk_label = "HIGH"
-            risk_note  = "Renegade + low loyalty — likely to recruit disgruntled owners."
+            risk_c      = RED
+            risk_label  = "HIGH"
+            risk_note   = "Renegade + low loyalty — likely to recruit disgruntled owners."
+            accept_prob = 0.65
         elif renegade or disloyal:
-            risk_c     = GOLD
-            risk_label = "MEDIUM"
-            risk_note  = ("Renegade personality — may look for allies."
-                          if renegade else
-                          "Low loyalty — may not go quietly.")
+            risk_c      = GOLD
+            risk_label  = "MEDIUM"
+            risk_note   = ("Renegade personality — may look for allies."
+                           if renegade else
+                           "Low loyalty — may not go quietly.")
+            accept_prob = 0.80
         else:
-            risk_c     = MUTED
-            risk_label = "LOW"
-            risk_note  = "Steady + loyal — more likely to sell and move on."
+            risk_c      = MUTED
+            risk_label  = "LOW"
+            risk_note   = "Steady + loyal — more likely to sell and move on."
+            accept_prob = 1.00   # always accepts a clean exit
 
         other_demand = sum(1 for t in league.teams
                            if t is not team and t.owner
@@ -5571,6 +5576,8 @@ class CommissionerGame:
         other_lean   = sum(1 for t in league.teams
                            if t is not team and t.owner
                            and t.owner.threat_level == THREAT_LEAN)
+
+        can_facilitate = self._treasury >= BUYOUT_COST
 
         clear()
         header("OWNER AT BREAKING POINT", f"After Season {sn}")
@@ -5589,26 +5596,53 @@ class CommissionerGame:
                   f"limited recruiting pool.{RESET}")
 
         print(f"\n  {BOLD}Two paths forward:{RESET}\n")
-        print(f"  {CYAN}[1]{RESET}  Facilitate an immediate sale")
-        print(f"       {MUTED}{owner.name} leaves. You choose the new ownership group.{RESET}")
-        print(f"       {MUTED}Clean break — no breakaway risk. Could be a fresh start for {fname}.{RESET}")
+
+        # ── Option 1: Facilitate sale ─────────────────────────────────────────
+        if can_facilitate:
+            prob_str = f"{accept_prob:.0%} chance they accept" if accept_prob < 1.0 else "guaranteed acceptance"
+            sale_label = (f"Facilitate an immediate sale  "
+                          f"{MUTED}(${ BUYOUT_COST:.0f}M buyout incentive · {prob_str}){RESET}")
+        else:
+            sale_label = (f"{MUTED}Facilitate an immediate sale  "
+                          f"(need ${BUYOUT_COST:.0f}M — insufficient treasury){RESET}")
+
+        print(f"  {CYAN}[1]{RESET}  {sale_label}")
+        if can_facilitate:
+            print(f"       {MUTED}{owner.name} leaves. You choose the new ownership group.{RESET}")
         print()
+
+        # ── Option 2: Let it play out ─────────────────────────────────────────
         print(f"  {CYAN}[2]{RESET}  Let it play out")
         print(f"       {MUTED}{owner.name} stays for now. Whether they sell or recruit")
         print(f"       depends on how many allies they can find in the ownership group.{RESET}")
         print(f"       {MUTED}Watch next season's owner meeting closely.{RESET}")
 
-        choice = choose(["Facilitate an immediate sale", "Let it play out"], default=0)
+        opts = [sale_label if can_facilitate else f"{MUTED}Facilitate sale (insufficient funds){RESET}",
+                "Let it play out"]
+        choice = choose(opts, default=1 if not can_facilitate else 0)
 
-        if choice == 0:
-            self._handle_ownership_transition(team, owner, season, forced=True)
+        if choice == 0 and can_facilitate:
+            self._treasury -= BUYOUT_COST
+            if accept_prob >= 1.0 or random.random() < accept_prob:
+                # Sale accepted
+                print(f"\n  {GREEN}{owner.name} accepts the offer.{RESET}  "
+                      f"Treasury: {GREEN}${self._treasury:.0f}M{RESET}")
+                press_enter()
+                self._handle_ownership_transition(team, owner, season, forced=True)
+            else:
+                # Sale rejected — money spent, falls through to ringleader path
+                print(f"\n  {RED}{owner.name} rejected the offer — not interested in a quiet exit.{RESET}")
+                print(f"  {MUTED}Treasury: ${self._treasury:.0f}M  (buyout cost still spent){RESET}")
+                print(f"  {MUTED}They remain for now. Watch next season's owner meeting.{RESET}")
+                press_enter()
+                league._ringleader_team_id        = team.team_id
+                league._ringleader_demand_seasons  = cfg.rival_b_ringleader_seasons
+                league._defection_warning_season   = None
         else:
-            # Wire directly into Type B ringleader machinery.
-            # Set demand_seasons to the warning threshold so the warning fires
-            # next offseason check, and defection potentially resolves the season after.
-            league._ringleader_team_id       = team.team_id
-            league._ringleader_demand_seasons = cfg.rival_b_ringleader_seasons
-            league._defection_warning_season  = None
+            # Let it play out — wire into Type B ringleader machinery
+            league._ringleader_team_id        = team.team_id
+            league._ringleader_demand_seasons  = cfg.rival_b_ringleader_seasons
+            league._defection_warning_season   = None
             print(f"\n  {GOLD}Understood.{RESET} {owner.name} remains — for now.")
             print(f"  {MUTED}Keep an eye on the owner meeting next season.{RESET}")
             press_enter()
