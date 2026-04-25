@@ -352,15 +352,17 @@ class Season:
         self._compute_finals_mvp()
 
     def _compute_regular_season_awards(self) -> None:
-        """Compute MVP, OPOY, and DPOY from the full league player pool.
+        """Compute MVP, OPOY, and DPOY from the regular-season player pool.
 
-        All rostered players are eligible — a dominant player on a lottery team
-        can still win if their production is exceptional enough. Win% weighting
-        naturally rewards players on better teams without hard-excluding others.
+        MVP: restricted to playoff teams; scored 60% PPG + 40% defensive value,
+             weighted by regular-season win%. Best two-way performer on a good team.
 
-        MVP and OPOY use actual simulated PPG weighted by team win%.
-        DPOY uses individual defensive rating (pts allowed per 100 poss defended),
-        falling back to drtg_contrib if stats are unavailable.
+        OPOY: all players eligible (including MVP); pure scoring champ — highest PPG
+              regardless of team quality. No win% weighting.
+
+        DPOY: all players except OPOY winner eligible (including MVP); pure defensive
+              champ — lowest def_rtg (pts allowed per 100 poss defended). No win%
+              weighting. Falls back to player attribute if no game-log data.
         """
         pool = [
             (p, t)
@@ -371,39 +373,91 @@ class Season:
         if not pool:
             return
 
+        playoff_set = set(self.regular_season_standings[:self.playoff_teams])
+
         def _ppg(p: Player) -> float:
             s = self.player_stats.get(p.player_id)
             return s.ppg if s else 0.0
 
-        def _def_rtg(p: Player) -> float:
+        def _def_score(p: Player) -> float:
+            """Defensive value: positive = better than league average (110 baseline)."""
             s = self.player_stats.get(p.player_id)
-            # Lower def_rtg = better defender; fall back to attribute if no stats
+            if s and s.poss_defended > 0:
+                return -(s.def_rtg - 110.0)
+            return -p.drtg_contrib  # fallback: attribute already on same scale
+
+        def _raw_def_rtg(p: Player) -> float:
+            """Raw def_rtg for DPOY sorting (lower = better)."""
+            s = self.player_stats.get(p.player_id)
             return s.def_rtg if (s and s.poss_defended > 0) else (110.0 + p.drtg_contrib)
 
-        # MVP: highest PPG weighted by team's regular-season win pct
-        self.mvp, self.mvp_team = max(
-            pool,
-            key=lambda pt: _ppg(pt[0]) * (0.7 + 0.6 * self.reg_win_pct(pt[1]))
-        )
+        # MVP: playoff teams only; 60/40 two-way formula weighted by win%
+        mvp_pool = [(p, t) for p, t in pool if t in playoff_set]
+        if mvp_pool:
+            self.mvp, self.mvp_team = max(
+                mvp_pool,
+                key=lambda pt: (
+                    (0.60 * _ppg(pt[0]) + 0.40 * _def_score(pt[0]))
+                    * (0.70 + 0.60 * self.reg_win_pct(pt[1]))
+                ),
+            )
 
-        # OPOY: highest PPG scorer who is not the MVP
-        opoy_pool = [(p, t) for p, t in pool if p is not self.mvp]
-        if opoy_pool:
-            self.opoy, self.opoy_team = max(opoy_pool, key=lambda pt: _ppg(pt[0]))
+        # OPOY: all players, pure PPG — scoring champ, independent of team success
+        if pool:
+            self.opoy, self.opoy_team = max(pool, key=lambda pt: _ppg(pt[0]))
 
-        # DPOY: lowest defensive rating (MVP and OPOY ineligible)
-        dpoy_pool = [(p, t) for p, t in pool if p is not self.mvp and p is not self.opoy]
+        # DPOY: all players except OPOY winner, pure def_rtg — OPOY and DPOY
+        #       cannot be the same player, but MVP can win either or both
+        dpoy_pool = [(p, t) for p, t in pool if p is not self.opoy]
         if dpoy_pool:
-            self.dpoy, self.dpoy_team = min(dpoy_pool, key=lambda pt: _def_rtg(pt[0]))
+            self.dpoy, self.dpoy_team = min(dpoy_pool, key=lambda pt: _raw_def_rtg(pt[0]))
 
     def _compute_finals_mvp(self) -> None:
-        """Compute Finals MVP after the champion is set."""
-        if not self.champion:
+        """Compute Finals MVP from championship series game logs.
+
+        Uses the same 60/40 two-way formula as regular-season MVP (PPG + defensive
+        value), applied to stats from the Finals games only. No win% weighting —
+        all champion players won the same series.
+        """
+        if not self.champion or not self.playoff_rounds:
             return
-        champ_players = [(p, self.champion) for p in self.champion.roster
-                         if p is not None]
-        if champ_players:
-            self.finals_mvp, _ = max(champ_players, key=lambda pt: pt[0].overall)
+
+        finals_series = self.playoff_rounds[-1][0]
+
+        # Aggregate stats from each Finals game for champion's players
+        pts:      dict[int, int] = {}
+        pd:       dict[int, int] = {}   # poss_defended
+        pa:       dict[int, int] = {}   # pts_allowed
+        gp:       dict[int, int] = {}   # games played
+
+        for game in finals_series.games:
+            logs = game.home_logs if game.home is self.champion else game.away_logs
+            for pid, log in logs.items():
+                if pid == _BENCH_ID:
+                    continue
+                pts[pid] = pts.get(pid, 0) + log.points
+                pd[pid]  = pd.get(pid, 0)  + log.poss_defended
+                pa[pid]  = pa.get(pid, 0)  + log.pts_allowed
+                gp[pid]  = gp.get(pid, 0)  + 1
+
+        pid_to_player = {p.player_id: p for p in self.champion.roster if p is not None}
+
+        def _fmvp_score(pid: int) -> float:
+            games = gp.get(pid, 0)
+            if games == 0:
+                return -999.0
+            ppg = pts.get(pid, 0) / games
+            poss = pd.get(pid, 0)
+            if poss > 0:
+                def_score = -(pa.get(pid, 0) / poss * 100 - 110.0)
+            else:
+                p = pid_to_player[pid]
+                def_score = -p.drtg_contrib
+            return 0.60 * ppg + 0.40 * def_score
+
+        candidates = [pid for pid in pts if pid in pid_to_player and gp.get(pid, 0) > 0]
+        if candidates:
+            self.finals_mvp = pid_to_player[max(candidates, key=_fmvp_score)]
 
     def run(self) -> None:
         self.play_regular_season()
