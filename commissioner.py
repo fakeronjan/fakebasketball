@@ -269,7 +269,7 @@ class CommissionerGame:
             print(f"  The save may be from an incompatible version of the game.")
             idx = choose(["Start a new league", "Quit"], default=0)
             if idx == 1:
-                raise SystemExit
+                raise _QuitSignal()
             self._setup()
 
     # ── Setup ─────────────────────────────────────────────────────────────────
@@ -781,9 +781,11 @@ class CommissionerGame:
                     self._show_farewell()
                     break
         except _QuitSignal:
-            _do_save(self)
-            clear()
-            print(f"\n  {GREEN}Game saved.{RESET}  See you next season, Commissioner.\n")
+            if self.league is not None and self.league.seasons:
+                _do_save(self)
+                clear()
+                print(f"\n  {GREEN}Game saved.{RESET}  See you next season, Commissioner.\n")
+            # else: quit from start menu — no game to save, just exit cleanly
 
     def _start_menu(self) -> None:
         """Startup menu — new game or continue a saved one."""
@@ -799,7 +801,7 @@ class CommissionerGame:
                 self._load_game()
                 return
             elif idx == 2:
-                raise SystemExit
+                raise _QuitSignal()
         self._setup()
 
     def _run_one_season(self) -> Season:
