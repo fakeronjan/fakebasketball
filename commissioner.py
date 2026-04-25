@@ -5535,22 +5535,50 @@ class CommissionerGame:
             print(f"\n  {GREEN}{new_owner.name}{RESET} now owns {fname}.")
             press_enter()
 
-    def _handle_expansion_format_prompt(self, season: Season):
-        """Offer a format review after an expansion wave fires."""
-        league = self.league
-        n = len(league.teams)
+    def _handle_expansion_format_prompt(self, season: Season, n_added: int = 0):
+        """Offer a format review after an expansion wave fires, showing before/after impact."""
+        league  = self.league
+        cfg     = league.cfg
+        n       = len(league.teams)
+        n_before = n - n_added
+
+        # Effective gpp last season (before expansion teams join)
+        gpp_before = cfg.games_per_pair if cfg.games_per_pair > 0 else _games_per_pair(max(n_before, 2))
+        gs_before  = gpp_before * (n_before - 1) if n_before > 1 else 0
+
+        # What auto-calc gives for new size
+        gpp_auto = _games_per_pair(n)
+        gs_auto  = gpp_auto * (n - 1)
+
+        # Effective gpp next season (locked or auto)
+        gpp_next = cfg.games_per_pair if cfg.games_per_pair > 0 else gpp_auto
+        gs_next  = gpp_next * (n - 1)
+
         clear()
         header("EXPANSION FORMAT CHECK", f"After Season {season.number}")
-        print(f"""
-  The league has grown to {BOLD}{n} teams{RESET}. Your current schedule and
-  playoff format may need adjusting to stay balanced.
+        print(f"\n  The league grows from {BOLD}{n_before}{RESET} → {BOLD}{n} teams{RESET} next season.\n")
 
-  {MUTED}Auto-recommended for {n} teams:{RESET}
-    Games per matchup   {_games_per_pair(n)}×  →  {_games_per_pair(n) * (n-1)}-game season
-    Playoff bracket     {_playoff_count(n)} teams  ({_playoff_count(n)/n*100:.0f}% qualify)
-""")
+        # Before / after table
+        print(f"  {'':28} {'This season':>12}  {'Next season':>12}")
+        print(f"  {'Teams':<28} {n_before:>12}  {n:>12}")
+        print(f"  {'Games per matchup':<28} {gpp_before:>10}×  {gpp_next:>10}×")
+        print(f"  {'Regular season length':<28} {gs_before:>11}g  {gs_next:>11}g")
+
+        # Flag if schedule shrinks
+        if gs_next < gs_before:
+            print(f"\n  {RED}⚠ Your season would shrink from {gs_before} to {gs_next} games.{RESET}")
+            print(f"  {MUTED}With more teams, auto-calc reduces games per pair to stay near 40 games total.{RESET}")
+            print(f"  {MUTED}You can lock a higher value in format review.{RESET}")
+        elif gs_next > gs_before:
+            print(f"\n  {GREEN}Season grows from {gs_before} to {gs_next} games with {n} teams.{RESET}")
+        else:
+            print(f"\n  {MUTED}Season length unchanged at {gs_next} games.{RESET}")
+
+        po_auto = _playoff_count(n)
+        print(f"\n  {MUTED}Playoff bracket auto-recommendation: {po_auto} teams ({po_auto/n*100:.0f}% qualify){RESET}\n")
+
         idx = choose([
-            "Review & adjust format now",
+            "Review & adjust format",
             f"{MUTED}Keep current format{RESET}",
         ], default=1)
         if idx == 0:
@@ -5944,7 +5972,7 @@ class CommissionerGame:
             print(f"\n  {GREEN}Expansion approved!{RESET} {names} will join Season {joined}.")
             print(f"  League grows to {BOLD}{len(league.teams)}{RESET} teams.")
             press_enter()
-            self._handle_expansion_format_prompt(season)
+            self._handle_expansion_format_prompt(season, n_added=len(chosen))
             return
         else:
             print(f"\n  {MUTED}Expansion deferred.{RESET}")
