@@ -58,7 +58,7 @@ self.onmessage = async function (e) {
       'game.py', 'franchises.py', 'rival.py', 'league.py', 'commissioner.py',
     ];
     for (const f of pyFiles) {
-      const resp = await fetch(f);
+      const resp = await fetch(f, { cache: 'no-cache' });
       if (!resp.ok) throw new Error(`Failed to fetch ${f} (HTTP ${resp.status})`);
       pyodide.FS.writeFile('/home/pyodide/' + f, await resp.text());
     }
