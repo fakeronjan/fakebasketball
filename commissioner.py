@@ -46,7 +46,13 @@ def header(title: str, subtitle: str = ""):
     if subtitle:
         print(f"  {MUTED}{subtitle}{RESET}")
     print(f"{BOLD}{'═' * W}{RESET}")
-    print(f"  {MUTED}[q] save & quit  ·  [r] reports{RESET}")
+    has_reports = (
+        _game_ref is not None
+        and _game_ref.league is not None
+        and bool(_game_ref.league.seasons)
+    )
+    hint = "[q] save & quit  ·  [r] reports" if has_reports else "[q] quit"
+    print(f"  {MUTED}{hint}{RESET}")
 
 def divider():
     print(f"{MUTED}{'─' * W}{RESET}")
