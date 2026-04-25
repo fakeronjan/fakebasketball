@@ -46,6 +46,7 @@ def header(title: str, subtitle: str = ""):
     if subtitle:
         print(f"  {MUTED}{subtitle}{RESET}")
     print(f"{BOLD}{'═' * W}{RESET}")
+    print(f"  {MUTED}[q] save & quit  ·  [r] reports{RESET}")
 
 def divider():
     print(f"{MUTED}{'─' * W}{RESET}")
