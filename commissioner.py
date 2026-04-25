@@ -58,6 +58,30 @@ def header(title: str, subtitle: str = ""):
 def divider():
     print(f"{MUTED}{'─' * W}{RESET}")
 
+def _pillar_grade(score: float) -> str:
+    """Convert [0,1] pillar score to letter grade (2-char, right-padded)."""
+    if score >= 0.93: return "A+"
+    if score >= 0.88: return "A "
+    if score >= 0.85: return "A-"
+    if score >= 0.80: return "B+"
+    if score >= 0.75: return "B "
+    if score >= 0.70: return "B-"
+    if score >= 0.65: return "C+"
+    if score >= 0.60: return "C "
+    if score >= 0.55: return "C-"
+    if score >= 0.50: return "D+"
+    if score >= 0.45: return "D "
+    if score >= 0.40: return "D-"
+    return "F "
+
+def _grade_color(grade: str) -> str:
+    """ANSI color for a pillar grade string."""
+    g = grade.strip()
+    if g.startswith("A"): return GREEN
+    if g.startswith("B"): return CYAN
+    if g.startswith("C"): return GOLD
+    return RED
+
 def pop_bar(value: float, width: int = 20) -> str:
     filled = round(value * width)
     bar = "█" * filled + "░" * (width - filled)
@@ -278,7 +302,8 @@ class CommissionerGame:
         self.season_num = 0
         self._prev_league_pop = 0.0
         self._rule_changes_made: int = 0  # cumulative rule changes (drives cost escalation)
-        self._last_pop_signals: dict = {}  # signal breakdown from most recent season
+        self._last_pop_signals: dict = {}   # signal breakdown from most recent season
+        self._last_pillar_scores: dict = {}  # four-pillar health scores from most recent season
         self._treasury: float = 0.0       # accumulated commissioner funds (carry-over)
         self._last_revenue: float = 0.0   # revenue earned most recent season
         self._retiring_this_season: list = []
@@ -822,6 +847,7 @@ class CommissionerGame:
         league._evolve_market_engagements(season)
         self._last_pop_signals = league._evolve_league_popularity(season)
         league._evolve_meta()
+        self._last_pillar_scores = league.compute_pillar_scores(season)
         season._popularity        = {t: t.popularity for t in league.teams}
         season._market_engagement = {t: t.market_engagement for t in league.teams}
         season._league_popularity = league.league_popularity
@@ -1518,20 +1544,39 @@ class CommissionerGame:
         total_fans = sum(_fans_millions(t) for t in league.teams)
         print(f"\n  {BOLD}League Health{RESET}")
         print(f"  Popularity  {pop_bar(lp)}  {trend(lp_prev, lp)}")
-        print(f"  Fan Base    {CYAN}{total_fans:.1f}M{RESET}  {MUTED}total fans (popularity × market){RESET}")
-        if self._last_pop_signals:
-            annotations = self._pop_signal_annotations(season)
-            for sig_name, sig_delta in self._last_pop_signals.items():
-                if abs(sig_delta) >= 0.0005:
-                    color = GREEN if sig_delta > 0 else RED
-                    sign = "+" if sig_delta >= 0 else ""
-                    note = annotations.get(sig_name, "")
-                    note_str = f"  {MUTED}{note}{RESET}" if note else ""
-                    print(f"    {MUTED}{sig_name:<20}{RESET} {color}{sign}{sig_delta:.1%}{RESET}{note_str}")
-        print(f"  Era         {era_desc(league.league_meta)}")
-        print(f"  Avg scoring {avg_ppg:.1f} pts/game")
+        print(f"  Fan Base    {CYAN}{total_fans:.1f}M{RESET}  "
+              f"{MUTED}total fans · Era: {era_label(league.league_meta)} · "
+              f"Avg {avg_ppg:.1f} pts/game{RESET}")
         if season.meta_shock:
             print(f"  {RED}{BOLD}⚡ Rule change shock fired this season!{RESET}")
+
+        # Four-pillar display
+        pillar_data = self._last_pillar_scores
+        if pillar_data:
+            print()
+            pillar_defs = [
+                ("Integrity",     "integrity"),
+                ("Parity",        "parity"),
+                ("Drama",         "drama"),
+                ("Entertainment", "entertainment"),
+            ]
+            history = league.pillar_history
+            for label, key in pillar_defs:
+                data   = pillar_data.get(key, {})
+                score  = data.get("score", 0.0)
+                grade  = _pillar_grade(score)
+                gc     = _grade_color(grade)
+                # Trend vs prior season
+                prev_sn = sn - 1
+                prev_score = history.get(prev_sn, {}).get(key)
+                tr = trend(prev_score, score) if prev_score is not None else f"{MUTED}—{RESET}"
+                print(f"  {label:<14} {gc}{BOLD}{grade}{RESET}  "
+                      f"{MUTED}{score:.2f}{RESET}  {tr}")
+                drivers = data.get("drivers", [])
+                for dir_ch, dlabel, _ in drivers[:3]:
+                    dc = GREEN if dir_ch == "↑" else RED
+                    print(f"    {dc}{dir_ch}{RESET}  {MUTED}{dlabel}{RESET}")
+            print(f"\n  {MUTED}[H] Full health breakdown{RESET}")
 
         # Notable events
         events = self._collect_events(season)
@@ -1541,6 +1586,67 @@ class CommissionerGame:
                 print(f"  • {e}")
 
         self._prev_league_pop = lp
+        while True:
+            raw = prompt("Enter to continue, [H] for full health breakdown:").strip().lower()
+            if raw == "h" and self._last_pillar_scores:
+                self._show_league_health_detail(season)
+            else:
+                break
+
+    def _show_league_health_detail(self, season: Season) -> None:
+        """Full drill-down screen for all four pillar scores and their components."""
+        league = self.league
+        sn = season.number
+        pillar_data = self._last_pillar_scores
+        if not pillar_data:
+            press_enter("No pillar data available.")
+            return
+
+        clear()
+        header("LEAGUE HEALTH BREAKDOWN", f"Season {sn}")
+
+        pillar_defs = [
+            ("INTEGRITY",     "integrity",     "Trustworthiness & governance"),
+            ("PARITY",        "parity",        "Competitive balance & access"),
+            ("DRAMA",         "drama",         "Narrative & story arcs"),
+            ("ENTERTAINMENT", "entertainment", "Product quality & star power"),
+        ]
+
+        for label, key, subtitle in pillar_defs:
+            data  = pillar_data.get(key, {})
+            score = data.get("score", 0.0)
+            grade = _pillar_grade(score)
+            gc    = _grade_color(grade)
+            history = league.pillar_history
+            prev_score = history.get(sn - 1, {}).get(key)
+            tr = trend(prev_score, score) if prev_score is not None else f"{MUTED}—{RESET}"
+
+            print(f"\n  {gc}{BOLD}{label}{RESET}  {gc}{grade}{RESET}  "
+                  f"{MUTED}{score:.2f}{RESET}  {tr}  {MUTED}{subtitle}{RESET}")
+            divider()
+
+            components = data.get("components", [])
+            for w, s, clabel in components:
+                bar_w = 12
+                filled = round(s * bar_w)
+                bar = "█" * filled + "░" * (bar_w - filled)
+                sc = GREEN if s >= 0.70 else (RED if s < 0.45 else GOLD)
+                contribution = w * s
+                print(f"  {sc}{bar}{RESET}  {MUTED}w={w:.2f}{RESET}  {clabel}")
+
+        # Show raw popularity signals at bottom for reference
+        if self._last_pop_signals:
+            print(f"\n  {BOLD}Popularity signals this season{RESET}  {MUTED}(underlying drivers){RESET}")
+            divider()
+            annotations = self._pop_signal_annotations(season)
+            for sig_name, sig_delta in self._last_pop_signals.items():
+                if abs(sig_delta) >= 0.0005:
+                    color = GREEN if sig_delta > 0 else RED
+                    sign  = "+" if sig_delta >= 0 else ""
+                    note  = annotations.get(sig_name, "")
+                    note_str = f"  {MUTED}{note}{RESET}" if note else ""
+                    print(f"    {MUTED}{sig_name:<22}{RESET} {color}{sign}{sig_delta:.1%}{RESET}{note_str}")
+
         press_enter()
 
     def _playoff_results(self, season: Season) -> dict:
@@ -1801,9 +1907,10 @@ class CommissionerGame:
                 f"All-Time Records {MUTED}championships, streaks, best & worst seasons{RESET}",
                 f"Rivalries        {MUTED}head-to-head matchup history{RESET}",
                 f"Playoff Analysis {MUTED}seed advantage, series length & home court trends{RESET}",
+                f"League Health    {MUTED}pillar scores trend — Integrity · Parity · Drama · Entertainment{RESET}",
                 rival_label,
                 f"{MUTED}Back{RESET}",
-            ], default=11)
+            ], default=12)
             if   idx == 0:  self._show_league_history(season)
             elif idx == 1:  self._show_team_history(season)
             elif idx == 2:  self._show_player_stats(season)
@@ -1814,8 +1921,67 @@ class CommissionerGame:
             elif idx == 7:  self._show_alltime_records(season)
             elif idx == 8:  self._show_rivalries(season)
             elif idx == 9:  self._show_playoff_analysis(season)
-            elif idx == 10: self._show_rival_league_report(season)
+            elif idx == 10: self._show_league_health_report(season)
+            elif idx == 11: self._show_rival_league_report(season)
             else: break
+
+    # ── Report: League Health Trend ───────────────────────────────────────────
+
+    def _show_league_health_report(self, season: Season):
+        league  = self.league
+        history = league.pillar_history
+        if not history:
+            press_enter("No pillar history available yet — play at least one season.")
+            return
+
+        PAGE = 20
+        seasons = league.seasons
+        page = max(0, len(seasons) - PAGE)
+
+        while True:
+            clear()
+            header("LEAGUE HEALTH HISTORY", self.league_name)
+            chunk = seasons[page: page + PAGE]
+
+            print(f"\n  {'S':>3}  {'Integrity':<12} {'Parity':<12} "
+                  f"{'Drama':<12} {'Entertainment':<14} {'Pop':>4}")
+            divider()
+
+            for s in chunk:
+                sn = s.number
+                ph = history.get(sn, {})
+                lp = getattr(s, '_league_popularity', None)
+                lp_str = f"{lp:.0%}" if lp is not None else "  —"
+
+                def _grade_cell(key: str) -> str:
+                    sc = ph.get(key)
+                    if sc is None:
+                        return f"{'—':<12}"
+                    g  = _pillar_grade(sc)
+                    gc = _grade_color(g)
+                    return f"{gc}{BOLD}{g}{RESET} {MUTED}{sc:.2f}{RESET}  "
+
+                print(f"  {sn:>3}  "
+                      f"{_grade_cell('integrity')}"
+                      f"{_grade_cell('parity')}"
+                      f"{_grade_cell('drama')}"
+                      f"{_grade_cell('entertainment')}"
+                      f"  {MUTED}{lp_str}{RESET}")
+
+            print()
+            divider()
+            has_next = page + PAGE < len(seasons)
+            nav = []
+            if page > 0:  nav.append("p=prev")
+            if has_next:  nav.append("Enter=next")
+            else:         nav.append("Enter=done")
+            raw = prompt(f"  [{', '.join(nav)}]:").strip().lower()
+            if raw == "p" and page > 0:
+                page -= PAGE
+            elif has_next and raw in ("", "n"):
+                page += PAGE
+            else:
+                break
 
     # ── Report: League History ────────────────────────────────────────────────
 
