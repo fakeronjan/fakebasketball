@@ -167,9 +167,14 @@ def prompt(msg: str) -> str:
         if low in ("quit", "q"):
             raise _QuitSignal()
         if low in ("reports", "r") and _game_ref is not None:
-            seasons = _game_ref.league.seasons if _game_ref.league else []
-            if seasons:
-                _game_ref._show_reports(seasons[-1])
+            # Use the in-progress season if available (e.g. during playoffs),
+            # otherwise fall back to the last completed season.
+            season = _game_ref._current_season
+            if season is None and _game_ref.league:
+                seasons = _game_ref.league.seasons
+                season  = seasons[-1] if seasons else None
+            if season is not None:
+                _game_ref._show_reports(season)
             # After returning from reports, re-prompt in context.
             continue
         return raw
@@ -251,6 +256,7 @@ class CommissionerGame:
         self._owner_actions: dict = {}    # {team_id: action_dict} — generated each offseason
         self._walkout_just_formed: bool = False   # set by CBA handler when Type C forms
         self._defection_warning_shown: set = set()  # season numbers where warning was shown
+        self._current_season: "Season | None" = None  # set during _run_one_season for mid-season reports
 
     def _load_game(self) -> None:
         """Load saved state into self, handling corruption or version mismatch."""
@@ -810,6 +816,7 @@ class CommissionerGame:
         league = self.league
         sn = self.season_num
         season = Season(sn, list(league.teams), league.cfg, league.league_meta)
+        self._current_season = season   # expose early so 'r' works during playoffs
         season.play_regular_season()
         self._play_playoffs_interactive(season)
         league.seasons.append(season)
