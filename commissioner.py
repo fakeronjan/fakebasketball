@@ -148,8 +148,31 @@ def _show_risk_reward(cost: str, risk: str, reward: str, note: str = "") -> None
         print(f"  {MUTED}{note}{RESET}")
     print()
 
+# ── Global quit / reports ─────────────────────────────────────────────────────
+# Typing "quit" or "q" at any prompt saves and exits.
+# Typing "reports" or "r" at any prompt opens the reports menu mid-flow.
+
+class _QuitSignal(Exception):
+    """Raised anywhere inside the game to trigger a save-and-exit."""
+
+_game_ref: "CommissionerGame | None" = None  # set in CommissionerGame.run()
+
+
 def prompt(msg: str) -> str:
-    return input(f"\n  {CYAN}▶ {msg}{RESET} ").strip()
+    """Input helper. Intercepts 'quit'/'q' and 'reports'/'r' globally."""
+    while True:
+        raw = input(f"\n  {CYAN}▶ {msg}{RESET} ").strip()
+        low = raw.lower()
+        if low in ("quit", "q"):
+            raise _QuitSignal()
+        if low in ("reports", "r") and _game_ref is not None:
+            seasons = _game_ref.league.seasons if _game_ref.league else []
+            if seasons:
+                _game_ref._show_reports(seasons[-1])
+            # After returning from reports, re-prompt in context.
+            continue
+        return raw
+
 
 def press_enter(msg: str = "Press Enter to continue..."):
     input(f"\n  {MUTED}{msg}{RESET}")
@@ -730,30 +753,37 @@ class CommissionerGame:
     # ── Core season loop ──────────────────────────────────────────────────────
 
     def run(self):
+        global _game_ref
+        _game_ref = self
         self._start_menu()
-        while True:
-            self.season_num += 1
-            season = self._run_one_season()
-            self._show_summary(season)
-            self._post_season(season)
-            _do_save(self)   # autosave after every completed season
+        try:
             while True:
-                idx = choose(
-                    ["Next season", "View reports", "Save & quit", "Quit without saving"],
-                    title="What next?", default=0,
-                )
-                if idx == 1:
-                    self._show_reports(season)
-                else:
+                self.season_num += 1
+                season = self._run_one_season()
+                self._show_summary(season)
+                self._post_season(season)
+                _do_save(self)   # autosave after every completed season
+                while True:
+                    idx = choose(
+                        ["Next season", "View reports", "Save & quit", "Quit without saving"],
+                        title="What next?", default=0,
+                    )
+                    if idx == 1:
+                        self._show_reports(season)
+                    else:
+                        break
+                if idx == 2:
+                    _do_save(self)
+                    clear()
+                    print(f"\n  {GREEN}Game saved.{RESET}  See you next season, Commissioner.\n")
                     break
-            if idx == 2:
-                _do_save(self)
-                clear()
-                print(f"\n  {GREEN}Game saved.{RESET}  See you next season, Commissioner.\n")
-                break
-            if idx == 3:
-                self._show_farewell()
-                break
+                if idx == 3:
+                    self._show_farewell()
+                    break
+        except _QuitSignal:
+            _do_save(self)
+            clear()
+            print(f"\n  {GREEN}Game saved.{RESET}  See you next season, Commissioner.\n")
 
     def _start_menu(self) -> None:
         """Startup menu — new game or continue a saved one."""
@@ -5180,95 +5210,84 @@ class CommissionerGame:
         quiet         = [(t, o) for t, o in owners_with_teams
                          if o.threat_level not in (THREAT_DEMAND, THREAT_LEAN)]
 
-        # ── Layer 1: Room Read (always shown) ─────────────────────────────────
-        clear()
-        header("OWNER MEETING", f"After Season {sn}")
-        print(f"\n  {MUTED}{'':4}{'Owner':<22} {'Team':<20} {'Motivation':<12} {'Mood':<10} {'P&L':>8}  Status{RESET}\n")
+        # ── Layer 1: Room Read — loop so user can meet multiple owners ──────────
+        while True:
+            clear()
+            header("OWNER MEETING", f"After Season {sn}")
+            print(f"\n  {MUTED}{'':4}{'Owner':<22} {'Team':<20} {'Motivation':<12} {'Mood':<10} {'P&L':>8}  Status{RESET}\n")
 
-        for i, (team, owner) in enumerate(owners_with_teams, 1):
-            mood_c  = (GREEN if owner.happiness >= 0.55 else
-                       GOLD  if owner.happiness >= 0.35 else RED)
-            pl_c    = GREEN if owner.last_net_profit >= 0 else RED
-            pl_str  = f"{pl_c}${owner.last_net_profit:+.1f}M{RESET}"
-            mot_str = owner.motivation_label()
+            for i, (team, owner) in enumerate(owners_with_teams, 1):
+                mood_c  = (GREEN if owner.happiness >= 0.55 else
+                           GOLD  if owner.happiness >= 0.35 else RED)
+                pl_c    = GREEN if owner.last_net_profit >= 0 else RED
+                pl_str  = f"{pl_c}${owner.last_net_profit:+.1f}M{RESET}"
+                mot_str = owner.motivation_label()
 
-            if owner.threat_level == THREAT_DEMAND:
-                status = f"{RED}Demanding ◀{RESET}"
-            elif owner.threat_level == THREAT_LEAN:
-                status = f"{GOLD}Watching{RESET}"
-            else:
-                status = f"{MUTED}—{RESET}"
+                if owner.threat_level == THREAT_DEMAND:
+                    status = f"{RED}Demanding ◀{RESET}"
+                elif owner.threat_level == THREAT_LEAN:
+                    status = f"{GOLD}Watching{RESET}"
+                else:
+                    status = f"{MUTED}—{RESET}"
 
-            # Action flag
-            action = self._owner_actions.get(team.team_id)
-            if action:
-                flag = (f"  {RED}[! scandal]{RESET}"   if action["category"] == "scandal"  else
-                        f"  {GOLD}[→ unsavory]{RESET}"  if action["category"] == "unsavory" else
-                        f"  {CYAN}[→ proposal]{RESET}")
-            else:
-                flag = ""
-
-            print(f"  {CYAN}[{i}]{RESET} {owner.name:<22} {MUTED}{team.name:<20} {mot_str:<12}{RESET} "
-                  f"{mood_c}{owner_happiness_label(owner.happiness):<10}{RESET} "
-                  f"{pl_str:>18}  {status}{flag}")
-
-        print()
-        # Summary line
-        parts = []
-        if demanding:
-            parts.append(f"{RED}{len(demanding)} demanding{RESET}")
-        if watching:
-            parts.append(f"{GOLD}{len(watching)} watching{RESET}")
-        if quiet:
-            parts.append(f"{MUTED}{len(quiet)} quiet{RESET}")
-        if transitioning:
-            parts.append(f"{CYAN}{len(transitioning)} transitioning{RESET}")
-        print(f"  {' · '.join(parts)}")
-
-        # Pending action summary
-        n_scandals  = sum(1 for t, _ in owners_with_teams
-                          if self._owner_actions.get(t.team_id, {}).get("category") == "scandal")
-        n_unsavory  = sum(1 for t, _ in owners_with_teams
-                          if self._owner_actions.get(t.team_id, {}).get("category") == "unsavory")
-        n_proposals = sum(1 for t, _ in owners_with_teams
-                          if self._owner_actions.get(t.team_id, {}).get("category") == "proposal")
-        action_parts = []
-        if n_scandals:  action_parts.append(f"{RED}{n_scandals} scandal(s) requiring response{RESET}")
-        if n_unsavory:  action_parts.append(f"{GOLD}{n_unsavory} unsavory proposal(s){RESET}")
-        if n_proposals: action_parts.append(f"{CYAN}{n_proposals} proposal(s){RESET}")
-        if action_parts:
-            print(f"  {' · '.join(action_parts)}")
-
-        # Grievances for Watching owners
-        lean_with_grievance = [(t, o) for t, o in watching if o.grievance]
-        if lean_with_grievance:
-            print(f"\n  {GOLD}Watching — grievances on record:{RESET}")
-            for team, owner in lean_with_grievance:
-                print(f"  {MUTED}{owner.name} ({team.name}):{RESET}")
-                print(f"    {owner.grievance}")
-
-        # ── Proactive outreach option ─────────────────────────────────────────
-        # Offer after the room read — skip directly if there are demanding owners
-        # (agenda takes priority in those cases)
-        # Any owner can be selected — action handled first, then optional outreach
-        has_any_action = any(t.team_id in self._owner_actions for t, _ in owners_with_teams)
-        print()
-        raw = prompt("Enter an owner number to address, or Enter to continue:").strip()
-        if raw.isdigit():
-            idx = int(raw) - 1
-            if 0 <= idx < len(owners_with_teams):
-                t, o = owners_with_teams[idx]
-                # Handle pending action first
-                action = self._owner_actions.pop(t.team_id, None)
+                action = self._owner_actions.get(team.team_id)
                 if action:
-                    self._handle_owner_action(t, o, action, season)
-                # Outreach only for non-DEMAND owners
-                if o.threat_level != THREAT_DEMAND:
-                    self._owner_outreach(t, o, season)
-        elif not raw and not demanding and not has_any_action:
-            pass  # just continue
-        else:
-            press_enter()
+                    flag = (f"  {RED}[! scandal]{RESET}"   if action["category"] == "scandal"  else
+                            f"  {GOLD}[→ unsavory]{RESET}"  if action["category"] == "unsavory" else
+                            f"  {CYAN}[→ proposal]{RESET}")
+                else:
+                    flag = ""
+
+                print(f"  {CYAN}[{i}]{RESET} {owner.name:<22} {MUTED}{team.name:<20} {mot_str:<12}{RESET} "
+                      f"{mood_c}{owner_happiness_label(owner.happiness):<10}{RESET} "
+                      f"{pl_str:>18}  {status}{flag}")
+
+            print()
+            parts = []
+            if demanding:
+                parts.append(f"{RED}{len(demanding)} demanding{RESET}")
+            if watching:
+                parts.append(f"{GOLD}{len(watching)} watching{RESET}")
+            if quiet:
+                parts.append(f"{MUTED}{len(quiet)} quiet{RESET}")
+            if transitioning:
+                parts.append(f"{CYAN}{len(transitioning)} transitioning{RESET}")
+            print(f"  {' · '.join(parts)}")
+
+            n_scandals  = sum(1 for t, _ in owners_with_teams
+                              if self._owner_actions.get(t.team_id, {}).get("category") == "scandal")
+            n_unsavory  = sum(1 for t, _ in owners_with_teams
+                              if self._owner_actions.get(t.team_id, {}).get("category") == "unsavory")
+            n_proposals = sum(1 for t, _ in owners_with_teams
+                              if self._owner_actions.get(t.team_id, {}).get("category") == "proposal")
+            action_parts = []
+            if n_scandals:  action_parts.append(f"{RED}{n_scandals} scandal(s) requiring response{RESET}")
+            if n_unsavory:  action_parts.append(f"{GOLD}{n_unsavory} unsavory proposal(s){RESET}")
+            if n_proposals: action_parts.append(f"{CYAN}{n_proposals} proposal(s){RESET}")
+            if action_parts:
+                print(f"  {' · '.join(action_parts)}")
+
+            lean_with_grievance = [(t, o) for t, o in watching if o.grievance]
+            if lean_with_grievance:
+                print(f"\n  {GOLD}Watching — grievances on record:{RESET}")
+                for team, owner in lean_with_grievance:
+                    print(f"  {MUTED}{owner.name} ({team.name}):{RESET}")
+                    print(f"    {owner.grievance}")
+
+            print()
+            raw = prompt("Enter an owner number to meet, or Enter to continue:")
+            if not raw:
+                break   # proceed to agenda
+            if raw.isdigit():
+                idx = int(raw) - 1
+                if 0 <= idx < len(owners_with_teams):
+                    t, o = owners_with_teams[idx]
+                    action = self._owner_actions.pop(t.team_id, None)
+                    if action:
+                        self._handle_owner_action(t, o, action, season)
+                    if o.threat_level != THREAT_DEMAND:
+                        self._owner_outreach(t, o, season)
+            # loop back — redraws the list with updated flags
 
         # ── Layer 2: Agenda (DEMAND owners) ──────────────────────────────────
         for team, owner in demanding:
