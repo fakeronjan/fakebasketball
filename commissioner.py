@@ -379,10 +379,6 @@ class CommissionerGame:
                 else:
                     right = ""
                 print(left + right)
-            for (li, lf) in left_col[len(right_col):]:
-                lm  = f"{lf.effective_metro:>4.0f}M"
-                lst = f"{GOLD}★{RESET}" if lf.city in all_secondaries else " "
-                print(f"  {li:>2}. {lf.city:<{col_w}} {lm} {lst}")
 
             print()
             raw = prompt("Enter team numbers separated by spaces (min 6, max 16), or Enter for default (top 8):")
