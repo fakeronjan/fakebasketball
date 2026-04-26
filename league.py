@@ -307,20 +307,24 @@ class League:
 
         # ── Roster-driven grievances (checked first; most visceral concern) ────
         if star is not None and star.contract_years_remaining <= 1:
+            sp  = star.pronoun
+            spp = star.pronoun_pos
             flight_risk = star.happiness < 0.55 and star.motivation != MOT_LOYALTY
             if flight_risk and owner.motivation == OWNER_MOT_WINNING:
-                return (f"{p} is alarmed. {pp.capitalize()} franchise player is in the final year of their deal "
-                        f"and does not look happy. Losing them would mean starting over.")
+                return (f"{p} is alarmed. {pp.capitalize()} franchise player is in the final year of {spp} deal "
+                        f"and {sp} does not look happy. Losing {sp} would mean starting over.")
             elif flight_risk:
                 return (f"{p} is nervous about the roster. The best player on this team could walk "
                         f"at the end of the year and {owner.pronoun} has no clear plan.")
             elif owner.motivation == OWNER_MOT_WINNING:
                 return (f"{p} is watching {pp} star's contract situation closely. "
-                        f"The front office needs to show it can build around them.")
+                        f"The front office needs to show it can build around {sp}.")
 
         if star is not None and star.age >= 33 and owner.motivation == OWNER_MOT_WINNING:
+            sp  = star.pronoun
+            spp = star.pronoun_pos
             return (f"{p} knows the window is closing. {pp.capitalize()} best player won't be "
-                    f"at this level much longer, and the pipeline behind them looks thin.")
+                    f"at this level much longer, and the pipeline behind {sp} looks thin.")
 
         if roster and not any(pl.overall >= 6 for pl in roster):
             if owner.motivation == OWNER_MOT_WINNING:

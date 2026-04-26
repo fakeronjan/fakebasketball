@@ -331,6 +331,18 @@ class Player:
         return round(self.peak_drtg * self.mult, 2)
 
     @property
+    def pronoun(self) -> str:
+        return "she" if self.gender == "female" else "he"
+
+    @property
+    def pronoun_pos(self) -> str:
+        return "her" if self.gender == "female" else "his"
+
+    @property
+    def pronoun_cap(self) -> str:
+        return "She" if self.gender == "female" else "He"
+
+    @property
     def overall(self) -> float:
         """Combined quality for sorting/display. Higher = better."""
         return self.ortg_contrib - self.drtg_contrib
