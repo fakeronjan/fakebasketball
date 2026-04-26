@@ -73,6 +73,18 @@ Three rival formation paths, each a different flavor of crisis:
 
 All three types integrate with the FA pool, legitimacy, treasury, owner pressure, and expansion/merger logic.
 
+### Coach System (`coach.py`, `league.py`)
+- Five archetypes: Culture Coach, Star Whisperer, Defensive Mastermind, Offensive Innovator, Motivator
+- Each archetype has six base modifiers: ortg_mod, drtg_mod, chem_scale, star_hap, depth_hap, fa_draw
+- Scaling: `flex_scale = 1.35 − 0.70 × flexibility`; `rating_scale = 0.50 + rating`; combined `scale = flex_scale × rating_scale`
+- COY bonus: `+0.02 × min(3, coy_wins)` added to fa_draw — legends attract more stars
+- FA draw: coach `fa_draw × 10.0` wired into all three motivation branches; loyalty-motivated players rank destinations by coach fa_draw
+- COY always fires: season 1 = best net rating, season 2+ = largest net-rating improvement (no threshold gatekeeping)
+- Coach lifecycle: hot seat set/cleared by owner happiness; auto-fired when demanding owner + tenure ≥ 2; COY always clears hot seat
+- Two coach types: lifer (generated fresh) and former player (retired → coach, skews star whisperer / chemistry)
+- `generate_coaches_balanced(n)`: ensures near-equal archetype distribution at league init
+- Balance tuned via 5×30 simulation (Star Whisperer 25.7% titles, Offensive 20.1% — plausible variance, no archetype dominant)
+
 ### Commissioner Game Features
 - **Playoff interventions**: nudge or rig series outcomes at legitimacy cost; cost compounds per intervention per season
 - **Star FA events**: commissioner can influence where star free agents land
@@ -99,6 +111,7 @@ All three types integrate with the FA pool, legitimacy, treasury, owner pressure
 - **Player Stats**: season leaderboards (scoring, defense, efficiency) · best single seasons all-time · career leaders; all screens use season-start snapshots (no placeholder P{id} names for retired players)
 - **Rosters**: current players with last season's actual stats (PPG, FG%, Def Rtg, games missed) + Dur label + 🔋 fatigue level (color-coded)
 - **Owner Dashboard**: per-team happiness, competence, P&L, threat level, revenue efficiency
+- **Coaching Dashboard**: all teams with archetype, flex, horizon, tenure, COY wins, happiness, computed ORtg/DRtg modifiers, hot seat; COY history last 10 seasons; archetype mix summary
 - **Market Map**: popularity, engagement, fan counts, grudge cities
 - **Event Log**: all expansions, mergers, relocations with season tags
 - **All-Time Records**: championships table, streaks/droughts, best/worst team seasons
@@ -111,10 +124,18 @@ Three places surface the system during play:
 2. **Pre-playoff series scout card** — each Star/Co-Star row shows games missed (red if 5+) and 🔋 fatigue reading
 3. **Commissioner desk flags** — playoff-bound teams with any player at 0.35+ fatigue get a 🔋 flag (gold ≥0.35, red ≥0.50)
 
+### Season Summary (3 screens)
+**Screen A — Standings**: champion callout (defeated runner-up, series score), regular season standings table with seed/record/pts/diff/net rtg/top player, playoff bracket recap with `(#N)` seeds on every team.
+
+**Screen B — Awards Night**: MVP / OPOY / DPOY / Finals MVP / COY — each with the exact selection metric, career win count (e.g. "3×"), and streak badge ("2 in a row" when applicable). Stars to Watch block (top 8 by tier with mood/contract/trend flags).
+
+**Screen C — League Health / Fan Engagement**: per-market table (sorted by market size) showing pop bar, %, fans, engagement %, and commissioner flags (CHAMP, RELOC RISK, LOSING STREAK, HOT SEAT, STAR RISK, STAR EXP, SURGING, FADING, LOW POP). Four-pillar summary with top 2 drivers. Notable events. [H] for full pillar breakdown.
+
 ### UI Consistency
 - All decision inputs use numbers (1/2/3) throughout — no letter-based inputs (A/C/R, S/F/I, etc.)
 - `_pick()` / `choose()` helper always has a default; Enter accepts it
 - CBA and commissioner desk default to a reasonable pre-selection; owner agenda/scandal screens require explicit choice (intentional — every option has real consequences)
+- Award displays always surface the metric that drove the selection — no "trust me" awards
 
 ---
 
@@ -134,13 +155,19 @@ Notes:
 
 ---
 
-## Backlog
+## Backlog (top items)
 
-- **Career stat tracking / Hall of Fame** — accumulate stats across seasons for HOF eligibility; not started
-- **In-game box scores** — game-level box score during playoff series (currently series-level only)
-- **Multi-slot saves** — currently single slot only; natural next step if players want multiple leagues
+See `devlog/2026-04-26 revision backlog.md` for full list with priority picks.
+
+- **Fan dialogue** — commissioner receives fan sentiment signals (letters, social pulse, market reactions) as flavor and pressure
+- **Career stat tracking / Hall of Fame** — cumulative stats across seasons; HOF induction as late-game prestige moment
+- **Generational prospect event** — flag elite-ceiling prospects the season *before* the draft; LeBron 2003 / Wemby 2023 model
+- **Star FA as league-wide event** — when a big name hits FA, it's broadcast-level entertainment for the whole league, not just a commissioner decision
+- **In-game box scores** — per-game stat display during playoff interactive mode
+- **Coach hire/fire cycle** — interactive coaching market when a seat opens; coach contracts and poaching
+- **Calibration**: money owner happiness rescale (#1), engagement pull config (#4), happiness as slope not cliff (#22)
+- **Multi-slot saves** — currently single slot only
 - **Expansion bidding** — franchise fees, market research, owner vetting; currently auto-triggered
-- **League sponsorships** — TV deals, naming rights, gambling partnerships
 
 ---
 
