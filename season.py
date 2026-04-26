@@ -26,6 +26,10 @@ class PlayerSeasonStats:
     fgm:           int = 0
     fga_3:         int = 0
     fgm_3:         int = 0
+    fga_mid:       int = 0
+    fgm_mid:       int = 0
+    fga_paint:     int = 0
+    fgm_paint:     int = 0
     fta:           int = 0
     ftm:           int = 0
     poss_defended: int = 0
@@ -39,6 +43,10 @@ class PlayerSeasonStats:
         self.fgm           += log.fgm
         self.fga_3         += log.fga_3
         self.fgm_3         += log.fgm_3
+        self.fga_mid       += log.fga_mid
+        self.fgm_mid       += log.fgm_mid
+        self.fga_paint     += log.fga_paint
+        self.fgm_paint     += log.fgm_paint
         self.fta           += log.fta
         self.ftm           += log.ftm
         self.poss_defended += log.poss_defended
@@ -66,6 +74,23 @@ class PlayerSeasonStats:
     def def_rtg(self) -> float:
         """Points allowed per 100 possessions defended."""
         return self.pts_allowed / self.poss_defended * 100 if self.poss_defended else 0.0
+
+    @property
+    def paint_pct(self) -> float:
+        return self.fgm_paint / self.fga_paint if self.fga_paint else 0.0
+
+    @property
+    def mid_pct(self) -> float:
+        return self.fgm_mid / self.fga_mid if self.fga_mid else 0.0
+
+    def pts_from_zone(self) -> tuple[int, int, int, int]:
+        """Points scored from each zone: (paint, mid, three, ft)."""
+        return (
+            self.fgm_paint * 2,
+            self.fgm_mid   * 2,
+            self.fgm_3     * 3,
+            self.ftm,
+        )
 
 
 def _playoff_count(n_teams: int) -> int:

@@ -60,6 +60,10 @@ class PlayerGameLog:
     fgm:           int = 0   # field goals made
     fga_3:         int = 0   # 3-point attempts
     fgm_3:         int = 0   # 3-pointers made
+    fga_mid:       int = 0   # mid-range attempts
+    fgm_mid:       int = 0   # mid-range makes
+    fga_paint:     int = 0   # paint attempts
+    fgm_paint:     int = 0   # paint makes
     fta:           int = 0
     ftm:           int = 0
     poss_defended: int = 0   # possessions as primary defender
@@ -309,6 +313,14 @@ def _credit_offense(logs: dict, r: PossessionResult) -> None:
             log.fga_3 += 1
             if r.made:
                 log.fgm_3 += 1
+        elif r.zone == ZONE_MID:
+            log.fga_mid += 1
+            if r.made:
+                log.fgm_mid += 1
+        elif r.zone == ZONE_PAINT:
+            log.fga_paint += 1
+            if r.made:
+                log.fgm_paint += 1
 
 
 def _credit_defense(logs: dict, r: PossessionResult) -> None:

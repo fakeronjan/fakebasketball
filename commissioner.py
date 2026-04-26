@@ -456,6 +456,9 @@ class CommissionerGame:
                  finals_mvp_ppg=0.0,
                  finals_mvp_drtg=0.0,
             )
+            # Patch PlayerSeasonStats objects for new zone-split fields
+            for ps in getattr(s, 'player_stats', {}).values():
+                _fix(ps, fga_paint=0, fgm_paint=0, fga_mid=0, fgm_mid=0)
 
         # ── League-level ──────────────────────────────────────────────────────
         _fix(league,
@@ -1135,69 +1138,15 @@ class CommissionerGame:
 
         header(self.league_name, f"Season {sn}  —  Regular Season Final")
 
-        # Notable callouts
-        leader = standings[0]
-        last   = standings[-1]
-        lw = season.reg_wins(leader);  ll = season.reg_losses(leader)
-        bw = season.reg_wins(last);    bl = season.reg_losses(last)
-        print(f"\n  {GREEN}Best record :{RESET}  {leader.franchise_at(sn).name}  {_wl(lw, ll)}")
-        print(f"  {RED}Worst record:{RESET}  {last.franchise_at(sn).name}  {_wl(bw, bl)}")
-
-        # Scoring / defensive leaders
-        ppg_leader  = max(standings, key=lambda t: season.team_ppg(t))
-        def_leader  = min(standings, key=lambda t: season.team_papg(t))
-        diff_leader = max(standings, key=lambda t: season.team_ppg(t) - season.team_papg(t))
-        print(f"  {GREEN}Top offense :{RESET}  {ppg_leader.franchise_at(sn).name:<28}  "
-              f"{season.team_ppg(ppg_leader):.1f} PS/G")
-        print(f"  {RED}Top defense :{RESET}  {def_leader.franchise_at(sn).name:<28}  "
-              f"{season.team_papg(def_leader):.1f} PA/G")
-        best_diff = season.team_ppg(diff_leader) - season.team_papg(diff_leader)
-        print(f"  {CYAN}Best margin :{RESET}  {diff_leader.franchise_at(sn).name:<28}  "
-              f"{best_diff:+.1f} per game")
-
-        # Regular season awards
-        if season.mvp or season.dpoy or season.coy:
-            print()
-            if season.mvp:
-                mvp_team = season.mvp_team.franchise_at(sn).nickname if season.mvp_team else "—"
-                mvp_seed = (standings.index(season.mvp_team) + 1
-                            if season.mvp_team in standings else "?")
-                tc  = GOLD if season.mvp.peak_overall >= 14 else CYAN
-                ms  = season.player_stats.get(season.mvp.player_id)
-                stat_str = (f"{ms.ppg:.1f} PPG  {ms.def_rtg:.1f} DRtg  ({mvp_seed}) seed"
-                            if ms else f"ORtg {season.mvp.ortg_contrib:>+5.1f}  ({mvp_seed}) seed")
-                print(f"  {GOLD}MVP  :{RESET}  {happiness_emoji(season.mvp.happiness)} {tc}{season.mvp.name:<22}{RESET}  "
-                      f"{MUTED}{season.mvp.position} · {mvp_team}{RESET}  {stat_str}")
-            if season.opoy:
-                opoy_team = season.opoy_team.franchise_at(sn).nickname if season.opoy_team else "—"
-                tc  = GOLD if season.opoy.peak_overall >= 14 else CYAN
-                os  = season.player_stats.get(season.opoy.player_id)
-                stat_str = (f"{os.ppg:>5.1f} PPG  {os.fg_pct:.1%} FG  {os.fg3_pct:.1%} 3P"
-                            if os else f"ORtg {season.opoy.ortg_contrib:>+5.1f}")
-                print(f"  {GOLD}OPOY :{RESET}  {happiness_emoji(season.opoy.happiness)} {tc}{season.opoy.name:<22}{RESET}  "
-                      f"{MUTED}{season.opoy.position} · {opoy_team}{RESET}  {stat_str}")
-            if season.dpoy:
-                dpoy_team = season.dpoy_team.franchise_at(sn).nickname if season.dpoy_team else "—"
-                tc  = GOLD if season.dpoy.peak_overall >= 14 else CYAN
-                ds  = season.player_stats.get(season.dpoy.player_id)
-                stat_str = (f"Def Rtg {ds.def_rtg:>5.1f}  {ds.pts_allowed}/{ds.poss_defended} poss"
-                            if ds and ds.poss_defended else f"DRtg {season.dpoy.drtg_contrib:>+5.1f}")
-                print(f"  {CYAN}DPOY :{RESET}  {happiness_emoji(season.dpoy.happiness)} {tc}{season.dpoy.name:<22}{RESET}  "
-                      f"{MUTED}{season.dpoy.position} · {dpoy_team}{RESET}  {stat_str}")
-            if season.coy:
-                from coach import ARCHETYPE_LABELS
-                coy = season.coy
-                ctname = season.coy_team.franchise_at(sn).nickname if season.coy_team else "—"
-                arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
-                fp_note = f"  {MUTED}ex-player{RESET}" if coy.former_player else ""
-                coy_metric = (f"net rtg {season.coy_delta:>+.1f}  {MUTED}best in league{RESET}"
-                              if season.coy_first_season
-                              else f"improved {season.coy_delta:>+.1f} net rtg")
-                print(f"  {GOLD}COY  :{RESET}  {happiness_emoji(coy.happiness)} {CYAN}{coy.name:<22}{RESET}  "
-                      f"{MUTED}{arch_lbl} · {ctname}{RESET}  {coy_metric}{fp_note}")
+        # Pre-compute per-team distinctions for inline highlights
+        best_record  = standings[0]
+        worst_record = standings[-1]
+        ppg_leader   = max(standings, key=lambda t: season.team_ppg(t))
+        def_leader   = min(standings, key=lambda t: season.team_papg(t))
+        diff_leader  = max(standings, key=lambda t: season.team_ppg(t) - season.team_papg(t))
 
         cfg = season.cfg
-        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'Record':<13} {'ORtg':>4}  {'DRtg':>4}  {'Pace':>4}  "
+        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'Record':<13} {'ORtg':>4}  {'DRtg':>4}  "
               f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}{RESET}")
         divider()
         for i, team in enumerate(standings):
@@ -1207,49 +1156,81 @@ class CommissionerGame:
             ortg, drtg, pace, _ = season._start_ratings.get(team, (team.ortg, team.drtg, team.pace, team.style_3pt))
             record   = _wl(rw, rl)
             padded   = f"{fname:<28}"
+            ppg  = season.team_ppg(team)
+            papg = season.team_papg(team)
+            diff = ppg - papg
+
+            # Record column color — highlight best/worst
+            if team is best_record:
+                rec_str  = f"{GREEN}{BOLD}{record:<13}{RESET}"
+            elif team is worst_record:
+                rec_str  = f"{RED}{record:<13}{RESET}"
+            else:
+                rec_str  = f"{record:<13}"
+
+            # PS/G — highlight top offense
+            ppg_c    = (f"{GREEN}{BOLD}{ppg:>5.1f}{RESET}" if team is ppg_leader
+                        else f"{ppg:>5.1f}")
+            # PA/G — highlight top defense (fewest allowed)
+            papg_c   = (f"{GREEN}{BOLD}{papg:>5.1f}{RESET}" if team is def_leader
+                        else f"{papg:>5.1f}")
+            # Diff — highlight best margin
+            if team is diff_leader:
+                diff_str = f"{GOLD}{BOLD}{diff:>+5.1f}{RESET}"
+            else:
+                diff_c   = GREEN if diff > 0 else (RED if diff < 0 else MUTED)
+                diff_str = f"{diff_c}{diff:>+5.1f}{RESET}"
+
             if rank <= n_playoff:
                 seed_tag = f"{CYAN}({rank}){RESET}"
                 name_str = f"{BOLD}{padded}{RESET}"
             else:
                 seed_tag = f"{MUTED}    {RESET}"
                 name_str = f"{MUTED}{padded}{RESET}"
-            ppg  = season.team_ppg(team)
-            papg = season.team_papg(team)
-            diff = ppg - papg
-            diff_c = GREEN if diff > 0 else (RED if diff < 0 else MUTED)
-            print(f"  {rank:>2}. {name_str} {record:<13} {ortg:>4.0f}  {drtg:>4.0f}  {pace:>4.0f}  "
-                  f"{seed_tag} {ppg:>5.1f}  {papg:>5.1f}  {diff_c}{diff:>+5.1f}{RESET}")
+
+            print(f"  {rank:>2}. {name_str} {rec_str} {ortg:>4.0f}  {drtg:>4.0f}  "
+                  f"{seed_tag} {ppg_c}  {papg_c}  {diff_str}")
 
         divider()
         print(f"\n  Top {n_playoff} of {n_teams} teams advance to the playoffs.")
 
-        # ── Season stat leaderboard ───────────────────────────────────────────
+        # ── Scoring leaders — with zone breakdown ─────────────────────────────
         all_players = [(p, t) for t in season.teams for p in t.roster if p is not None]
         scored = [(p, t, season.player_stats[p.player_id])
                   for p, t in all_players
                   if p.player_id in season.player_stats
                   and p.player_id != _BENCH_ID]
         if scored:
-            print()
-            print(f"  {BOLD}{'SCORING LEADERS':^60}{RESET}")
-            print(f"  {MUTED}{'Player':<22} {'Team':<20} {'PPG':>5} {'FG%':>6} {'3P%':>6} {'FT%':>6}{RESET}")
-            top_scorers = sorted(scored, key=lambda x: x[2].ppg, reverse=True)[:5]
-            for p, t, s in top_scorers:
-                tname = t.franchise_at(sn).nickname[:18]
-                tc = GOLD if p is season.mvp else (CYAN if p.peak_overall >= 14 else "")
-                print(f"  {tc}{p.name:<22}{RESET} {MUTED}{tname:<20}{RESET}"
-                      f" {s.ppg:>5.1f} {s.fg_pct:>6.1%} {s.fg3_pct:>6.1%} {s.ft_pct:>6.1%}")
+            top_scorers = sorted(scored, key=lambda x: x[2].ppg, reverse=True)[:8]
 
-            print()
-            print(f"  {BOLD}{'DEFENSIVE LEADERS':^60}{RESET}")
-            print(f"  {MUTED}{'Player':<22} {'Team':<20} {'Def Rtg':>7} {'Poss':>5}{RESET}")
-            def_candidates = [(p, t, s) for p, t, s in scored if s.poss_defended > 0]
-            top_defenders = sorted(def_candidates, key=lambda x: x[2].def_rtg)[:5]
-            for p, t, s in top_defenders:
-                tname = t.franchise_at(sn).nickname[:18]
-                tc = CYAN if p is season.dpoy else ""
-                print(f"  {tc}{p.name:<22}{RESET} {MUTED}{tname:<20}{RESET}"
-                      f" {s.def_rtg:>7.1f} {s.poss_defended:>5}")
+            print(f"\n  {BOLD}SCORING LEADERS{RESET}")
+            # Header: name | team | PPG | Paint (ppg / make%) | Mid | 3PT | FT
+            print(f"  {MUTED}{'Player':<22} {'Team':<18} {'PPG':>5}  "
+                  f"{'Paint':>10}  {'Mid':>10}  {'3PT':>10}  {'FT':>9}{RESET}")
+            divider()
+
+            def _zone_cell(pts_per_game: float, pct: float) -> str:
+                """Format a zone cell: '12.4 (57%)' right-aligned in 10 chars."""
+                inner = f"{pts_per_game:.1f} ({pct:.0%})"
+                return f"{inner:>10}"
+
+            for p, t, s in top_scorers:
+                tname = t.franchise_at(sn).nickname[:16]
+                tc    = GOLD if p is season.mvp else (CYAN if p.peak_overall >= 14 else "")
+                g     = s.games or 1
+
+                paint_ppg = s.fgm_paint * 2 / g
+                mid_ppg   = s.fgm_mid   * 2 / g
+                three_ppg = s.fgm_3     * 3 / g
+                ft_ppg    = s.ftm           / g
+
+                paint_cell = _zone_cell(paint_ppg, s.paint_pct)
+                mid_cell   = _zone_cell(mid_ppg,   s.mid_pct)
+                three_cell = _zone_cell(three_ppg, s.fg3_pct)
+                ft_cell    = _zone_cell(ft_ppg,    s.ft_pct)
+
+                print(f"  {tc}{p.name:<22}{RESET} {MUTED}{tname:<18}{RESET} {s.ppg:>5.1f}  "
+                      f"{MUTED}{paint_cell}  {mid_cell}  {three_cell}  {ft_cell[:9]}{RESET}")
 
         press_enter("Press Enter to see injury report...")
 
