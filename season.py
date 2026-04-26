@@ -216,6 +216,7 @@ class Season:
         self.mip_team:        Team   | None = None
         self.mip_delta:       float = 0.0   # composite 60/40 score improvement
         self.mip_ppg_delta:   float = 0.0   # PPG change for display
+        self.mip_drtg_delta:  float = 0.0   # DRtg change (negative = improved)
         # Coach of the Year (set by league.update_all_coach_happiness)
         self.coy:              "Coach | None" = None
         self.coy_team:         "Team  | None" = None
@@ -491,10 +492,18 @@ class Season:
                     best_t = t
 
         if best_p is not None and best_delta > 0:
+            curr = self.player_stats[best_p.player_id]
+            prev = prior_stats[best_p.player_id]
+            curr_drtg = curr.def_rtg if curr.poss_defended > 0 else None
+            prev_drtg = prev.def_rtg if prev.poss_defended > 0 else None
             self.mip           = best_p
             self.mip_team      = best_t
             self.mip_delta     = round(best_delta, 2)
             self.mip_ppg_delta = round(best_ppg_delta, 1)
+            # Negative = improved (fewer pts allowed); None if no defensive data
+            self.mip_drtg_delta = (round(curr_drtg - prev_drtg, 1)
+                                   if curr_drtg is not None and prev_drtg is not None
+                                   else 0.0)
 
     def _compute_finals_mvp(self) -> None:
         """Compute Finals MVP from championship series game logs.

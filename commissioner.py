@@ -459,6 +459,7 @@ class CommissionerGame:
                  mip_team=None,
                  mip_delta=0.0,
                  mip_ppg_delta=0.0,
+                 mip_drtg_delta=0.0,
             )
             # Patch PlayerSeasonStats objects for new zone-split fields
             for ps in getattr(s, 'player_stats', {}).values():
@@ -1960,9 +1961,12 @@ class CommissionerGame:
                         stat_str = f"DRtg {p.drtg_contrib:>+.1f}"
                 elif lbl == "MIP":
                     ppg_sign = "+" if season.mip_ppg_delta >= 0 else ""
+                    drtg_s = (f"  {season.mip_drtg_delta:.1f} DRtg"
+                              if season.mip_drtg_delta <= -1.0 else "")
                     if ps and ps.games > 0:
                         stat_str = (f"{ps.ppg:.1f} PPG  "
-                                    f"{ppg_sign}{season.mip_ppg_delta:.1f} PPG  "
+                                    f"{ppg_sign}{season.mip_ppg_delta:.1f} PPG"
+                                    f"{drtg_s}  "
                                     f"{season.mip_delta:>+.2f} score vs prior season")
                     else:
                         stat_str = f"{season.mip_delta:>+.2f} score vs prior season"
