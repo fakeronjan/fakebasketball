@@ -217,6 +217,9 @@ class Season:
         self.mip_delta:       float = 0.0   # composite 60/40 score improvement
         self.mip_ppg_delta:   float = 0.0   # PPG change for display
         self.mip_drtg_delta:  float = 0.0   # DRtg change (negative = improved)
+        self.roy:             Player | None = None
+        self.roy_team:        Team   | None = None
+        self.roy_ppg:         float = 0.0   # PPG for display
         # Coach of the Year (set by league.update_all_coach_happiness)
         self.coy:              "Coach | None" = None
         self.coy_team:         "Team  | None" = None
@@ -448,6 +451,20 @@ class Season:
         dpoy_pool = [(p, t) for p, t in pool if p is not self.opoy]
         if dpoy_pool:
             self.dpoy, self.dpoy_team = min(dpoy_pool, key=lambda pt: _raw_def_rtg(pt[0]))
+
+        # ROY: rookies only (seasons_played == 0); same 60/40 two-way formula
+        #      weighted by win% — no playoff restriction, all teams eligible
+        roy_pool = [(p, t) for p, t in pool if p.seasons_played == 0]
+        if roy_pool:
+            self.roy, self.roy_team = max(
+                roy_pool,
+                key=lambda pt: (
+                    (0.60 * _ppg(pt[0]) + 0.40 * _def_score(pt[0]))
+                    * (0.70 + 0.60 * self.reg_win_pct(pt[1]))
+                ),
+            )
+            roy_ps = self.player_stats.get(self.roy.player_id)
+            self.roy_ppg = round(roy_ps.ppg, 1) if roy_ps else 0.0
 
     def compute_mip(self, prior_stats: dict) -> None:
         """Most Improved Player: biggest positive delta in the 60/40 two-way score.
