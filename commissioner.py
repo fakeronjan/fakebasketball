@@ -1482,6 +1482,7 @@ class CommissionerGame:
     def _show_summary(self, season: Season):
         self._show_standings_screen(season)
         self._show_awards_screen(season)
+        self._show_league_health_screen(season)
 
     # ── Screen A: Standings ───────────────────────────────────────────────────
 
@@ -1708,22 +1709,120 @@ class CommissionerGame:
                       f"{_exp_flag}{_dec_flag}"
                       f"  {MUTED}{_ppg_str}{RESET}")
 
-        # ── League health ─────────────────────────────────────────────────────
-        print()
-        divider()
-        avg_ppg    = season.league_avg_ppg()
-        total_fans = sum(_fans_millions(t) for t in league.teams)
-        print(f"\n  {BOLD}League Health{RESET}")
-        print(f"  Popularity  {pop_bar(lp)}  {trend(lp_prev, lp)}")
-        print(f"  Fan Base    {CYAN}{total_fans:.1f}M{RESET}  "
-              f"{MUTED}total fans · Era: {era_label(league.league_meta)} · "
-              f"Avg {avg_ppg:.1f} pts/game{RESET}")
-        if season.meta_shock:
-            print(f"  {RED}{BOLD}⚡ Rule change shock fired this season!{RESET}")
+        self._prev_league_pop = lp
+        press_enter()
 
+    # ── Screen C: League Health / Fan Engagement ─────────────────────────────
+
+    def _show_league_health_screen(self, season: Season) -> None:
+        """Screen C — per-market vitals and commissioner flags, four-pillar overview."""
+        clear()
+        league  = self.league
+        sn      = season.number
+        lp      = league.league_popularity
+        lp_prev = self._prev_league_pop
+        avg_ppg = season.league_avg_ppg()
+        total_fans = sum(_fans_millions(t) for t in league.teams)
+
+        header("LEAGUE HEALTH  —  Fan Engagement", f"Season {sn}  ·  {self.league_name}")
+
+        # ── League-wide summary row ───────────────────────────────────────────
+        print()
+        print(f"  League Popularity  {pop_bar(lp, 16)}  {trend(lp_prev, lp)}"
+              f"  {MUTED}total fans {CYAN}{total_fans:.1f}M{RESET}"
+              f"  {MUTED}Era: {era_label(league.league_meta)}  ·  Avg {avg_ppg:.1f} pts/game{RESET}")
+        if season.meta_shock:
+            print(f"  {RED}{BOLD}  Rule change shock fired this season!{RESET}")
+
+        # Grab previous season's per-team snapshots for trend computation
+        prev_s = self.league.seasons[-1] if self.league.seasons else None
+        prev_pop = getattr(prev_s, '_popularity', {}) if prev_s else {}
+        prev_eng = getattr(prev_s, '_market_engagement', {}) if prev_s else {}
+
+        # ── Per-market table ─────────────────────────────────────────────────
+        print(f"\n  {BOLD}Markets{RESET}")
+        divider()
+
+        # Column widths (plain text, no ANSI)
+        COL_T = 22   # team name
+        COL_M = 6    # market size
+        BAR_W = 10   # popularity bar
+        # Header uses plain widths; data rows build each segment at fixed length
+        print(f"  {'Team':<{COL_T}} {'Mkt':>{COL_M}}  "
+              f"{'Popularity':<{BAR_W + 10}}  {'Eng':>4}  {'Fans':>6}  Flags")
+        divider()
+
+        teams_sorted = sorted(league.teams,
+                              key=lambda t: -t.franchise.effective_metro)
+
+        for t in teams_sorted:
+            fname  = t.franchise_at(sn).name
+            metro  = t.franchise.effective_metro
+            pop    = t.popularity
+            eng    = t.market_engagement
+            fans   = _fans_millions(t)
+            p_prev = prev_pop.get(t)
+
+            # Popularity mini-bar
+            filled = round(pop * BAR_W)
+            bar_c  = GREEN if pop >= 0.55 else (RED if pop < 0.30 else CYAN)
+            bar    = f"{bar_c}{'█' * filled}{'░' * (BAR_W - filled)}{RESET}"
+            pop_pct = f"{pop:.0%}"          # e.g. "63%"
+            fans_s  = f"{MUTED}{fans:.1f}M{RESET}"
+
+            eng_c   = GREEN if eng >= 0.55 else (RED if eng < 0.30 else CYAN)
+            eng_str = f"{eng_c}{eng:.0%}{RESET}"
+
+            # ── Commissioner flags ────────────────────────────────────────────
+            flags: list[str] = []
+
+            # Defending champion
+            if season.champion is t:
+                flags.append(f"{GOLD}CHAMP{RESET}")
+
+            # Relocation risk: consecutive losing seasons
+            ls = t._consecutive_losing_seasons
+            if ls >= 4:
+                flags.append(f"{RED}RELOC RISK ({ls} losing){RESET}")
+            elif ls >= 2:
+                flags.append(f"{GOLD}LOSING STREAK ({ls}){RESET}")
+
+            # Coach hot seat
+            if t.coach and t.coach.hot_seat:
+                flags.append(f"{GOLD}HOT SEAT{RESET}")
+
+            # Star at risk: in final contract year and unhappy
+            star = t.roster[0] if t.roster else None
+            if star is not None:
+                if star.contract_years_remaining <= 1 and star.happiness < 0.55:
+                    flags.append(f"{RED}STAR RISK{RESET}")
+                elif star.contract_years_remaining <= 1:
+                    flags.append(f"{MUTED}STAR EXP{RESET}")
+
+            # Popularity trend vs prior season
+            if p_prev is not None:
+                pop_delta = pop - p_prev
+                if pop_delta >= 0.06:
+                    flags.append(f"{GREEN}SURGING{RESET}")
+                elif pop_delta <= -0.06:
+                    flags.append(f"{RED}FADING{RESET}")
+
+            # Danger zone: low popularity even without a losing streak
+            if pop < 0.25 and not any("RELOC" in f for f in flags):
+                flags.append(f"{RED}LOW POP{RESET}")
+
+            flag_str = "  ".join(flags) if flags else f"{MUTED}—{RESET}"
+            mkt_str  = f"{metro:.1f}M"
+
+            print(f"  {fname:<{COL_T}} {mkt_str:>{COL_M}}  "
+                  f"{bar} {pop_pct:<4} {fans_s:<12}  "
+                  f"{eng_str:<5}  {flag_str}")
+
+        # ── Four-pillar overview ──────────────────────────────────────────────
         pillar_data = self._last_pillar_scores
         if pillar_data:
-            print()
+            print(f"\n  {BOLD}League Pillars{RESET}")
+            divider()
             history = league.pillar_history
             for label, key in [("Integrity", "integrity"), ("Parity", "parity"),
                                 ("Drama", "drama"), ("Entertainment", "entertainment")]:
@@ -1734,21 +1833,21 @@ class CommissionerGame:
                 prev_score = history.get(sn - 1, {}).get(key)
                 tr         = trend(prev_score, score) if prev_score is not None else f"{MUTED}—{RESET}"
                 print(f"  {label:<14} {gc}{BOLD}{grade}{RESET}  {MUTED}{score:.2f}{RESET}  {tr}")
-                for dir_ch, dlabel, _ in data.get("drivers", [])[:3]:
+                for dir_ch, dlabel, _ in data.get("drivers", [])[:2]:
                     dc = GREEN if dir_ch == "↑" else RED
                     print(f"    {dc}{dir_ch}{RESET}  {MUTED}{dlabel}{RESET}")
-            print(f"\n  {MUTED}[H] Full health breakdown{RESET}")
+            print(f"\n  {MUTED}[H] Full pillar breakdown{RESET}")
 
         # ── Notable events ────────────────────────────────────────────────────
         events = self._collect_events(season)
         if events:
             print(f"\n  {BOLD}Events{RESET}")
+            divider()
             for e in events:
                 print(f"  • {e}")
 
-        self._prev_league_pop = lp
         while True:
-            raw = prompt("Enter to continue, [H] for full health breakdown:").strip().lower()
+            raw = prompt("Enter to continue, [H] for full pillar breakdown:").strip().lower()
             if raw == "h" and self._last_pillar_scores:
                 self._show_league_health_detail(season)
             else:
