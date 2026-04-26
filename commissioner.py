@@ -1946,6 +1946,7 @@ class CommissionerGame:
                 f"Player Stats     {MUTED}season leaders · best single seasons · career leaders{RESET}",
                 f"Rosters          {MUTED}current players with last season's stats{RESET}",
                 f"Owner Dashboard  {MUTED}happiness, P&L, competence & threat level by team{RESET}",
+                f"Coaching         {MUTED}archetypes, modifiers, tenure, mood & COY history{RESET}",
                 f"Market Map       {MUTED}engagement, popularity & grudges by city{RESET}",
                 f"Event Log        {MUTED}expansions, mergers & relocations{RESET}",
                 f"All-Time Records {MUTED}championships, streaks, best & worst seasons{RESET}",
@@ -1954,19 +1955,20 @@ class CommissionerGame:
                 f"League Health    {MUTED}pillar scores trend — Integrity · Parity · Drama · Entertainment{RESET}",
                 rival_label,
                 f"{MUTED}Back{RESET}",
-            ], default=12)
+            ], default=13)
             if   idx == 0:  self._show_league_history(season)
             elif idx == 1:  self._show_team_history(season)
             elif idx == 2:  self._show_player_stats(season)
             elif idx == 3:  self._show_rosters(season)
             elif idx == 4:  self._show_owner_dashboard(season)
-            elif idx == 5:  self._show_market_map(season)
-            elif idx == 6:  self._show_event_log(season)
-            elif idx == 7:  self._show_alltime_records(season)
-            elif idx == 8:  self._show_rivalries(season)
-            elif idx == 9:  self._show_playoff_analysis(season)
-            elif idx == 10: self._show_league_health_report(season)
-            elif idx == 11: self._show_rival_league_report(season)
+            elif idx == 5:  self._show_coach_dashboard(season)
+            elif idx == 6:  self._show_market_map(season)
+            elif idx == 7:  self._show_event_log(season)
+            elif idx == 8:  self._show_alltime_records(season)
+            elif idx == 9:  self._show_rivalries(season)
+            elif idx == 10: self._show_playoff_analysis(season)
+            elif idx == 11: self._show_league_health_report(season)
+            elif idx == 12: self._show_rival_league_report(season)
             else: break
 
     # ── Report: League Health Trend ───────────────────────────────────────────
@@ -3246,6 +3248,106 @@ class CommissionerGame:
                   f"League P&L: {p_c}{total_profit:+.1f}M{RESET}")
             if demanding or watching:
                 print(f"  {RED}{demanding} demanding{RESET}  ·  {GOLD}{watching} watching{RESET}")
+
+        press_enter()
+
+    # ── Report: Coach Dashboard ───────────────────────────────────────────────
+
+    def _show_coach_dashboard(self, season: Season) -> None:
+        """Per-team coaching snapshot: archetype, modifiers, tenure, mood, COY history."""
+        from coach import ARCHETYPE_LABELS
+        league = self.league
+        sn     = season.number
+        cfg    = league.cfg
+
+        _ARCH_SHORT = {
+            "chemistry":     "Culture",
+            "star_whisperer":"Whisperer",
+            "defensive":     "Defensive",
+            "offensive":     "Offensive",
+            "motivator":     "Motivator",
+        }
+
+        # Sort by net rating descending (best teams first)
+        teams = sorted(league.teams, key=lambda t: -t.net_rating())
+
+        clear()
+        header("COACHING DASHBOARD", f"After Season {sn}  ·  {len(teams)} teams")
+
+        print(f"\n  {'Team':<24} {'Coach':<22} {'Arch':<11} {'Flex':<9} {'Hor':<10} "
+              f"{'Yr':>3}  {'COY':>3}  {'Mood':>5}  {'ORtg':>5}  {'DRtg':>5}  {'Net':>5}  Status")
+        divider()
+
+        for t in teams:
+            tname = t.franchise_at(sn).name[:22]
+            coach = t.coach
+            if coach is None:
+                print(f"  {MUTED}{tname:<24} — no coach{RESET}")
+                continue
+
+            mods      = coach.compute_modifiers()
+            arch_s    = _ARCH_SHORT.get(coach.archetype, coach.archetype[:9])
+            flex_lbl  = "Rigid" if coach.flexibility < 0.35 else ("Flexible" if coach.flexibility > 0.65 else "Balanced")
+            hor_lbl   = "Win-now" if coach.horizon < 0.35 else ("Dev" if coach.horizon > 0.65 else "Mixed")
+
+            h     = coach.happiness
+            h_c   = GREEN if h >= 0.65 else (GOLD if h >= 0.40 else RED)
+            h_lbl = f"{h_c}{h:.0%}{RESET}"
+
+            ortg_delta = mods["ortg_mod"]
+            drtg_delta = mods["drtg_mod"]
+            net_delta  = ortg_delta - drtg_delta
+            o_c = GREEN if ortg_delta > 0 else (RED if ortg_delta < -0.5 else MUTED)
+            d_c = GREEN if drtg_delta < 0 else (RED if drtg_delta > 0.5 else MUTED)
+            n_c = GREEN if net_delta > 1 else (MUTED if net_delta >= -1 else RED)
+
+            seat_lbl = f"{RED}🔥 HOT SEAT{RESET}" if coach.hot_seat else ""
+            coy_lbl  = f"{GOLD}★{coach.coy_wins}{RESET}" if coach.coy_wins else f"{MUTED} — {RESET}"
+            fp_lbl   = f" {MUTED}ex-player{RESET}" if coach.former_player else ""
+
+            print(f"  {tname:<24} {coach.name:<22} {CYAN}{arch_s:<11}{RESET} "
+                  f"{flex_lbl:<9} {hor_lbl:<10} "
+                  f"{coach.tenure:>3}  {coy_lbl}  {h_lbl}  "
+                  f"{o_c}{ortg_delta:>+5.1f}{RESET}  "
+                  f"{d_c}{drtg_delta:>+5.1f}{RESET}  "
+                  f"{n_c}{net_delta:>+5.1f}{RESET}  "
+                  f"{seat_lbl}{fp_lbl}")
+
+        # League-wide coaching summary
+        divider()
+        coaches = [t.coach for t in league.teams if t.coach]
+        if coaches:
+            avg_h    = sum(c.happiness for c in coaches) / len(coaches)
+            hot_n    = sum(1 for c in coaches if c.hot_seat)
+            avg_ten  = sum(c.coach.tenure for t in league.teams
+                           if t.coach for c in [t]) / len(coaches)  # noqa: recompute below
+            avg_ten  = sum(c.tenure for c in coaches) / len(coaches)
+            fp_n     = sum(1 for c in coaches if c.former_player)
+            from collections import Counter as _Counter
+            arch_dist = _Counter(c.archetype for c in coaches)
+            h_c = GREEN if avg_h >= 0.65 else (GOLD if avg_h >= 0.45 else RED)
+            print(f"\n  Avg happiness: {h_c}{avg_h:.0%}{RESET}   "
+                  f"Avg tenure: {avg_ten:.1f} yrs   "
+                  f"On hot seat: {RED if hot_n else MUTED}{hot_n}{RESET}   "
+                  f"Ex-players coaching: {fp_n}")
+            arch_str = "  ".join(
+                f"{CYAN}{_ARCH_SHORT.get(a, a)}{RESET} {n}"
+                for a, n in arch_dist.most_common()
+            )
+            print(f"  Archetype mix: {arch_str}")
+
+        # COY history — last 10 seasons
+        coy_seasons = [(s.number, s.coy, s.coy_team, s.coy_delta)
+                       for s in league.seasons if s.coy]
+        if coy_seasons:
+            print(f"\n  {GOLD}{BOLD}Coach of the Year History{RESET}")
+            divider()
+            for s_num, coy, coy_team, delta in coy_seasons[-10:]:
+                ctname   = coy_team.franchise_at(s_num).name[:18] if coy_team else "—"
+                arch_s   = _ARCH_SHORT.get(coy.archetype, coy.archetype)
+                fp_tag   = f" {MUTED}(ex-player){RESET}" if coy.former_player else ""
+                print(f"  {MUTED}Szn {s_num:>3}{RESET}  {GOLD}{coy.name:<22}{RESET}  "
+                      f"{ctname:<20}  {CYAN}{arch_s:<10}{RESET}  {GOLD}+{delta:.1f} NR{RESET}{fp_tag}")
 
         press_enter()
 
@@ -5486,13 +5588,13 @@ class CommissionerGame:
             press_enter()
 
     def _handle_coach_meeting(self, season: Season) -> None:
-        """Coach storylines — only fires when there is something worth telling.
+        """Coaching report — always shown, scaled to what's newsworthy.
 
-        Coaches are background actors. This screen only surfaces when a genuine
-        coaching narrative exists: COY winner, hot seat, or a fired/hired change.
-        Routine 'everyone is slightly restless' seasons are silently skipped.
+        Quiet seasons: compact landscape (archetype mix, avg tenure, stability).
+        Active seasons: COY spotlight and/or hot-seat callouts.
         """
         from coach import ARCHETYPE_LABELS
+        from collections import Counter as _Counter
         league = self.league
         sn     = season.number
 
@@ -5502,27 +5604,36 @@ class CommissionerGame:
 
         hot_seat = [(t, c) for t, c in coaches if c.hot_seat]
         coy      = season.coy
+        has_news = hot_seat or coy is not None
 
-        # Nothing worth showing — skip silently
-        if not hot_seat and coy is None:
-            return
+        _ARCH_SHORT = {
+            "chemistry":     "Culture",
+            "star_whisperer":"Whisperer",
+            "defensive":     "Defensive",
+            "offensive":     "Offensive",
+            "motivator":     "Motivator",
+        }
 
         clear()
         header("COACHING REPORT", f"After Season {sn}")
 
-        # COY spotlight
+        # ── COY spotlight ─────────────────────────────────────────────────────
         if coy:
             ctname   = season.coy_team.franchise_at(sn).name if season.coy_team else "—"
             arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
             fp_note  = f"  {MUTED}former player{RESET}" if coy.former_player else ""
+            coy_str  = f"★ × {coy.coy_wins}" if coy.coy_wins > 1 else ""
             print(f"\n  {GOLD}{BOLD}Coach of the Year{RESET}")
             divider()
             print(f"\n  {GOLD}{coy.name}{RESET}  {MUTED}· {ctname} · {arch_lbl} "
                   f"· Year {coy.tenure}{RESET}{fp_note}")
             print(f"  {MUTED}Net rating improved {season.coy_delta:>+.1f} pts — "
                   f"best turnaround in the league this season.{RESET}")
+            if coy.coy_wins > 1:
+                print(f"  {GOLD}{coy.coy_wins}× Coach of the Year in their career. "
+                      f"Established reputation — stars are taking notice.{RESET}")
 
-        # Hot seat coaches
+        # ── Hot seat coaches ──────────────────────────────────────────────────
         if hot_seat:
             print(f"\n  {RED}{BOLD}On the Hot Seat{RESET}")
             divider()
@@ -5540,6 +5651,41 @@ class CommissionerGame:
                 else:
                     print(f"  {MUTED}{owner_first} is watching closely. "
                           f"Another poor season likely forces a change.{RESET}")
+
+        # ── Coaching landscape (always shown) ─────────────────────────────────
+        all_coaches = [c for _, c in coaches]
+        avg_h   = sum(c.happiness for c in all_coaches) / len(all_coaches)
+        avg_ten = sum(c.tenure for c in all_coaches) / len(all_coaches)
+        hot_n   = len(hot_seat)
+        arch_dist = _Counter(_ARCH_SHORT.get(c.archetype, c.archetype) for c in all_coaches)
+        veteran_coaches = sum(1 for c in all_coaches if c.tenure >= 4)
+
+        h_c = GREEN if avg_h >= 0.65 else (GOLD if avg_h >= 0.45 else RED)
+        section_lbl = "Coaching Landscape" if has_news else "\n  Coaching Landscape"
+        if not has_news:
+            print(f"\n  {BOLD}Coaching Landscape{RESET}  {MUTED}— a quiet season on the sidelines{RESET}")
+        else:
+            print(f"\n  {BOLD}Coaching Landscape{RESET}")
+        divider()
+
+        arch_str = "  ".join(
+            f"{CYAN}{a}{RESET} ×{n}" for a, n in arch_dist.most_common()
+        )
+        print(f"\n  {arch_str}")
+        print(f"\n  Avg happiness {h_c}{avg_h:.0%}{RESET}  ·  "
+              f"Avg tenure {avg_ten:.1f} yrs  ·  "
+              f"Veteran coaches (4+ yrs) {veteran_coaches}  ·  "
+              f"Hot seats {RED if hot_n else MUTED}{hot_n}{RESET}")
+
+        # Longest-tenured coach callout
+        longest = max(all_coaches, key=lambda c: c.tenure)
+        if longest.tenure >= 3:
+            lt_team = next((t for t, c in coaches if c is longest), None)
+            lt_tname = lt_team.franchise_at(sn).name if lt_team else "—"
+            lt_arch = _ARCH_SHORT.get(longest.archetype, longest.archetype)
+            fp_tag = " (ex-player)" if longest.former_player else ""
+            print(f"  {MUTED}Longest tenure: {longest.name}{fp_tag} · {lt_tname} "
+                  f"· {lt_arch} · Year {longest.tenure}{RESET}")
 
         press_enter()
 
