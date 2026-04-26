@@ -453,6 +453,8 @@ class CommissionerGame:
                  _popularity={},
                  _market_engagement={},
                  _league_popularity=0.0,
+                 finals_mvp_ppg=0.0,
+                 finals_mvp_drtg=0.0,
             )
 
         # ── League-level ──────────────────────────────────────────────────────
@@ -1065,6 +1067,8 @@ class CommissionerGame:
         season._market_engagement = {t: t.market_engagement for t in league.teams}
         season._league_popularity = league.league_popularity
         season._meta              = league.league_meta   # snapshot for history display
+        # COY must be set before _show_summary so the awards screen can display it
+        league.update_all_coach_happiness(season)
         return season
 
     # ── Interactive playoffs ───────────────────────────────────────────────────
@@ -1799,44 +1803,47 @@ class CommissionerGame:
         lp_prev = self._prev_league_pop
         standings = season.regular_season_standings
 
-        header("AWARDS NIGHT", f"Season {sn}  ·  {self.league_name}")
+        header("🏆  AWARDS NIGHT", f"Season {sn}  ·  {self.league_name}")
 
-        # ── Player & coach awards ─────────────────────────────────────────────
-        # Build a chronological list of all seasons including this one for
-        # award-count and streak computation.
-        all_seasons = list(self.league.seasons) + [season]
-
-        _AWARD_GETTERS = {
-            "MVP":        lambda s: s.mvp,
-            "OPOY":       lambda s: s.opoy,
-            "DPOY":       lambda s: s.dpoy,
-            "Finals MVP": lambda s: s.finals_mvp,
-            "COY":        lambda s: s.coy,
-        }
+        # league.seasons already contains this season (appended in _run_one_season)
+        all_seasons = list(self.league.seasons)
 
         def _award_badge(key: str, winner_id) -> str:
-            """Return e.g. '3× (2 in a row)' for a player/coach winner_id."""
-            getter = _AWARD_GETTERS[key]
-            id_fn  = (lambda s: getattr(getter(s), "player_id", None)
-                      if key != "COY"
-                      else lambda s: getattr(getter(s), "coach_id", None))
-            # total wins
-            total = sum(1 for s in all_seasons if id_fn(s) == winner_id)
-            # current streak (walk backwards from this season)
+            """Return e.g. '3×' or '3×  3 in a row'."""
+            getter_map = {
+                "MVP":        lambda s: s.mvp,
+                "OPOY":       lambda s: s.opoy,
+                "DPOY":       lambda s: s.dpoy,
+                "Finals MVP": lambda s: s.finals_mvp,
+                "COY":        lambda s: s.coy,
+            }
+            getter = getter_map[key]
+            attr   = "coach_id" if key == "COY" else "player_id"
+            id_fn  = lambda s: getattr(getter(s), attr, None)
+            total  = sum(1 for s in all_seasons if id_fn(s) == winner_id)
             streak = 0
             for s in reversed(all_seasons):
                 if id_fn(s) == winner_id:
                     streak += 1
                 else:
                     break
-            parts = [f"{total}×"]
+            badge = f"{GOLD}{total}×{RESET}"
             if streak >= 2:
-                parts.append(f"{streak} in a row")
-            return "  " + "  ".join(parts)
+                badge += f"  {GOLD}{streak} in a row{RESET}"
+            return badge
+
+        AWARD_EMOJIS = {
+            "MVP":        "🏆",
+            "OPOY":       "🎯",
+            "DPOY":       "🛡️",
+            "Finals MVP": "🏅",
+            "COY":        "📋",
+        }
 
         if season.mvp or season.opoy or season.dpoy or season.finals_mvp or season.coy:
             print(f"\n  {BOLD}Season Awards{RESET}")
             divider()
+
             for lbl, p, t in [
                 ("MVP",        season.mvp,        season.mvp_team),
                 ("OPOY",       season.opoy,       season.opoy_team),
@@ -1845,69 +1852,114 @@ class CommissionerGame:
             ]:
                 if p is None:
                     continue
-                tname = t.franchise_at(sn).nickname if t else "—"
+                emoji = AWARD_EMOJIS[lbl]
+                tname = t.franchise_at(sn).name if t else "—"
                 tc    = GOLD if p.peak_overall >= 14 else CYAN
                 ps    = season.player_stats.get(p.player_id)
-                if ps and lbl == "DPOY":
-                    stat_str = (f"Def Rtg {ps.def_rtg:.1f}  {ps.poss_defended} poss defended"
-                                if ps.poss_defended else f"DRtg {p.drtg_contrib:>+.1f}")
-                elif ps and ps.games > 0:
-                    if lbl == "MVP":
-                        seed = (standings.index(t) + 1
-                                if t in standings else "?")
-                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg  ({seed}) seed"
-                    elif lbl == "Finals MVP":
-                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg"
+
+                if lbl == "DPOY":
+                    if ps and ps.poss_defended:
+                        stat_str = f"{ps.def_rtg:.1f} DRtg  {ps.poss_defended} poss defended"
                     else:
-                        stat_str = (f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  "
-                                    f"{ps.fg3_pct:.1%} 3P  {ps.ft_pct:.1%} FT")
-                else:
-                    stat_str = f"ORtg {p.ortg_contrib:>+.1f}  DRtg {p.drtg_contrib:>+.1f}"
+                        stat_str = f"DRtg {p.drtg_contrib:>+.1f}"
+                elif lbl == "Finals MVP":
+                    stat_str = f"{season.finals_mvp_ppg:.1f} PPG  {season.finals_mvp_drtg:.1f} DRtg  (Finals only)"
+                elif lbl == "MVP":
+                    seed = standings.index(t) + 1 if t in standings else "?"
+                    if ps and ps.games > 0:
+                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg  ({seed}) seed"
+                    else:
+                        stat_str = f"ORtg {p.ortg_contrib:>+.1f}  ({seed}) seed"
+                else:  # OPOY
+                    if ps and ps.games > 0:
+                        stat_str = f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  {ps.fg3_pct:.1%} 3P"
+                    else:
+                        stat_str = f"ORtg {p.ortg_contrib:>+.1f}"
+
                 badge = _award_badge(lbl, p.player_id)
-                print(f"  {GOLD}{lbl:<12}{RESET} {happiness_emoji(p.happiness)} "
-                      f"{tc}{p.name:<22}{RESET}"
-                      f"  {MUTED}{p.position} · {tname:<18}{RESET}"
-                      f"  {stat_str}  {p.trend}{MUTED}{badge}{RESET}")
+                print(f"  {emoji} {GOLD}{lbl:<12}{RESET} "
+                      f"{tc}{BOLD}{p.name:<22}{RESET}  "
+                      f"{p.position} · {tname:<24}"
+                      f"  {MUTED}{stat_str}{RESET}  {p.trend}  {badge}")
 
             if season.coy:
                 from coach import ARCHETYPE_LABELS
                 coy      = season.coy
-                ctname   = season.coy_team.franchise_at(sn).nickname if season.coy_team else "—"
+                ctname   = season.coy_team.franchise_at(sn).name if season.coy_team else "—"
                 arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
                 fp_note  = f"  {MUTED}(former player){RESET}" if coy.former_player else ""
-                coy_metric = (f"net rtg {season.coy_delta:>+.1f}  {MUTED}best in league{RESET}"
+                coy_metric = (f"{season.coy_delta:>+.1f} net rtg  {MUTED}(best in league){RESET}"
                               if season.coy_first_season
-                              else f"improved {season.coy_delta:>+.1f} net rtg")
+                              else f"{season.coy_delta:>+.1f} net rtg improvement")
                 coy_badge = _award_badge("COY", coy.coach_id)
-                print(f"  {GOLD}{'Coach of Yr':<12}{RESET} {happiness_emoji(coy.happiness)} "
-                      f"{CYAN}{coy.name:<22}{RESET}"
-                      f"  {MUTED}{arch_lbl} · {ctname:<18}{RESET}"
-                      f"  {coy_metric}{fp_note}{MUTED}{coy_badge}{RESET}")
+                print(f"  📋 {GOLD}{'Coach of Yr':<12}{RESET} "
+                      f"{CYAN}{BOLD}{coy.name:<22}{RESET}  "
+                      f"{arch_lbl} · {ctname:<24}"
+                      f"  {MUTED}{coy_metric}{RESET}{fp_note}  {coy_badge}")
 
-        # ── Stars to Watch ────────────────────────────────────────────────────
-        all_stars: list[tuple] = []
-        for _team in league.teams:
-            for _p in _team.roster:
-                if _p is not None and _p.peak_overall >= 12:
-                    all_stars.append((_p, _team))
-        all_stars.sort(key=lambda x: -x[0].peak_overall)
+        # ── Award runners-up ──────────────────────────────────────────────────
+        def _runner_up_rows(season: "Season") -> list[str]:
+            """Return formatted runner-up lines for MVP, OPOY, DPOY."""
+            lines = []
+            pool = [(p, t) for t in league.teams for p in t.roster if p is not None]
+            playoff_set = set(season.regular_season_standings[:season.playoff_teams])
 
-        if all_stars:
-            print(f"\n  {BOLD}Stars to Watch{RESET}")
+            def _ppg(p):
+                s = season.player_stats.get(p.player_id)
+                return s.ppg if (s and s.games > 0) else 0.0
+            def _def_score(p):
+                s = season.player_stats.get(p.player_id)
+                if s and s.poss_defended > 0:
+                    return -(s.def_rtg - 110.0)
+                return -p.drtg_contrib
+            def _raw_drtg(p):
+                s = season.player_stats.get(p.player_id)
+                return s.def_rtg if (s and s.poss_defended > 0) else 110.0 + p.drtg_contrib
+
+            # MVP runners-up (playoff teams only)
+            mvp_pool = sorted(
+                [(p, t) for p, t in pool if t in playoff_set],
+                key=lambda pt: (0.60 * _ppg(pt[0]) + 0.40 * _def_score(pt[0]))
+                               * (0.70 + 0.60 * season.reg_win_pct(pt[1])),
+                reverse=True,
+            )
+            for rank, (p, t) in enumerate(mvp_pool[1:3], 2):
+                ps = season.player_stats.get(p.player_id)
+                seed = standings.index(t) + 1 if t in standings else "?"
+                stat = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg  ({seed}) seed" if ps else ""
+                tc = GOLD if p.peak_overall >= 14 else CYAN
+                lines.append(f"  {'MVP' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
+                              f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
+
+            # OPOY runners-up
+            opoy_pool = sorted(pool, key=lambda pt: _ppg(pt[0]), reverse=True)
+            for rank, (p, t) in enumerate(opoy_pool[1:3], 2):
+                ps = season.player_stats.get(p.player_id)
+                stat = f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  {ps.fg3_pct:.1%} 3P" if ps else ""
+                tc = GOLD if p.peak_overall >= 14 else CYAN
+                lines.append(f"  {'OPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
+                              f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
+
+            # DPOY runners-up (exclude OPOY winner)
+            dpoy_pool = sorted(
+                [(p, t) for p, t in pool if p is not season.opoy],
+                key=lambda pt: _raw_drtg(pt[0]),
+            )
+            for rank, (p, t) in enumerate(dpoy_pool[1:3], 2):
+                ps = season.player_stats.get(p.player_id)
+                stat = f"{ps.def_rtg:.1f} DRtg  {ps.poss_defended} poss" if (ps and ps.poss_defended) else ""
+                tc = GOLD if p.peak_overall >= 14 else CYAN
+                lines.append(f"  {'DPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
+                              f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
+
+            return lines
+
+        runner_up_lines = _runner_up_rows(season)
+        if runner_up_lines:
+            print(f"\n  {BOLD}Runners-Up{RESET}")
             divider()
-            for _p, _team in all_stars[:8]:
-                _tier_c   = GOLD if _p.peak_overall >= 18 else CYAN
-                _tier_lbl = "Elite" if _p.peak_overall >= 18 else " High"
-                _exp_flag = f"  {RED}EXP{RESET}" if _p.contract_years_remaining <= 1 else ""
-                _dec_flag = f"  {MUTED}↓{RESET}" if _p.is_declining else ""
-                _ps       = season.player_stats.get(_p.player_id)
-                _ppg_str  = f"{_ps.ppg:.1f} PPG" if _ps and _ps.games > 0 else ""
-                _tname    = _team.franchise_at(sn).name
-                print(f"  {happiness_emoji(_p.happiness)} {_tier_c}{_p.name:<22}{RESET}"
-                      f"  {MUTED}{_tname:<26}{RESET}"
-                      f"  {_tier_c}{_tier_lbl}{RESET}"
-                      f"{_exp_flag}{_dec_flag}"
-                      f"  {MUTED}{_ppg_str}{RESET}")
+            for line in runner_up_lines:
+                print(line)
 
         self._prev_league_pop = lp
         press_enter()
@@ -4200,9 +4252,9 @@ class CommissionerGame:
         commissioner_take = self.league.distribute_revenue()
         self._treasury += commissioner_take
         self._last_revenue = commissioner_take
-        # Update owner and coach happiness now that P&L is finalized
+        # Update owner happiness now that P&L is finalized
+        # (coach happiness already computed in _run_one_season so COY shows in awards)
         self.league.update_all_owner_happiness(season)
-        self.league.update_all_coach_happiness(season)
         self._handle_player_offseason(season)
         self._owner_actions = self._generate_all_owner_actions(season)
         if season.number >= 5 and season.number % 5 == 0:

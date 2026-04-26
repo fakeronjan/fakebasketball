@@ -184,7 +184,9 @@ class Season:
         self.opoy_team:  Team   | None = None
         self.dpoy:       Player | None = None
         self.dpoy_team:  Team   | None = None
-        self.finals_mvp: Player | None = None
+        self.finals_mvp:      Player | None = None
+        self.finals_mvp_ppg:  float = 0.0   # Finals-only PPG for display
+        self.finals_mvp_drtg: float = 0.0   # Finals-only DRtg for display
         # Coach of the Year (set by league.update_all_coach_happiness)
         self.coy:              "Coach | None" = None
         self.coy_team:         "Team  | None" = None
@@ -462,7 +464,14 @@ class Season:
 
         candidates = [pid for pid in pts if pid in pid_to_player and gp.get(pid, 0) > 0]
         if candidates:
-            self.finals_mvp = pid_to_player[max(candidates, key=_fmvp_score)]
+            best_pid = max(candidates, key=_fmvp_score)
+            self.finals_mvp = pid_to_player[best_pid]
+            games = gp.get(best_pid, 1)
+            self.finals_mvp_ppg  = round(pts.get(best_pid, 0) / games, 1)
+            poss = pd.get(best_pid, 0)
+            self.finals_mvp_drtg = round(
+                pa.get(best_pid, 0) / poss * 100 if poss > 0 else 110.0 + self.finals_mvp.drtg_contrib, 1
+            )
 
     def run(self) -> None:
         self.play_regular_season()
