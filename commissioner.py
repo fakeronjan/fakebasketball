@@ -2086,13 +2086,16 @@ class CommissionerGame:
             divider()
 
             components = data.get("components", [])
-            for w, s, clabel in components:
+            for w, s, cname, clabel in components:
                 bar_w = 12
                 filled = round(s * bar_w)
                 bar = "█" * filled + "░" * (bar_w - filled)
                 sc = GREEN if s >= 0.70 else (RED if s < 0.45 else GOLD)
-                contribution = w * s
-                print(f"  {sc}{bar}{RESET}  {MUTED}w={w:.2f}{RESET}  {clabel}")
+                w_label = ("Major" if w >= 0.20 else ("Moderate" if w >= 0.08 else "Minor"))
+                w_color = CYAN if w >= 0.20 else (MUTED if w < 0.08 else "")
+                print(f"  {sc}{bar}{RESET}  {sc}{s:.0%}{RESET}  "
+                      f"{BOLD}{cname:<18}{RESET}  "
+                      f"{w_color}{w_label:<8}{RESET}  {MUTED}{clabel}{RESET}")
 
         press_enter()
 

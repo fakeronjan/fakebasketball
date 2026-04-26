@@ -1439,7 +1439,7 @@ class League:
             """
             positives = []
             negatives = []
-            for w, s, label in components:
+            for w, s, name, label in components:
                 contribution = w * (s - 0.50)
                 if abs(contribution) < 0.003:
                     continue
@@ -1463,7 +1463,7 @@ class League:
             legit_label = f"Legitimacy moderate ({legit:.0%})"
         else:
             legit_label = f"Legitimacy weak ({legit:.0%}) — fan trust eroding"
-        ic.append((0.50, legit, legit_label))
+        ic.append((0.50, legit, "Legitimacy", legit_label))
 
         # 2. Grudge markets (Moderate 0.20)
         if self.market_grudges:
@@ -1475,9 +1475,9 @@ class League:
             top_cities = sorted(self.market_grudges.items(), key=lambda x: -x[1])[:2]
             city_str = ", ".join(c for c, _ in top_cities)
             grudge_score = 1.0 - weighted_grudge
-            ic.append((0.20, grudge_score, f"Grudge markets: {city_str}"))
+            ic.append((0.20, grudge_score, "Grudge Markets", f"Active grudge markets: {city_str}"))
         else:
-            ic.append((0.20, 1.0, "No grudge markets"))
+            ic.append((0.20, 1.0, "Grudge Markets", "No grudge markets"))
 
         # 3. Work stoppage hangover (Acute 0.15) — counter already decremented
         h = self._stoppage_hangover
@@ -1487,7 +1487,7 @@ class League:
             hangover_label = f"Work stoppage hangover — {hangover_label_map.get(h, 'fading')} ({5 - h} of 5 yrs)"
         else:
             hangover_label = "No work stoppage hangover"
-        ic.append((0.15, hangover_score, hangover_label))
+        ic.append((0.15, hangover_score, "Work Stoppage", hangover_label))
 
         # 4. Owner stability (Minor 0.08)
         owned_teams = [t for t in self.teams if t.owner is not None]
@@ -1502,9 +1502,9 @@ class League:
                 owner_label = f"1 owner restless ({t_name})"
             else:
                 owner_label = f"{restless} owners restless or demanding"
-            ic.append((0.08, stability, owner_label))
+            ic.append((0.08, stability, "Owner Stability", owner_label))
         else:
-            ic.append((0.08, 0.70, "No owner data"))
+            ic.append((0.08, 0.70, "Owner Stability", "No owner data"))
 
         # 5. Star player happiness (Minor 0.07)
         star_players = [(p, p.peak_overall)
@@ -1520,11 +1520,11 @@ class League:
                 star_label = "1 star unhappy — departure risk"
             else:
                 star_label = f"{unhappy} stars unhappy — retention risk"
-            ic.append((0.07, avg_h, star_label))
+            ic.append((0.07, avg_h, "Star Happiness", star_label))
         else:
-            ic.append((0.07, 0.70, "No stars tracked yet"))
+            ic.append((0.07, 0.70, "Star Happiness", "No stars tracked yet"))
 
-        integrity_score = sum(w * s for w, s, _ in ic)
+        integrity_score = sum(w * s for w, s, *_ in ic)
 
         # ══ PARITY ═════════════════════════════════════════════════════════════
         # Does every market feel like they can compete?
@@ -1536,9 +1536,9 @@ class League:
             mean_nr = sum(nets) / len(nets)
             std_nr = (sum((x - mean_nr) ** 2 for x in nets) / len(nets)) ** 0.5
             spread_score = max(0.0, 1.0 - std_nr / 8.0)
-            pc.append((0.25, spread_score, f"Rating spread ±{std_nr:.1f} pts net rating"))
+            pc.append((0.25, spread_score, "Rating Spread", f"Team net ratings spread ±{std_nr:.1f} pts"))
         else:
-            pc.append((0.25, 0.70, "Rating spread: insufficient data"))
+            pc.append((0.25, 0.70, "Rating Spread", "Insufficient data"))
 
         # 2. Playoff rotation breadth — distinct playoff teams, 8-season window (Major 0.25)
         window = min(8, n_seasons)
@@ -1554,10 +1554,10 @@ class League:
             distinct = len(seen_in_playoffs)
             total = len(self.teams)
             breadth_score = min(1.0, distinct / max(1, total))
-            pc.append((0.25, breadth_score,
+            pc.append((0.25, breadth_score, "Playoff Access",
                        f"{distinct} of {total} teams reached playoffs in last {window} seasons"))
         else:
-            pc.append((0.25, 0.50, "Playoff rotation: too early to measure"))
+            pc.append((0.25, 0.50, "Playoff Access", "Too early to measure"))
 
         # 3. Championship concentration — distinct champions, 8-season window (Moderate 0.20)
         champ_window = min(8, n_seasons)
@@ -1573,11 +1573,11 @@ class League:
                     champ_label = f"{top_city} won {top_n} of last {champ_window} titles"
                 else:
                     champ_label = f"{distinct_c} different champions in last {champ_window} seasons"
-                pc.append((0.20, min(1.0, variety), champ_label))
+                pc.append((0.20, min(1.0, variety), "Title Variety", champ_label))
             else:
-                pc.append((0.20, 0.60, "Championship history: too early"))
+                pc.append((0.20, 0.60, "Title Variety", "Too early to measure"))
         else:
-            pc.append((0.20, 0.60, "Championship history: too early"))
+            pc.append((0.20, 0.60, "Title Variety", "Too early to measure"))
 
         # 4. Longest playoff drought — normalized by league size (Moderate 0.20)
         if n_seasons >= 2:
@@ -1597,16 +1597,15 @@ class League:
             drought_score = max(0.0, 1.0 - max_drought / max(1, len(self.teams)))
             drought_city = drought_team.franchise_at(sn).city
             if drought_score >= 0.65:
-                # Short droughts — frame positively; still mention city if not trivial
                 if max_drought <= 1:
                     drought_label = "No significant playoff droughts"
                 else:
                     drought_label = f"Playoff access healthy ({drought_city} longest at {max_drought} seasons)"
             else:
                 drought_label = f"Longest drought: {drought_city} ({max_drought} seasons without playoffs)"
-            pc.append((0.20, drought_score, drought_label))
+            pc.append((0.20, drought_score, "Playoff Drought", drought_label))
         else:
-            pc.append((0.20, 0.70, "Playoff drought: too early to measure"))
+            pc.append((0.20, 0.70, "Playoff Drought", "Too early to measure"))
 
         # 5. Revenue gap — top vs. bottom net profit (Minor 0.05)
         teams_w_owners = [t for t in self.teams if t.owner is not None]
@@ -1614,9 +1613,9 @@ class League:
             profits = [t.owner.last_net_profit for t in teams_w_owners]
             gap = max(profits) - min(profits)
             gap_score = max(0.0, 1.0 - gap / 30.0)
-            pc.append((0.05, gap_score, f"Revenue gap: ${gap:.0f}M spread top-to-bottom"))
+            pc.append((0.05, gap_score, "Revenue Gap", f"${gap:.0f}M spread top-to-bottom"))
         else:
-            pc.append((0.05, 0.70, "Revenue data insufficient"))
+            pc.append((0.05, 0.70, "Revenue Gap", "Insufficient data"))
 
         # 6. Small market success (Minor 0.05)
         if n_seasons >= 3 and len(self.teams) >= 4:
@@ -1642,15 +1641,15 @@ class League:
                 if sm_apps == 0:
                     sm_label = "Small-market teams shut out of playoffs"
                 else:
-                    sm_label = (f"Small markets: {actual_rate:.0%} of playoff spots "
+                    sm_label = (f"{actual_rate:.0%} of playoff spots "
                                 f"({expected_rate:.0%} expected)")
-                pc.append((0.05, sm_score, sm_label))
+                pc.append((0.05, sm_score, "Small Markets", sm_label))
             else:
-                pc.append((0.05, 0.50, "Small market: insufficient data"))
+                pc.append((0.05, 0.50, "Small Markets", "Insufficient data"))
         else:
-            pc.append((0.05, 0.60, "Small market: too early to measure"))
+            pc.append((0.05, 0.60, "Small Markets", "Too early to measure"))
 
-        parity_score = sum(w * s for w, s, _ in pc)
+        parity_score = sum(w * s for w, s, *_ in pc)
 
         # ══ DRAMA ══════════════════════════════════════════════════════════════
         # Is there a story worth following?
@@ -1696,7 +1695,7 @@ class League:
         else:
             fn_city = finals_streak_team.franchise_at(sn).city if finals_streak_team else "?"
             finals_label = f"{fn_city} — {finals_streak} straight Finals — fatigue setting in"
-        dc.append((0.30, finals_curve, finals_label))
+        dc.append((0.30, finals_curve, "Finals Streak", finals_label))
 
         # 2. Playoff drama index — Game 7s, close series, upsets (Major 0.30)
         all_series = [sr for rnd in season.playoff_rounds for sr in rnd]
@@ -1736,7 +1735,7 @@ class League:
         else:
             drama_score_comp = 0.50
             drama_label = "No playoff data"
-        dc.append((0.30, drama_score_comp, drama_label))
+        dc.append((0.30, drama_score_comp, "Playoff Drama", drama_label))
 
         # 3. Championship drought broken (Moderate 0.15)
         drought_score_drama = 0.50  # baseline: neutral — no long drought broken
@@ -1762,7 +1761,7 @@ class League:
                 drought_score_drama = 0.55
                 drought_drama_label = (f"{season.champion.franchise_at(sn).city} "
                                        f"returns to championship form")
-        dc.append((0.15, drought_score_drama, drought_drama_label))
+        dc.append((0.15, drought_score_drama, "Title Drought", drought_drama_label))
 
         # 4. Rival league existence (Moderate 0.15)
         if self.rival_league and self.rival_league.active:
@@ -1778,13 +1777,13 @@ class League:
         else:
             rival_drama = 0.50
             rival_label = "No rival league storyline"
-        dc.append((0.15, rival_drama, rival_label))
+        dc.append((0.15, rival_drama, "Rival League", rival_label))
 
         # 5. Meta shock event (Minor 0.05)
         shock_score = 0.80 if season.meta_shock else 0.50
         shock_label = ("Rule-change shock — era disruption creates talking points"
                        if season.meta_shock else "No rule-change shock this season")
-        dc.append((0.05, shock_score, shock_label))
+        dc.append((0.05, shock_score, "Rule Changes", shock_label))
 
         # 6. Star playoff injuries (Minor 0.05) — negative drama, anticlimactic
         star_ids = {p.player_id for t in self.teams for p in t.roster
@@ -1809,9 +1808,9 @@ class League:
                 injury_drama, inj_label = 0.65, "Stars healthy this season"
         else:
             injury_drama, inj_label = 0.65, "Stars healthy this season"
-        dc.append((0.05, injury_drama, inj_label))
+        dc.append((0.05, injury_drama, "Star Health", inj_label))
 
-        drama_score = sum(w * s for w, s, _ in dc)
+        drama_score = sum(w * s for w, s, *_ in dc)
 
         # ══ ENTERTAINMENT ══════════════════════════════════════════════════════
         # Is the product fun to watch?
@@ -1840,7 +1839,7 @@ class League:
             scoring_label = "Balanced era — clean basketball"
         else:
             scoring_label = "Defensive lean — some fans find it a grind"
-        ec.append((0.25, scoring_score, scoring_label))
+        ec.append((0.25, scoring_score, "Scoring Era", scoring_label))
 
         # 2. Star power — elite/high player count, market-weighted (Major 0.25)
         n_teams = max(1, len(self.teams))
@@ -1851,8 +1850,8 @@ class League:
         # Target: ~0.5 star-equivalents per team = 1.0 score
         star_eq = (elite_count * 1.0 + high_count * 0.5) / n_teams
         star_power_score = min(1.0, star_eq * 2.0)
-        ec.append((0.25, star_power_score,
-                   f"Star talent: {elite_count} elite, {high_count} high-tier players"))
+        ec.append((0.25, star_power_score, "Star Power",
+                   f"{elite_count} elite, {high_count} high-tier players in the league"))
 
         # 3. Star availability — fraction of star games played (Major 0.20)
         star_pids = {p.player_id for t in self.teams for p in t.roster
@@ -1873,9 +1872,9 @@ class League:
                 avail_label = f"Moderate star absences ({1 - avail:.0%} of games missed)"
             else:
                 avail_label = f"Stars on the court ({avail:.0%} availability)"
-            ec.append((0.20, avail_score, avail_label))
+            ec.append((0.20, avail_score, "Star Availability", avail_label))
         else:
-            ec.append((0.20, 0.70, "Star availability: no data"))
+            ec.append((0.20, 0.70, "Star Availability", "No data"))
 
         # 4. Playoff fraction — regular season stakes (Moderate 0.10)
         pf = season.playoff_teams / max(1, len(season.teams))
@@ -1893,7 +1892,7 @@ class League:
             pf_label = f"Playoff rate {pf:.0%} — very exclusive, many markets shut out"
         else:
             pf_label = f"Playoff rate {pf:.0%} — regular season meaningful"
-        ec.append((0.10, pf_score, pf_label))
+        ec.append((0.10, pf_score, "Playoff Stakes", pf_label))
 
         # 5. Style diversity — variance in team style_3pt (Moderate 0.10)
         if len(self.teams) >= 3:
@@ -1907,9 +1906,9 @@ class League:
                 div_label = f"Some style variety (3pt spread: ±{std_s:.0%})"
             else:
                 div_label = f"Diverse play styles — good range of identities (±{std_s:.0%})"
-            ec.append((0.10, diversity_score, div_label))
+            ec.append((0.10, diversity_score, "Style Diversity", div_label))
         else:
-            ec.append((0.10, 0.60, "Style diversity: insufficient data"))
+            ec.append((0.10, 0.60, "Style Diversity", "Insufficient data"))
 
         # 6. Regular season competitiveness — win% spread (Minor 0.05)
         win_pcts = [season.reg_win_pct(t) for t in season.teams
@@ -1924,9 +1923,9 @@ class League:
                 comp_label = f"Competitive regular season (win% spread ±{std_wp:.2f})"
             else:
                 comp_label = f"Uncompetitive regular season — clear haves and have-nots (±{std_wp:.2f})"
-            ec.append((0.05, comp_score, comp_label))
+            ec.append((0.05, comp_score, "Competitiveness", comp_label))
         else:
-            ec.append((0.05, 0.60, "Regular season competitiveness: too early"))
+            ec.append((0.05, 0.60, "Competitiveness", "Too early to measure"))
 
         # 7. Rivalry playoff matchups (Minor 0.05)
         rivalry_bonus = 0.50
@@ -1955,9 +1954,9 @@ class League:
                     c1, c2 = t1.franchise_at(sn).city, t2.franchise_at(sn).city
                     rivalry_ent_label = (f"Playoff rivalry: {c1}–{c2} "
                                          f"(met {pair_counts[k]}x in last {rivalry_window} seasons)")
-        ec.append((0.05, rivalry_bonus, rivalry_ent_label))
+        ec.append((0.05, rivalry_bonus, "Playoff Rivalries", rivalry_ent_label))
 
-        entertainment_score = sum(w * s for w, s, _ in ec)
+        entertainment_score = sum(w * s for w, s, *_ in ec)
 
         # ── Assemble result ───────────────────────────────────────────────────
         result = {
