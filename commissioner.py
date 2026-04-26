@@ -256,6 +256,17 @@ def choose(options: list[str], title: str = "Choose an option", default: int = -
 
 
 # ── Save / load ───────────────────────────────────────────────────────────────
+#
+# Version strategy:
+#   SAVE_VERSION is bumped ONLY for structural breaks — renamed fields, changed
+#   types, removed required data, fundamentally restructured classes.
+#
+#   Additive changes (new fields with defaults) do NOT require a version bump.
+#   Instead, add the field + its default to _post_load_fixup() in
+#   CommissionerGame. That function runs after every load and silently patches
+#   any missing attrs on all live objects.  One line per new field — that's it.
+
+SAVE_VERSION = 1   # bump only for breaking structural changes
 
 _SAVE_FILE = os.path.join(os.path.dirname(__file__), "save.pkl")
 
@@ -267,6 +278,7 @@ def _do_save(game: "CommissionerGame") -> None:
     import player as _player_mod
     import owner as _owner_mod
     payload = {
+        "save_version":       SAVE_VERSION,
         "game":               game,
         "next_id":            _player_mod._next_id,
         "used_names":         _player_mod._used_names,
@@ -278,12 +290,20 @@ def _do_save(game: "CommissionerGame") -> None:
         pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
     os.replace(tmp, _SAVE_FILE)   # atomic on POSIX; best-effort on Windows
 
+class _SaveVersionError(Exception):
+    pass
+
 def _do_load() -> "CommissionerGame":
     """Restore game state from disk. Raises on version mismatch or corruption."""
     import player as _player_mod
     import owner as _owner_mod
     with open(_SAVE_FILE, "rb") as f:
         payload = pickle.load(f)
+    saved_version = payload.get("save_version", 0)
+    if saved_version != SAVE_VERSION:
+        raise _SaveVersionError(
+            f"Save file is version {saved_version}, game expects version {SAVE_VERSION}."
+        )
     game                          = payload["game"]
     _player_mod._next_id          = payload["next_id"]
     _player_mod._used_names       = payload["used_names"]
@@ -318,21 +338,146 @@ class CommissionerGame:
         try:
             loaded = _do_load()
             self.__dict__.update(loaded.__dict__)
+            patched = self._post_load_fixup()
             clear()
             sn = self.season_num
             lname = self.league_name
             n_teams = len(self.league.teams) if self.league else 0
+            compat_note = (f"  {MUTED}({patched} field(s) migrated from older save){RESET}\n"
+                           if patched else "")
             print(f"\n  {GREEN}Save loaded.{RESET}  "
-                  f"{lname}  ·  After Season {sn}  ·  {n_teams} teams\n")
+                  f"{lname}  ·  After Season {sn}  ·  {n_teams} teams\n"
+                  f"{compat_note}")
             press_enter()
+        except _SaveVersionError as e:
+            clear()
+            print(f"\n  {RED}Save file incompatible:{RESET} {e}\n")
+            print(f"  This save was created with a different version of the game")
+            print(f"  and cannot be migrated automatically.  You'll need to start fresh.\n")
+            idx = choose(["Start a new league  —  quick start",
+                          "Start a new league  —  manual setup",
+                          "Quit"], default=0)
+            if idx == 0:
+                self._setup_quick()
+            elif idx == 1:
+                self._setup()
+            else:
+                raise _QuitSignal()
         except Exception as e:
             clear()
             print(f"\n  {RED}Could not load save file:{RESET} {e}\n")
-            print(f"  The save may be from an incompatible version of the game.")
-            idx = choose(["Start a new league", "Quit"], default=0)
-            if idx == 1:
+            print(f"  The file may be corrupted.  You'll need to start fresh.\n")
+            idx = choose(["Start a new league  —  quick start",
+                          "Start a new league  —  manual setup",
+                          "Quit"], default=0)
+            if idx == 0:
+                self._setup_quick()
+            elif idx == 1:
+                self._setup()
+            else:
                 raise _QuitSignal()
-            self._setup()
+
+    def _post_load_fixup(self) -> int:
+        """Patch missing attributes on all loaded objects (additive schema changes).
+
+        When a new field is added to any game class, add it here with its default
+        value.  Do NOT bump SAVE_VERSION for additive changes — just add a line here.
+        Only bump SAVE_VERSION for structural breaks (renamed/removed fields, type
+        changes) that cannot be papered over with a simple default.
+
+        Returns the count of fields that were patched (shown in the load confirmation).
+        """
+        patched = 0
+
+        def _fix(obj, **defaults) -> None:
+            nonlocal patched
+            for attr, default in defaults.items():
+                if not hasattr(obj, attr):
+                    setattr(obj, attr, default)
+                    patched += 1
+
+        league = self.league
+        if league is None:
+            return patched
+
+        # ── All coaches (rostered + pool) ─────────────────────────────────────
+        all_coaches: list = []
+        for team in league.teams:
+            if team.coach:
+                all_coaches.append(team.coach)
+        all_coaches.extend(getattr(league, '_coaching_pool', []))
+        for coach in all_coaches:
+            _fix(coach,
+                 coy_wins=0,
+                 hot_seat=False,
+                 prev_net_rating=None,
+                 former_player=False,
+                 former_player_id=None,
+                 former_team_name=None,
+                 seasons_coached=0,
+            )
+
+        # ── All teams ─────────────────────────────────────────────────────────
+        for team in league.teams:
+            _fix(team,
+                 legacy=0.0,
+                 market_engagement=0.11,
+                 _consecutive_playoff_misses=0,
+                 _bottom2_in_streak=0,
+                 _protected_until=0,
+                 _consecutive_losing_seasons=0,
+            )
+
+        # ── All rostered players (+ FA pool) ─────────────────────────────────
+        all_players: list = []
+        for team in league.teams:
+            for p in team.roster:
+                if p is not None:
+                    all_players.append(p)
+        all_players.extend(getattr(league, 'free_agent_pool', []))
+        for p in all_players:
+            _fix(p,
+                 fatigue=0.0,
+                 durability=0.75,
+                 games_missed=0,
+                 contract_years_remaining=2,
+                 contract_length=3,
+                 happiness=0.70,
+            )
+
+        # ── All past seasons ──────────────────────────────────────────────────
+        for s in getattr(league, 'seasons', []):
+            _fix(s,
+                 coy_first_season=False,
+                 meta_shock=False,
+                 _popularity={},
+                 _market_engagement={},
+                 _league_popularity=0.0,
+            )
+
+        # ── League-level ──────────────────────────────────────────────────────
+        _fix(league,
+             pillar_history={},
+             _coaching_pool=[],
+             relocation_log=[],
+             expansion_log=[],
+             merger_log=[],
+             _consecutive_championships=0,
+             _defending_champion_id=None,
+        )
+
+        # ── CommissionerGame-level ────────────────────────────────────────────
+        # (handled by __dict__.update in _load_game — __init__ defaults survive)
+        # Add explicit fixes here if a field was removed from __init__:
+        _fix(self,
+             _last_pillar_scores={},
+             _last_pop_signals={},
+             _defection_warning_shown=set(),
+             _walkout_just_formed=False,
+             _current_season=None,
+        )
+
+        return patched
 
     # ── Setup ─────────────────────────────────────────────────────────────────
 
