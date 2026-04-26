@@ -1416,6 +1416,14 @@ class CommissionerGame:
         header(f"PLAYOFFS  —  {rname}  RESULTS", f"Season {sn}")
         print()
 
+        standings = season.regular_season_standings
+
+        def _seed(team: "Team") -> int:
+            try:
+                return standings.index(team) + 1
+            except ValueError:
+                return 0
+
         for sr in round_series:
             winner = sr.winner
             loser  = sr.seed2 if sr.winner is sr.seed1 else sr.seed1
@@ -1424,6 +1432,10 @@ class CommissionerGame:
             n_games = len(sr.games)
             wname  = winner.franchise_at(sn).name
             lname  = loser.franchise_at(sn).name
+            w_seed = _seed(winner)
+            l_seed = _seed(loser)
+            wseed_tag = f"{CYAN}(#{w_seed}){RESET} " if w_seed else ""
+            lseed_tag = f"{CYAN}(#{l_seed}){RESET} " if l_seed else ""
 
             # Sweep / full series tag
             min_games = season.cfg.series_length // 2 + 1
@@ -1438,7 +1450,8 @@ class CommissionerGame:
             upset = loser is sr.seed1
             upset_tag = f"  {RED}UPSET{RESET}" if upset else ""
 
-            print(f"  {BOLD}{wname:<28}{RESET} def. {lname:<28} "
+            print(f"  {wseed_tag}{BOLD}{wname:<24}{RESET} def. "
+                  f"{lseed_tag}{lname:<24} "
                   f"{GOLD}{w_wins}–{l_wins}{RESET}{drama_tag}{upset_tag}")
 
         # If this is the Finals, crown the champion
@@ -1464,26 +1477,37 @@ class CommissionerGame:
 
         press_enter()
 
-    # ── Season summary ────────────────────────────────────────────────────────
+    # ── Season summary (two screens) ─────────────────────────────────────────
 
     def _show_summary(self, season: Season):
+        self._show_standings_screen(season)
+        self._show_awards_screen(season)
+
+    # ── Screen A: Standings ───────────────────────────────────────────────────
+
+    def _show_standings_screen(self, season: Season) -> None:
+        """Screen A — champion callout, regular season table, playoff bracket recap."""
         clear()
-        league = self.league
-        sn = season.number
-        n_teams = len(season.teams)
-        lp = league.league_popularity
-        lp_prev = self._prev_league_pop
+        league   = self.league
+        sn       = season.number
+        n_teams  = len(season.teams)
+        lp       = league.league_popularity
+        lp_prev  = self._prev_league_pop
+        standings    = season.regular_season_standings
+        n_playoff    = season.playoff_teams
+        playoff_result = self._playoff_results(season)
 
         header(
             self.league_name,
             f"Season {sn}  ·  {n_teams} teams  ·  League Popularity: {lp:.0%} {trend(lp_prev, lp)}"
         )
 
-        # Champion
-        champ = season.champion
-        champ_seed = season.regular_season_standings.index(champ) + 1
-        finals = season.playoff_rounds[-1][0]
-        runner_up = finals.seed2 if finals.winner is finals.seed1 else finals.seed1
+        # Champion callout
+        champ      = season.champion
+        champ_seed = standings.index(champ) + 1
+        finals     = season.playoff_rounds[-1][0]
+        runner_up  = finals.seed2 if finals.winner is finals.seed1 else finals.seed1
+        ru_seed    = standings.index(runner_up) + 1 if runner_up in standings else "?"
         ru_w = sum(1 for g in finals.games if g.winner is champ)
         ru_l = len(finals.games) - ru_w
         repeat = len(league.seasons) >= 2 and champ is league.seasons[-2].champion
@@ -1491,61 +1515,19 @@ class CommissionerGame:
         print(f"\n  {GOLD}{BOLD}🏆  CHAMPION: {champ.franchise_at(sn).name}{RESET}", end="")
         if repeat: print(f"  {GOLD}★ REPEAT{RESET}", end="")
         print()
-        print(f"     {MUTED}Seed {champ_seed} · defeated {runner_up.franchise_at(sn).name} {ru_w}–{ru_l} in the Finals{RESET}")
+        print(f"     {MUTED}Seed {champ_seed} · defeated #{ru_seed} {runner_up.franchise_at(sn).name} "
+              f"{ru_w}–{ru_l} in the Finals{RESET}")
 
-        # Awards
-        if season.mvp or season.opoy or season.dpoy or season.finals_mvp or season.coy:
-            print(f"\n  {BOLD}Season Awards{RESET}")
-            divider()
-            for lbl, p, t in [
-                ("MVP",        season.mvp,        season.mvp_team),
-                ("OPOY",       season.opoy,       season.opoy_team),
-                ("DPOY",       season.dpoy,       season.dpoy_team),
-                ("Finals MVP", season.finals_mvp, season.champion),
-            ]:
-                if p is None:
-                    continue
-                tname = t.franchise_at(sn).nickname if t else "—"
-                tc = GOLD if p.peak_overall >= 14 else CYAN
-                ps = season.player_stats.get(p.player_id)
-                if ps and lbl == "DPOY":
-                    stat_str = (f"Def Rtg {ps.def_rtg:.1f}  {ps.poss_defended} poss defended"
-                                if ps.poss_defended else f"DRtg {p.drtg_contrib:>+.1f}")
-                elif ps and ps.games > 0:
-                    if lbl == "MVP":
-                        seed = (season.regular_season_standings.index(t) + 1
-                                if t in season.regular_season_standings else "?")
-                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg  #{seed} seed"
-                    elif lbl == "Finals MVP":
-                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg"
-                    else:
-                        stat_str = f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  {ps.fg3_pct:.1%} 3P  {ps.ft_pct:.1%} FT"
-                else:
-                    stat_str = f"ORtg {p.ortg_contrib:>+.1f}  DRtg {p.drtg_contrib:>+.1f}"
-                print(f"  {GOLD}{lbl:<12}{RESET} {happiness_emoji(p.happiness)} {tc}{p.name:<22}{RESET}"
-                      f"  {MUTED}{p.position} · {tname:<18}{RESET}"
-                      f"  {stat_str}  {p.trend}")
-            # Coach of the Year
-            if season.coy:
-                from coach import ARCHETYPE_LABELS
-                coy = season.coy
-                ctname = season.coy_team.franchise_at(sn).nickname if season.coy_team else "—"
-                arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
-                fp_note = f"  {MUTED}(former player){RESET}" if coy.former_player else ""
-                print(f"  {GOLD}{'Coach of Yr':<12}{RESET} {happiness_emoji(coy.happiness)} "
-                      f"{CYAN}{coy.name:<22}{RESET}"
-                      f"  {MUTED}{arch_lbl} · {ctname:<18}{RESET}"
-                      f"  net rtg {season.coy_delta:>+.1f}{fp_note}")
-
-        # Standings (single table: record + scoring + playoff result)
-        print(f"\n  {'TEAM':<30} {'RECORD':<13} {'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  PLAYOFF")
+        # Regular season standings
+        print(f"\n  {'#':<4} {'TEAM':<28} {'RECORD':<13} {'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  PLAYOFF")
         divider()
-        standings = season.regular_season_standings
-        n_playoff = season.playoff_teams
-        playoff_result = self._playoff_results(season)
+
+        def _seed_of(team: "Team") -> int:
+            try:    return standings.index(team) + 1
+            except: return 99
 
         for i, team in enumerate(standings):
-            rank = i + 1
+            rank   = i + 1
             rw, rl = season.reg_wins(team), season.reg_losses(team)
             fname  = team.franchise_at(sn).name
             result = playoff_result.get(team, "")
@@ -1573,31 +1555,101 @@ class CommissionerGame:
                 result_str = f"{MUTED}—{RESET}"
 
             seed_str = f"{CYAN}({rank}){RESET}" if rank <= n_playoff else "    "
-            print(f"  {rank:>2}. {name_str}  {record:<13} {ppg:>5.1f}  {papg:>5.1f}  {diff_c}{diff:>+5.1f}{RESET}  {seed_str} {result_str}")
+            print(f"  {rank:>2}. {name_str}  {record:<13} {ppg:>5.1f}  {papg:>5.1f}  "
+                  f"{diff_c}{diff:>+5.1f}{RESET}  {seed_str} {result_str}")
 
-        # Playoff bracket recap
+        # Playoff bracket recap — with seeds on every line
         if season.playoff_rounds:
             n_rounds = len(season.playoff_rounds)
-            labels = _round_labels(n_rounds)
+            labels   = _round_labels(n_rounds)
             print(f"\n  {BOLD}Playoff Recap{RESET}")
             divider()
             for rnd_idx, rnd in enumerate(season.playoff_rounds):
                 rname = labels[rnd_idx]
                 print(f"  {MUTED}{rname}{RESET}")
                 for sr in rnd:
-                    winner = sr.winner
-                    loser  = sr.seed2 if sr.winner is sr.seed1 else sr.seed1
-                    w_wins = sr.seed1_wins if sr.winner is sr.seed1 else sr.seed2_wins
-                    l_wins = sr.seed2_wins if sr.winner is sr.seed1 else sr.seed1_wins
-                    wname  = winner.franchise_at(sn).name
-                    lname  = loser.franchise_at(sn).name
-                    clinch = sr.games[-1]
+                    winner  = sr.winner
+                    loser   = sr.seed2 if sr.winner is sr.seed1 else sr.seed1
+                    w_wins  = sr.seed1_wins if sr.winner is sr.seed1 else sr.seed2_wins
+                    l_wins  = sr.seed2_wins if sr.winner is sr.seed1 else sr.seed1_wins
+                    w_seed  = _seed_of(winner)
+                    l_seed  = _seed_of(loser)
+                    wname   = winner.franchise_at(sn).name
+                    lname   = loser.franchise_at(sn).name
+                    clinch  = sr.games[-1]
                     w_score = clinch.home_score if clinch.home is winner else clinch.away_score
                     l_score = clinch.away_score if clinch.home is winner else clinch.home_score
-                    print(f"    {wname:<26} def. {lname:<26} {w_wins}–{l_wins}  "
-                          f"{MUTED}clinch {w_score}–{l_score}{RESET}")
+                    upset_tag = f"  {RED}UPSET{RESET}" if loser is sr.seed1 else ""
+                    print(f"    {CYAN}({w_seed}){RESET} {wname:<24} def. "
+                          f"{CYAN}({l_seed}){RESET} {lname:<24} "
+                          f"{GOLD}{w_wins}–{l_wins}{RESET}  "
+                          f"{MUTED}clinch {w_score}–{l_score}{RESET}{upset_tag}")
 
-        # Stars to Watch
+        press_enter()
+
+    # ── Screen B: Awards Night ────────────────────────────────────────────────
+
+    def _show_awards_screen(self, season: Season) -> None:
+        """Screen B — all awards with metrics, stars to watch, league health."""
+        clear()
+        league  = self.league
+        sn      = season.number
+        lp      = league.league_popularity
+        lp_prev = self._prev_league_pop
+        standings = season.regular_season_standings
+
+        header("AWARDS NIGHT", f"Season {sn}  ·  {self.league_name}")
+
+        # ── Player & coach awards ─────────────────────────────────────────────
+        if season.mvp or season.opoy or season.dpoy or season.finals_mvp or season.coy:
+            print(f"\n  {BOLD}Season Awards{RESET}")
+            divider()
+            for lbl, p, t in [
+                ("MVP",        season.mvp,        season.mvp_team),
+                ("OPOY",       season.opoy,       season.opoy_team),
+                ("DPOY",       season.dpoy,       season.dpoy_team),
+                ("Finals MVP", season.finals_mvp, season.champion),
+            ]:
+                if p is None:
+                    continue
+                tname = t.franchise_at(sn).nickname if t else "—"
+                tc    = GOLD if p.peak_overall >= 14 else CYAN
+                ps    = season.player_stats.get(p.player_id)
+                if ps and lbl == "DPOY":
+                    stat_str = (f"Def Rtg {ps.def_rtg:.1f}  {ps.poss_defended} poss defended"
+                                if ps.poss_defended else f"DRtg {p.drtg_contrib:>+.1f}")
+                elif ps and ps.games > 0:
+                    if lbl == "MVP":
+                        seed = (standings.index(t) + 1
+                                if t in standings else "?")
+                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg  #{seed} seed"
+                    elif lbl == "Finals MVP":
+                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg"
+                    else:
+                        stat_str = (f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  "
+                                    f"{ps.fg3_pct:.1%} 3P  {ps.ft_pct:.1%} FT")
+                else:
+                    stat_str = f"ORtg {p.ortg_contrib:>+.1f}  DRtg {p.drtg_contrib:>+.1f}"
+                print(f"  {GOLD}{lbl:<12}{RESET} {happiness_emoji(p.happiness)} "
+                      f"{tc}{p.name:<22}{RESET}"
+                      f"  {MUTED}{p.position} · {tname:<18}{RESET}"
+                      f"  {stat_str}  {p.trend}")
+
+            if season.coy:
+                from coach import ARCHETYPE_LABELS
+                coy      = season.coy
+                ctname   = season.coy_team.franchise_at(sn).nickname if season.coy_team else "—"
+                arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
+                fp_note  = f"  {MUTED}(former player){RESET}" if coy.former_player else ""
+                coy_metric = (f"net rtg {season.coy_delta:>+.1f}  {MUTED}best in league{RESET}"
+                              if season.coy_first_season
+                              else f"improved {season.coy_delta:>+.1f} net rtg")
+                print(f"  {GOLD}{'Coach of Yr':<12}{RESET} {happiness_emoji(coy.happiness)} "
+                      f"{CYAN}{coy.name:<22}{RESET}"
+                      f"  {MUTED}{arch_lbl} · {ctname:<18}{RESET}"
+                      f"  {coy_metric}{fp_note}")
+
+        # ── Stars to Watch ────────────────────────────────────────────────────
         all_stars: list[tuple] = []
         for _team in league.teams:
             for _p in _team.roster:
@@ -1612,7 +1664,7 @@ class CommissionerGame:
                 _tier_c   = GOLD if _p.peak_overall >= 18 else CYAN
                 _tier_lbl = "Elite" if _p.peak_overall >= 18 else " High"
                 _exp_flag = f"  {RED}EXP{RESET}" if _p.contract_years_remaining <= 1 else ""
-                _dec_flag = f"  {MUTED}↓{RESET}"  if _p.is_declining else ""
+                _dec_flag = f"  {MUTED}↓{RESET}" if _p.is_declining else ""
                 _ps       = season.player_stats.get(_p.player_id)
                 _ppg_str  = f"{_ps.ppg:.1f} PPG" if _ps and _ps.games > 0 else ""
                 _tname    = _team.franchise_at(sn).name
@@ -1622,10 +1674,10 @@ class CommissionerGame:
                       f"{_exp_flag}{_dec_flag}"
                       f"  {MUTED}{_ppg_str}{RESET}")
 
-        # League health
+        # ── League health ─────────────────────────────────────────────────────
         print()
         divider()
-        avg_ppg = season.league_avg_ppg()
+        avg_ppg    = season.league_avg_ppg()
         total_fans = sum(_fans_millions(t) for t in league.teams)
         print(f"\n  {BOLD}League Health{RESET}")
         print(f"  Popularity  {pop_bar(lp)}  {trend(lp_prev, lp)}")
@@ -1635,35 +1687,25 @@ class CommissionerGame:
         if season.meta_shock:
             print(f"  {RED}{BOLD}⚡ Rule change shock fired this season!{RESET}")
 
-        # Four-pillar display
         pillar_data = self._last_pillar_scores
         if pillar_data:
             print()
-            pillar_defs = [
-                ("Integrity",     "integrity"),
-                ("Parity",        "parity"),
-                ("Drama",         "drama"),
-                ("Entertainment", "entertainment"),
-            ]
             history = league.pillar_history
-            for label, key in pillar_defs:
-                data   = pillar_data.get(key, {})
-                score  = data.get("score", 0.0)
-                grade  = _pillar_grade(score)
-                gc     = _grade_color(grade)
-                # Trend vs prior season
-                prev_sn = sn - 1
-                prev_score = history.get(prev_sn, {}).get(key)
-                tr = trend(prev_score, score) if prev_score is not None else f"{MUTED}—{RESET}"
-                print(f"  {label:<14} {gc}{BOLD}{grade}{RESET}  "
-                      f"{MUTED}{score:.2f}{RESET}  {tr}")
-                drivers = data.get("drivers", [])
-                for dir_ch, dlabel, _ in drivers[:3]:
+            for label, key in [("Integrity", "integrity"), ("Parity", "parity"),
+                                ("Drama", "drama"), ("Entertainment", "entertainment")]:
+                data       = pillar_data.get(key, {})
+                score      = data.get("score", 0.0)
+                grade      = _pillar_grade(score)
+                gc         = _grade_color(grade)
+                prev_score = history.get(sn - 1, {}).get(key)
+                tr         = trend(prev_score, score) if prev_score is not None else f"{MUTED}—{RESET}"
+                print(f"  {label:<14} {gc}{BOLD}{grade}{RESET}  {MUTED}{score:.2f}{RESET}  {tr}")
+                for dir_ch, dlabel, _ in data.get("drivers", [])[:3]:
                     dc = GREEN if dir_ch == "↑" else RED
                     print(f"    {dc}{dir_ch}{RESET}  {MUTED}{dlabel}{RESET}")
             print(f"\n  {MUTED}[H] Full health breakdown{RESET}")
 
-        # Notable events
+        # ── Notable events ────────────────────────────────────────────────────
         events = self._collect_events(season)
         if events:
             print(f"\n  {BOLD}Events{RESET}")
