@@ -738,6 +738,19 @@ class CommissionerGame:
                           f"{loy_c}{o.loyalty.replace('_', ' ')}{RESET}  "
                           f"{MUTED}competence {o.competence:.0%}{RESET}")
 
+                if t.coach:
+                    from coach import ARCHETYPE_LABELS
+                    c = t.coach
+                    arch_lbl  = ARCHETYPE_LABELS.get(c.archetype, c.archetype)
+                    flex_lbl  = ("Rigid" if c.flexibility < 0.35
+                                 else "Flexible" if c.flexibility > 0.65 else "Balanced")
+                    hor_lbl   = ("Win-now" if c.horizon < 0.35
+                                 else "Development" if c.horizon > 0.65 else "Mixed")
+                    fp_note   = f"  {MUTED}ex-player{RESET}" if c.former_player else ""
+                    print(f"  {MUTED}Coach:{RESET} {c.name}  "
+                          f"{CYAN}{arch_lbl}{RESET}  "
+                          f"{MUTED}{flex_lbl} · {hor_lbl} · rating {c.rating:.0%}{fp_note}{RESET}")
+
                 print(f"  {MUTED}{'─' * 80}{RESET}")
                 print(f"  {'Slot':<9} {'Name':<22} {'Pos':<5} {'Age':>3}  "
                       f"{'ORtg':>5}  {'DRtg':>5}  {'Zone':<6}  {'Ceiling':<7}  {'Mood':<4}  Motivation")
@@ -4084,6 +4097,16 @@ class CommissionerGame:
                     f"{RED}{team.market_engagement:.0%}{RESET} — well below baseline"
                 )
 
+        # Hot-seat coach alerts
+        for team in league.teams:
+            c = team.coach
+            if c and c.hot_seat:
+                owner_name = team.owner.name.split()[0] if team.owner else "Owner"
+                flags.append(
+                    f"{RED}🔥{RESET}  {c.name} ({team.name}) is on the "
+                    f"{RED}hot seat{RESET} — {owner_name} is running out of patience"
+                )
+
         # Fatigue alerts — playoff-bound teams with heavily loaded rosters
         n_playoff = (season.cfg.playoff_teams_override if season.cfg.playoff_teams_override > 0
                      else len(league.teams))  # post-season, all teams have finished
@@ -5709,6 +5732,12 @@ class CommissionerGame:
               f"Popularity: {pop_bar(team.popularity, 12)}  "
               f"Losing streak: {RED if team._consecutive_losing_seasons >= 3 else MUTED}"
               f"{team._consecutive_losing_seasons}{RESET}")
+        if team.coach:
+            from coach import ARCHETYPE_LABELS
+            c = team.coach
+            hs_tag = f"  {RED}HOT SEAT{RESET}" if c.hot_seat else ""
+            print(f"  Coach: {c.name}  {MUTED}{ARCHETYPE_LABELS.get(c.archetype, c.archetype)} "
+                  f"· Year {c.tenure}{RESET}{hs_tag}")
         print(f"  Treasury: {GREEN if self._treasury >= 15 else RED}${self._treasury:.0f}M{RESET}\n")
 
         choice = choose(options, "Commissioner Decision:", default=len(options) - 1)
