@@ -6,6 +6,8 @@ import random
 from collections import Counter
 from typing import Optional
 
+from coach import (Coach, generate_coach, generate_coaching_pool,
+                   coach_from_retired_player, ARCHETYPE_LABELS)
 from config import Config
 from franchises import ALL_FRANCHISES, Franchise
 from owner import (Owner, generate_owner, generate_heir, generate_buyers,
@@ -53,6 +55,9 @@ class League:
         # Owner system
         self.departed_teams: list[Team] = []   # teams whose owners walked out
         self._assign_owners()
+        # Coach system
+        self._coaching_pool: list[Coach] = []  # unassigned coaches available for hiring
+        self._assign_coaches()
         # CBA state — reset each negotiation round (every 5 seasons from season 5)
         self.cba_player_happiness_mod: float = 0.0     # flat bonus/penalty for all players
         self.cba_winning_happiness_mod: float = 0.0    # winning-motivated players only
@@ -186,6 +191,42 @@ class League:
         for team in self.teams:
             small = team.franchise.effective_metro < 3.0
             team.owner = generate_owner(small_market=small)
+
+    # ── Coach assignment ──────────────────────────────────────────────────────
+
+    def _assign_coaches(self) -> None:
+        """Generate and assign a founding lifer coach for each team.
+
+        Also seeds the coaching pool with a handful of available coaches
+        (roughly one per team) so the commissioner can make hires after
+        firings or retirements.
+        """
+        for team in self.teams:
+            team.coach = generate_coach()
+        # Seed pool: ~1 available coach per team as reserves
+        self._coaching_pool = generate_coaching_pool(max(4, len(self.teams)))
+
+    def _coaching_pool_hire(self, team: "Team") -> None:
+        """Assign the best-fit available coach to a team (from the pool).
+
+        Scores by owner_fit + small bonus for former-player coaches (more
+        relatable in locker-room context).  Replenishes the pool if depleted.
+        """
+        if not self._coaching_pool:
+            self._coaching_pool = generate_coaching_pool(4)
+        owner_mot = team.owner.motivation if team.owner else None
+        patience  = team.owner.tenure_left if team.owner else 5
+
+        def score(c: Coach) -> float:
+            s = c.owner_fit(owner_mot, patience) if owner_mot else 0.50
+            if c.former_player:
+                s += 0.05
+            return s
+
+        best = max(self._coaching_pool, key=score)
+        self._coaching_pool.remove(best)
+        best.tenure = 0
+        team.coach = best
 
     # ── Revenue distribution ──────────────────────────────────────────────────
 
@@ -384,6 +425,93 @@ class League:
 
             owner.update_threat()
 
+    # ── Coach lifecycle ───────────────────────────────────────────────────────
+
+    def _compute_coach_happiness(self, coach: Coach, team: Team,
+                                 season: Season) -> float:
+        """Return a new target happiness for a coach based on team context.
+
+        Inputs:
+          - Win/loss record this season vs. prior year net rating
+          - Owner happiness (coaches sense job security)
+          - Tenure (established coaches are more settled)
+        """
+        # Base from team net rating relative to league average
+        league_avg_nr = (sum(t.net_rating() for t in self.teams) / len(self.teams)
+                         if self.teams else 0.0)
+        team_nr = team.net_rating()
+        # Positive delta → happy; negative → unhappy
+        nr_score  = max(0.0, min(1.0, 0.50 + (team_nr - league_avg_nr) * 0.03))
+
+        # Owner alignment signal
+        owner_h = team.owner.happiness if team.owner else 0.60
+        # Coaches read room — worried owner creates anxiety
+        owner_signal = max(0.0, min(1.0, owner_h))
+
+        # Tenure stability: long-tenured coaches are harder to rattle
+        tenure_bonus = min(0.10, coach.tenure * 0.02)
+
+        return round(0.40 * nr_score + 0.40 * owner_signal + 0.20 * 0.65 + tenure_bonus, 3)
+
+    def update_all_coach_happiness(self, season: Season) -> None:
+        """Update happiness, tenure, hot seat status for all team coaches.
+
+        Hot seat fires when owner happiness is critically low (< 0.30) and
+        the team has missed the playoffs, or owner happiness < 0.20 regardless.
+        Auto-fires the coach if the owner is DEMANDING and coach.hot_seat is set.
+        """
+        playoff_teams: set[int] = set()
+        for rnd in season.playoff_rounds:
+            for series in rnd:
+                playoff_teams.add(series.seed1.team_id)
+                playoff_teams.add(series.seed2.team_id)
+
+        from owner import THREAT_DEMAND
+        coy_candidates: list[tuple[float, "Coach", "Team"]] = []
+
+        for team in self.teams:
+            if team.coach is None:
+                continue
+            coach = team.coach
+            current_nr = team.net_rating()
+
+            # COY delta: compare this season's rating vs. last season's stored value
+            if coach.prev_net_rating is not None:
+                coy_candidates.append((current_nr - coach.prev_net_rating, coach, team))
+
+            new_h = self._compute_coach_happiness(coach, team, season)
+            coach.happiness = round(0.40 * coach.happiness + 0.60 * new_h, 3)
+            coach.tenure          += 1
+            coach.seasons_coached += 1
+
+            # Store current rating for next season's COY computation
+            coach.prev_net_rating = current_nr
+
+            # Hot seat — driven by owner unhappiness, not coach happiness
+            owner_h   = team.owner.happiness if team.owner else 0.70
+            missed_po = team.team_id not in playoff_teams
+            if owner_h < 0.20 or (owner_h < 0.30 and missed_po):
+                coach.hot_seat = True
+            elif owner_h >= 0.50:
+                coach.hot_seat = False   # recover if owner settles
+
+            # Auto-fire: owner demanding and coach already on hot seat (min 2 seasons)
+            owner_demanding = (team.owner is not None
+                               and team.owner.threat_level == THREAT_DEMAND)
+            if coach.hot_seat and owner_demanding and coach.tenure >= 2:
+                coach.hot_seat = False
+                coach.tenure   = 0
+                self._coaching_pool.append(coach)
+                self._coaching_pool_hire(team)
+
+        # Coach of the Year — best net rating delta; all coaches eligible
+        if coy_candidates:
+            best_delta, best_coach, best_team = max(coy_candidates, key=lambda x: x[0])
+            if best_delta > 0.5:   # meaningful improvement threshold
+                season.coy       = best_coach
+                season.coy_team  = best_team
+                season.coy_delta = round(best_delta, 2)
+
     # ── Losing-streak tracker ─────────────────────────────────────────────────
 
     def _update_losing_streaks(self, season: Season) -> None:
@@ -532,22 +660,41 @@ class League:
             elif player.contract_years_remaining == 0:
                 expiring.append(player)
 
-        # 3. Retirements — vacate roster slots
+        # 3. Retirements — vacate roster slots; 25% chance → coaching pool
         for player in retiring:
             player.retired = True
             player.team_id = None
+            last_team_name: str | None = None
             for team in self.teams:
                 for i, p in enumerate(team.roster):
                     if p is player:
+                        last_team_name = team.name
                         team.roster[i] = None
             if player in self.free_agent_pool:
                 self.free_agent_pool.remove(player)
+            # Former-player coaching pipeline: 25% of retirees transition to coaching
+            if random.random() < 0.25:
+                coach = coach_from_retired_player(
+                    player_id      = player.player_id,
+                    name           = player.name,
+                    gender         = player.gender,
+                    last_team_name = last_team_name or "Unknown",
+                )
+                self._coaching_pool.append(coach)
 
         # 4. Compute happiness and popularity for all rostered players
         for team in self.teams:
-            for player in team.roster:
+            coach_mods = team.coach.compute_modifiers() if team.coach else {}
+            for slot_idx, player in enumerate(team.roster):
                 if player is not None:
-                    player.happiness   = self._compute_player_happiness(player, team, season)
+                    h = self._compute_player_happiness(player, team, season)
+                    if coach_mods:
+                        # Apply archetype-specific happiness mod
+                        is_star = player.peak_overall >= 12
+                        delta = (coach_mods["star_hap"] if is_star
+                                 else coach_mods["depth_hap"])
+                        h = max(0.0, min(1.0, h + delta))
+                    player.happiness   = h
                     player.popularity  = self._compute_player_popularity(player, season)
 
         # 5. Contract expirations — re-sign or enter FA pool
@@ -2648,6 +2795,7 @@ class League:
             self._offseason_adjustments(season)
             self.distribute_revenue()
             self.update_all_owner_happiness(season)
+            self.update_all_coach_happiness(season)
             self._update_losing_streaks(season)
             self._check_relocations(season)   # headless sim still uses auto-relocation
             self._decay_grudges()

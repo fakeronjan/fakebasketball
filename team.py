@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from franchises import Franchise
 
 if TYPE_CHECKING:
+    from coach import Coach
     from config import Config
     from owner import Owner
     from player import Player
@@ -41,6 +42,9 @@ class Team:
 
         # Owner
         self.owner: Owner | None = None
+
+        # Coach
+        self.coach: Coach | None = None
 
         # Player roster: [star, co-star, starter] — None = empty slot
         self.roster: list[Player | None] = [None, None, None]
@@ -172,11 +176,24 @@ class Team:
             mid   += w * zd[2]
             three += w * zd[3]
 
-        chem = self.compute_chemistry(cfg)
-        self.ortg = max(cfg.ortg_min, min(cfg.ortg_max,
-                        cfg.ortg_baseline + ortg_delta * chem))
-        self.drtg = max(cfg.drtg_min, min(cfg.drtg_max,
-                        cfg.drtg_baseline + drtg_delta * chem))
+        # Coach modifiers — applied before clamping
+        coach_mods: dict = {}
+        if self.coach is not None:
+            coach_mods = self.coach.compute_modifiers()
+
+        chem_raw = self.compute_chemistry(cfg)
+        if coach_mods:
+            # Scale the chemistry bonus (not the baseline) by the coach's chem_scale
+            chem_bonus = (chem_raw - 1.0) * coach_mods["chem_scale"]
+            chem = 1.0 + chem_bonus
+        else:
+            chem = chem_raw
+
+        raw_ortg = cfg.ortg_baseline + ortg_delta * chem + coach_mods.get("ortg_mod", 0.0)
+        raw_drtg = cfg.drtg_baseline + drtg_delta * chem + coach_mods.get("drtg_mod", 0.0)
+
+        self.ortg = max(cfg.ortg_min, min(cfg.ortg_max, raw_ortg))
+        self.drtg = max(cfg.drtg_min, min(cfg.drtg_max, raw_drtg))
         self.pace = max(cfg.pace_min,  min(cfg.pace_max,
                         cfg.pace_baseline + pace_delta))
 

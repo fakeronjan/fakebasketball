@@ -933,7 +933,7 @@ class CommissionerGame:
               f"{best_diff:+.1f} per game")
 
         # Regular season awards
-        if season.mvp or season.dpoy:
+        if season.mvp or season.dpoy or season.coy:
             print()
             if season.mvp:
                 mvp_team = season.mvp_team.franchise_at(sn).nickname if season.mvp_team else "—"
@@ -959,6 +959,14 @@ class CommissionerGame:
                             if ds and ds.poss_defended else f"DRtg {season.dpoy.drtg_contrib:>+5.1f}")
                 print(f"  {CYAN}DPOY :{RESET}  {happiness_emoji(season.dpoy.happiness)} {tc}{season.dpoy.name:<22}{RESET}  "
                       f"{MUTED}{season.dpoy.position} · {dpoy_team}{RESET}  {stat_str}")
+            if season.coy:
+                from coach import ARCHETYPE_LABELS
+                coy = season.coy
+                ctname = season.coy_team.franchise_at(sn).nickname if season.coy_team else "—"
+                arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
+                fp_note = f"  {MUTED}ex-player{RESET}" if coy.former_player else ""
+                print(f"  {GOLD}COY  :{RESET}  {happiness_emoji(coy.happiness)} {CYAN}{coy.name:<22}{RESET}  "
+                      f"{MUTED}{arch_lbl} · {ctname}{RESET}  net rtg {season.coy_delta:>+.1f}{fp_note}")
 
         cfg = season.cfg
         print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'Record':<13} {'ORtg':>4}  {'DRtg':>4}  {'Pace':>4}  "
@@ -1452,7 +1460,7 @@ class CommissionerGame:
         print(f"     {MUTED}Seed {champ_seed} · defeated {runner_up.franchise_at(sn).name} {ru_w}–{ru_l} in the Finals{RESET}")
 
         # Awards
-        if season.mvp or season.opoy or season.dpoy or season.finals_mvp:
+        if season.mvp or season.opoy or season.dpoy or season.finals_mvp or season.coy:
             print(f"\n  {BOLD}Season Awards{RESET}")
             divider()
             for lbl, p, t in [
@@ -1476,6 +1484,17 @@ class CommissionerGame:
                 print(f"  {GOLD}{lbl:<12}{RESET} {happiness_emoji(p.happiness)} {tc}{p.name:<22}{RESET}"
                       f"  {MUTED}{p.position} · {tname:<18}{RESET}"
                       f"  {stat_str}  {p.trend}")
+            # Coach of the Year
+            if season.coy:
+                from coach import ARCHETYPE_LABELS
+                coy = season.coy
+                ctname = season.coy_team.franchise_at(sn).nickname if season.coy_team else "—"
+                arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
+                fp_note = f"  {MUTED}(former player){RESET}" if coy.former_player else ""
+                print(f"  {GOLD}{'Coach of Yr':<12}{RESET} {happiness_emoji(coy.happiness)} "
+                      f"{CYAN}{coy.name:<22}{RESET}"
+                      f"  {MUTED}{arch_lbl} · {ctname:<18}{RESET}"
+                      f"  net rtg {season.coy_delta:>+.1f}{fp_note}")
 
         # Standings (single table: record + scoring + playoff result)
         print(f"\n  {'TEAM':<30} {'RECORD':<13} {'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  PLAYOFF")
@@ -2103,6 +2122,8 @@ class CommissionerGame:
                     award_parts.append(f"DPOY {s.dpoy.name}{drtg_s}")
                 if s.finals_mvp:
                     award_parts.append(f"FMVP {s.finals_mvp.name}")
+                if s.coy:
+                    award_parts.append(f"COY {s.coy.name} +{s.coy_delta:.1f}")
                 if award_parts:
                     print(f"       {MUTED}{('  ·  ').join(award_parts)}{RESET}")
 
@@ -3649,8 +3670,9 @@ class CommissionerGame:
         commissioner_take = self.league.distribute_revenue()
         self._treasury += commissioner_take
         self._last_revenue = commissioner_take
-        # Update owner happiness now that P&L is finalized
+        # Update owner and coach happiness now that P&L is finalized
         self.league.update_all_owner_happiness(season)
+        self.league.update_all_coach_happiness(season)
         self._handle_player_offseason(season)
         self._owner_actions = self._generate_all_owner_actions(season)
         if season.number >= 5 and season.number % 5 == 0:
@@ -3658,6 +3680,7 @@ class CommissionerGame:
         self._handle_rival_league(season)
         self._commissioner_desk(season)
         self._handle_players_meeting(season)
+        self._handle_coach_meeting(season)
         self._handle_owner_meeting(season)
         self._handle_expansion_decision(season)
         self._handle_merger_decision(season)
@@ -5436,6 +5459,83 @@ class CommissionerGame:
                 league.legitimacy = max(0.0, league.legitimacy - 0.15)
                 print(f"  {RED}Ignored.{RESET} This will not stay buried.")
             press_enter()
+
+    def _handle_coach_meeting(self, season: Season) -> None:
+        """Coach meeting: room read showing all coaches, with hot-seat coaches surfaced.
+
+        The commissioner doesn't manage coaches directly — they are ambient actors.
+        This meeting surfaces the storylines: who's thriving, who's under pressure,
+        and whether a hot-seat coach needs to be addressed via the owner relationship.
+        """
+        from coach import ARCHETYPE_LABELS
+        league = self.league
+        sn     = season.number
+
+        coaches: list[tuple] = []   # (team, coach)
+        for team in league.teams:
+            if team.coach is not None:
+                coaches.append((team, team.coach))
+
+        if not coaches:
+            return
+
+        hot_seat_coaches = [(t, c) for t, c in coaches if c.hot_seat]
+
+        # Skip the meeting entirely if nothing notable is happening
+        if not hot_seat_coaches and all(c.happiness >= 0.55 for _, c in coaches):
+            return
+
+        clear()
+        header("COACHES' MEETING", f"After Season {sn}")
+
+        # Room read — all coaches sorted by happiness (troubled first)
+        print(f"\n  {BOLD}Room Read{RESET}")
+        divider()
+        print(f"  {MUTED}{'':2}{'Coach':<22} {'Team':<22} {'Archetype':<22} {'Mood':<12} "
+              f"{'Tenure':>6}  Notes{RESET}\n")
+
+        coaches_sorted = sorted(coaches, key=lambda x: x[1].happiness)
+        for team, coach in coaches_sorted:
+            tname  = team.franchise_at(sn).nickname
+            arch   = ARCHETYPE_LABELS.get(coach.archetype, coach.archetype)
+            mood_c = (GREEN if coach.happiness >= 0.65 else
+                      GOLD  if coach.happiness >= 0.45 else RED)
+            mood_s = ("Settled"  if coach.happiness >= 0.65 else
+                      "Restless" if coach.happiness >= 0.45 else "Miserable")
+            notes  = []
+            if coach.hot_seat:
+                notes.append(f"{RED}HOT SEAT{RESET}")
+            if coach.former_player:
+                notes.append(f"{MUTED}ex-player{RESET}")
+            if coach.tenure <= 1:
+                notes.append(f"{MUTED}rookie HC{RESET}")
+            notes_str = "  ".join(notes) if notes else ""
+            print(f"  {happiness_emoji(coach.happiness)} {coach.name:<22}  "
+                  f"{MUTED}{tname:<22}{RESET}  "
+                  f"{MUTED}{arch:<22}{RESET}  "
+                  f"{mood_c}{mood_s:<12}{RESET}  "
+                  f"{MUTED}{coach.tenure:>6} yr{RESET}  "
+                  f"{notes_str}")
+
+        # Hot seat section — only if there are coaches on the hot seat
+        if hot_seat_coaches:
+            print(f"\n  {RED}{BOLD}On the Hot Seat{RESET}")
+            divider()
+            for team, coach in hot_seat_coaches:
+                tname   = team.franchise_at(sn).nickname
+                owner   = team.owner
+                owner_h = owner.happiness if owner else 0.50
+                arch    = ARCHETYPE_LABELS.get(coach.archetype, coach.archetype)
+                print(f"\n  {RED}{coach.name}{RESET}  {MUTED}· {tname} · {arch} · "
+                      f"Year {coach.tenure} · Owner happiness {owner_h:.0%}{RESET}")
+                if owner and owner.happiness < 0.30:
+                    print(f"  {MUTED}Owner is {owner.name.split()[0]} — patience has run out. "
+                          f"A firing is likely if results don't improve.{RESET}")
+                elif owner and owner.happiness < 0.45:
+                    print(f"  {MUTED}Owner {owner.name.split()[0]} is watching closely. "
+                          f"Another poor season may force a change.{RESET}")
+
+        press_enter()
 
     def _handle_owner_meeting(self, season: Season) -> None:
         """Owner meeting: always shown. Room read → optional outreach → agenda → transitions."""

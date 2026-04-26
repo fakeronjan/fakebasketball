@@ -185,6 +185,10 @@ class Season:
         self.dpoy:       Player | None = None
         self.dpoy_team:  Team   | None = None
         self.finals_mvp: Player | None = None
+        # Coach of the Year (set by league.update_all_coach_happiness)
+        self.coy:          "Coach | None" = None
+        self.coy_team:     "Team  | None" = None
+        self.coy_delta:    float = 0.0   # net rating delta that earned the award
 
     # -- Record helpers -------------------------------------------------------
 
