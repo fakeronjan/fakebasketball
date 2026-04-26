@@ -954,7 +954,7 @@ class CommissionerGame:
                             if season.mvp_team in standings else "?")
                 tc  = GOLD if season.mvp.peak_overall >= 14 else CYAN
                 ms  = season.player_stats.get(season.mvp.player_id)
-                stat_str = (f"{ms.ppg:>5.1f} PPG  {ms.fg_pct:.1%} FG  {ms.fg3_pct:.1%} 3P  #{mvp_seed} seed"
+                stat_str = (f"{ms.ppg:.1f} PPG  {ms.def_rtg:.1f} DRtg  #{mvp_seed} seed"
                             if ms else f"ORtg {season.mvp.ortg_contrib:>+5.1f}  #{mvp_seed} seed")
                 print(f"  {GOLD}MVP  :{RESET}  {happiness_emoji(season.mvp.happiness)} {tc}{season.mvp.name:<22}{RESET}  "
                       f"{MUTED}{season.mvp.position} · {mvp_team}{RESET}  {stat_str}")
@@ -1496,13 +1496,14 @@ class CommissionerGame:
                     stat_str = (f"Def Rtg {ps.def_rtg:.1f}  {ps.poss_defended} poss defended"
                                 if ps.poss_defended else f"DRtg {p.drtg_contrib:>+.1f}")
                 elif ps and ps.games > 0:
-                    base = f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  {ps.fg3_pct:.1%} 3P  {ps.ft_pct:.1%} FT"
                     if lbl == "MVP":
                         seed = (season.regular_season_standings.index(t) + 1
                                 if t in season.regular_season_standings else "?")
-                        stat_str = f"{base}  #{seed} seed"
+                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg  #{seed} seed"
+                    elif lbl == "Finals MVP":
+                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg"
                     else:
-                        stat_str = base
+                        stat_str = f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  {ps.fg3_pct:.1%} 3P  {ps.ft_pct:.1%} FT"
                 else:
                     stat_str = f"ORtg {p.ortg_contrib:>+.1f}  DRtg {p.drtg_contrib:>+.1f}"
                 print(f"  {GOLD}{lbl:<12}{RESET} {happiness_emoji(p.happiness)} {tc}{p.name:<22}{RESET}"
@@ -2138,10 +2139,11 @@ class CommissionerGame:
                 award_parts = []
                 if s.mvp:
                     ms = s.player_stats.get(s.mvp.player_id)
-                    ppg_s = f" {ms.ppg:.1f}ppg" if ms else ""
+                    ppg_s  = f" {ms.ppg:.1f}ppg" if ms else ""
+                    drtg_s = f" {ms.def_rtg:.1f}drtg" if ms else ""
                     seed_s = (f" #{s.regular_season_standings.index(s.mvp_team)+1}"
                               if s.mvp_team in s.regular_season_standings else "")
-                    award_parts.append(f"MVP {s.mvp.name}{ppg_s}{seed_s}")
+                    award_parts.append(f"MVP {s.mvp.name}{ppg_s}{drtg_s}{seed_s}")
                 if s.opoy:
                     os = s.player_stats.get(s.opoy.player_id)
                     ppg_s = f" {os.ppg:.1f}ppg" if os else ""
