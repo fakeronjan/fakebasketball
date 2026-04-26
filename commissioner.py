@@ -1601,6 +1601,38 @@ class CommissionerGame:
         header("AWARDS NIGHT", f"Season {sn}  ·  {self.league_name}")
 
         # ── Player & coach awards ─────────────────────────────────────────────
+        # Build a chronological list of all seasons including this one for
+        # award-count and streak computation.
+        all_seasons = list(self.league.seasons) + [season]
+
+        _AWARD_GETTERS = {
+            "MVP":        lambda s: s.mvp,
+            "OPOY":       lambda s: s.opoy,
+            "DPOY":       lambda s: s.dpoy,
+            "Finals MVP": lambda s: s.finals_mvp,
+            "COY":        lambda s: s.coy,
+        }
+
+        def _award_badge(key: str, winner_id) -> str:
+            """Return e.g. '3× (2 in a row)' for a player/coach winner_id."""
+            getter = _AWARD_GETTERS[key]
+            id_fn  = (lambda s: getattr(getter(s), "player_id", None)
+                      if key != "COY"
+                      else lambda s: getattr(getter(s), "coach_id", None))
+            # total wins
+            total = sum(1 for s in all_seasons if id_fn(s) == winner_id)
+            # current streak (walk backwards from this season)
+            streak = 0
+            for s in reversed(all_seasons):
+                if id_fn(s) == winner_id:
+                    streak += 1
+                else:
+                    break
+            parts = [f"{total}×"]
+            if streak >= 2:
+                parts.append(f"{streak} in a row")
+            return "  " + "  ".join(parts)
+
         if season.mvp or season.opoy or season.dpoy or season.finals_mvp or season.coy:
             print(f"\n  {BOLD}Season Awards{RESET}")
             divider()
@@ -1630,10 +1662,11 @@ class CommissionerGame:
                                     f"{ps.fg3_pct:.1%} 3P  {ps.ft_pct:.1%} FT")
                 else:
                     stat_str = f"ORtg {p.ortg_contrib:>+.1f}  DRtg {p.drtg_contrib:>+.1f}"
+                badge = _award_badge(lbl, p.player_id)
                 print(f"  {GOLD}{lbl:<12}{RESET} {happiness_emoji(p.happiness)} "
                       f"{tc}{p.name:<22}{RESET}"
                       f"  {MUTED}{p.position} · {tname:<18}{RESET}"
-                      f"  {stat_str}  {p.trend}")
+                      f"  {stat_str}  {p.trend}{MUTED}{badge}{RESET}")
 
             if season.coy:
                 from coach import ARCHETYPE_LABELS
@@ -1644,10 +1677,11 @@ class CommissionerGame:
                 coy_metric = (f"net rtg {season.coy_delta:>+.1f}  {MUTED}best in league{RESET}"
                               if season.coy_first_season
                               else f"improved {season.coy_delta:>+.1f} net rtg")
+                coy_badge = _award_badge("COY", coy.coach_id)
                 print(f"  {GOLD}{'Coach of Yr':<12}{RESET} {happiness_emoji(coy.happiness)} "
                       f"{CYAN}{coy.name:<22}{RESET}"
                       f"  {MUTED}{arch_lbl} · {ctname:<18}{RESET}"
-                      f"  {coy_metric}{fp_note}")
+                      f"  {coy_metric}{fp_note}{MUTED}{coy_badge}{RESET}")
 
         # ── Stars to Watch ────────────────────────────────────────────────────
         all_stars: list[tuple] = []
