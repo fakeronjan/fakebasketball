@@ -978,8 +978,11 @@ class CommissionerGame:
                 ctname = season.coy_team.franchise_at(sn).nickname if season.coy_team else "—"
                 arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
                 fp_note = f"  {MUTED}ex-player{RESET}" if coy.former_player else ""
+                coy_metric = (f"net rtg {season.coy_delta:>+.1f}  {MUTED}best in league{RESET}"
+                              if season.coy_first_season
+                              else f"improved {season.coy_delta:>+.1f} net rtg")
                 print(f"  {GOLD}COY  :{RESET}  {happiness_emoji(coy.happiness)} {CYAN}{coy.name:<22}{RESET}  "
-                      f"{MUTED}{arch_lbl} · {ctname}{RESET}  net rtg {season.coy_delta:>+.1f}{fp_note}")
+                      f"{MUTED}{arch_lbl} · {ctname}{RESET}  {coy_metric}{fp_note}")
 
         cfg = season.cfg
         print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'Record':<13} {'ORtg':>4}  {'DRtg':>4}  {'Pace':>4}  "
@@ -2138,7 +2141,9 @@ class CommissionerGame:
                 if s.finals_mvp:
                     award_parts.append(f"FMVP {s.finals_mvp.name}")
                 if s.coy:
-                    award_parts.append(f"COY {s.coy.name} +{s.coy_delta:.1f}")
+                    coy_metric_s = (f"NR {s.coy_delta:+.1f}" if s.coy_first_season
+                                    else f"Δ{s.coy_delta:+.1f}")
+                    award_parts.append(f"COY {s.coy.name} {coy_metric_s}")
                 if award_parts:
                     print(f"       {MUTED}{('  ·  ').join(award_parts)}{RESET}")
 
@@ -5627,8 +5632,12 @@ class CommissionerGame:
             divider()
             print(f"\n  {GOLD}{coy.name}{RESET}  {MUTED}· {ctname} · {arch_lbl} "
                   f"· Year {coy.tenure}{RESET}{fp_note}")
-            print(f"  {MUTED}Net rating improved {season.coy_delta:>+.1f} pts — "
-                  f"best turnaround in the league this season.{RESET}")
+            if season.coy_first_season:
+                print(f"  {MUTED}Best net rating in the league ({season.coy_delta:>+.1f}) — "
+                      f"set the standard in the inaugural season.{RESET}")
+            else:
+                print(f"  {MUTED}Net rating improved {season.coy_delta:>+.1f} pts — "
+                      f"best turnaround in the league this season.{RESET}")
             if coy.coy_wins > 1:
                 print(f"  {GOLD}{coy.coy_wins}× Coach of the Year in their career. "
                       f"Established reputation — stars are taking notice.{RESET}")

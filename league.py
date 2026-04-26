@@ -507,7 +507,7 @@ class League:
                 self._coaching_pool.append(coach)
                 self._coaching_pool_hire(team)
 
-        # Coach of the Year — best net rating delta; all coaches eligible
+        # Coach of the Year — best net rating delta (szn 2+) or best net rating (szn 1)
         if coy_candidates:
             best_delta, best_coach, best_team = max(coy_candidates, key=lambda x: x[0])
             if best_delta > 0.5:   # meaningful improvement threshold
@@ -516,6 +516,18 @@ class League:
                 season.coy_delta  = round(best_delta, 2)
                 best_coach.coy_wins += 1          # builds long-term FA draw reputation
                 best_coach.hot_seat  = False      # COY win clears the hot seat
+        elif not coy_candidates:
+            # Season 1: no prior baseline — award to the coach with the best net rating
+            nr_candidates = [(t.net_rating(), t.coach, t)
+                             for t in self.teams if t.coach is not None]
+            if nr_candidates:
+                best_nr, best_coach, best_team = max(nr_candidates, key=lambda x: x[0])
+                season.coy            = best_coach
+                season.coy_team       = best_team
+                season.coy_delta      = round(best_nr, 2)
+                season.coy_first_season = True
+                best_coach.coy_wins  += 1
+                best_coach.hot_seat   = False
 
     # ── Losing-streak tracker ─────────────────────────────────────────────────
 
