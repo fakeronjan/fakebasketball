@@ -174,7 +174,7 @@ def _pick_defender(defense: Team, shooter: Player | None,
     if shooter is not None:
         same_pos = [p for p in defenders if p.position == shooter.position]
         if same_pos:
-            return same_pos[0]
+            return random.choice(same_pos)
     return random.choice(defenders)
 
 
