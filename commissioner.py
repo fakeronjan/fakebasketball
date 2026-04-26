@@ -1145,7 +1145,7 @@ class CommissionerGame:
         def_leader   = min(standings, key=lambda t: season.team_papg(t))
         diff_leader  = max(standings, key=lambda t: season.team_ppg(t) - season.team_papg(t))
 
-        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'W–L':>5}  {'ORtg':>4}  {'DRtg':>4}  "
+        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'W–L':>5}  {'%':>4}  {'ORtg':>4}  {'DRtg':>4}  "
               f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}{RESET}")
         divider()
         for i, team in enumerate(standings):
@@ -1154,6 +1154,7 @@ class CommissionerGame:
             fname = team.franchise_at(sn).name
             ortg, drtg, _, _ = season._start_ratings.get(team, (team.ortg, team.drtg, team.pace, team.style_3pt))
             record   = f"{rw}–{rl}"
+            win_pct  = rw / (rw + rl) if (rw + rl) else 0.0
             padded   = f"{fname:<28}"
             ppg  = season.team_ppg(team)
             papg = season.team_papg(team)
@@ -1162,10 +1163,13 @@ class CommissionerGame:
             # Record column — highlight best/worst
             if team is best_record:
                 rec_str = f"{GREEN}{BOLD}{record:>5}{RESET}"
+                pct_str = f"{GREEN}{BOLD}{win_pct:.0%}{RESET}"
             elif team is worst_record:
                 rec_str = f"{RED}{record:>5}{RESET}"
+                pct_str = f"{RED}{win_pct:.0%}{RESET}"
             else:
                 rec_str = f"{record:>5}"
+                pct_str = f"{MUTED}{win_pct:.0%}{RESET}"
 
             # PS/G — highlight top offense
             ppg_c  = (f"{GREEN}{BOLD}{ppg:>5.1f}{RESET}" if team is ppg_leader
@@ -1183,7 +1187,7 @@ class CommissionerGame:
             # Bold name for playoff teams, muted for non-playoff
             name_str = f"{BOLD}{padded}{RESET}" if rank <= n_playoff else f"{MUTED}{padded}{RESET}"
 
-            print(f"  {rank:>2}. {name_str} {rec_str}  {ortg:>4.0f}  {drtg:>4.0f}  "
+            print(f"  {rank:>2}. {name_str} {rec_str}  {pct_str:>4}  {ortg:>4.0f}  {drtg:>4.0f}  "
                   f"{ppg_c}  {papg_c}  {diff_str}")
 
         divider()
