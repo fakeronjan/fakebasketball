@@ -54,7 +54,7 @@ self.onmessage = async function (e) {
     // ── Fetch and install all Python source files ─────────────────────────────
     postMessage({ type: 'status', text: 'Loading game files…' });
     const pyFiles = [
-      'config.py', 'team.py', 'player.py', 'owner.py', 'season.py',
+      'config.py', 'coach.py', 'team.py', 'player.py', 'owner.py', 'season.py',
       'game.py', 'franchises.py', 'rival.py', 'league.py', 'commissioner.py',
     ];
     for (const f of pyFiles) {
