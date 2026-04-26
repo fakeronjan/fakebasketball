@@ -5484,79 +5484,60 @@ class CommissionerGame:
             press_enter()
 
     def _handle_coach_meeting(self, season: Season) -> None:
-        """Coach meeting: room read showing all coaches, with hot-seat coaches surfaced.
+        """Coach storylines — only fires when there is something worth telling.
 
-        The commissioner doesn't manage coaches directly — they are ambient actors.
-        This meeting surfaces the storylines: who's thriving, who's under pressure,
-        and whether a hot-seat coach needs to be addressed via the owner relationship.
+        Coaches are background actors. This screen only surfaces when a genuine
+        coaching narrative exists: COY winner, hot seat, or a fired/hired change.
+        Routine 'everyone is slightly restless' seasons are silently skipped.
         """
         from coach import ARCHETYPE_LABELS
         league = self.league
         sn     = season.number
 
-        coaches: list[tuple] = []   # (team, coach)
-        for team in league.teams:
-            if team.coach is not None:
-                coaches.append((team, team.coach))
-
+        coaches = [(t, t.coach) for t in league.teams if t.coach is not None]
         if not coaches:
             return
 
-        hot_seat_coaches = [(t, c) for t, c in coaches if c.hot_seat]
+        hot_seat = [(t, c) for t, c in coaches if c.hot_seat]
+        coy      = season.coy
 
-        # Skip the meeting entirely if nothing notable is happening
-        if not hot_seat_coaches and all(c.happiness >= 0.55 for _, c in coaches):
+        # Nothing worth showing — skip silently
+        if not hot_seat and coy is None:
             return
 
         clear()
-        header("COACHES' MEETING", f"After Season {sn}")
+        header("COACHING REPORT", f"After Season {sn}")
 
-        # Room read — all coaches sorted by happiness (troubled first)
-        print(f"\n  {BOLD}Room Read{RESET}")
-        divider()
-        print(f"  {MUTED}{'':2}{'Coach':<22} {'Team':<22} {'Archetype':<22} {'Mood':<12} "
-              f"{'Tenure':>6}  Notes{RESET}\n")
+        # COY spotlight
+        if coy:
+            ctname   = season.coy_team.franchise_at(sn).name if season.coy_team else "—"
+            arch_lbl = ARCHETYPE_LABELS.get(coy.archetype, coy.archetype)
+            fp_note  = f"  {MUTED}former player{RESET}" if coy.former_player else ""
+            print(f"\n  {GOLD}{BOLD}Coach of the Year{RESET}")
+            divider()
+            print(f"\n  {GOLD}{coy.name}{RESET}  {MUTED}· {ctname} · {arch_lbl} "
+                  f"· Year {coy.tenure}{RESET}{fp_note}")
+            print(f"  {MUTED}Net rating improved {season.coy_delta:>+.1f} pts — "
+                  f"best turnaround in the league this season.{RESET}")
 
-        coaches_sorted = sorted(coaches, key=lambda x: x[1].happiness)
-        for team, coach in coaches_sorted:
-            tname  = team.franchise_at(sn).nickname
-            arch   = ARCHETYPE_LABELS.get(coach.archetype, coach.archetype)
-            mood_c = (GREEN if coach.happiness >= 0.65 else
-                      GOLD  if coach.happiness >= 0.45 else RED)
-            mood_s = ("Settled"  if coach.happiness >= 0.65 else
-                      "Restless" if coach.happiness >= 0.45 else "Miserable")
-            notes  = []
-            if coach.hot_seat:
-                notes.append(f"{RED}HOT SEAT{RESET}")
-            if coach.former_player:
-                notes.append(f"{MUTED}ex-player{RESET}")
-            if coach.tenure <= 1:
-                notes.append(f"{MUTED}rookie HC{RESET}")
-            notes_str = "  ".join(notes) if notes else ""
-            print(f"  {happiness_emoji(coach.happiness)} {coach.name:<22}  "
-                  f"{MUTED}{tname:<22}{RESET}  "
-                  f"{MUTED}{arch:<22}{RESET}  "
-                  f"{mood_c}{mood_s:<12}{RESET}  "
-                  f"{MUTED}{coach.tenure:>6} yr{RESET}  "
-                  f"{notes_str}")
-
-        # Hot seat section — only if there are coaches on the hot seat
-        if hot_seat_coaches:
+        # Hot seat coaches
+        if hot_seat:
             print(f"\n  {RED}{BOLD}On the Hot Seat{RESET}")
             divider()
-            for team, coach in hot_seat_coaches:
-                tname   = team.franchise_at(sn).nickname
+            for team, coach in hot_seat:
+                tname   = team.franchise_at(sn).name
                 owner   = team.owner
-                owner_h = owner.happiness if owner else 0.50
                 arch    = ARCHETYPE_LABELS.get(coach.archetype, coach.archetype)
-                print(f"\n  {RED}{coach.name}{RESET}  {MUTED}· {tname} · {arch} · "
-                      f"Year {coach.tenure} · Owner happiness {owner_h:.0%}{RESET}")
-                if owner and owner.happiness < 0.30:
-                    print(f"  {MUTED}Owner is {owner.name.split()[0]} — patience has run out. "
-                          f"A firing is likely if results don't improve.{RESET}")
-                elif owner and owner.happiness < 0.45:
-                    print(f"  {MUTED}Owner {owner.name.split()[0]} is watching closely. "
-                          f"Another poor season may force a change.{RESET}")
+                owner_h = owner.happiness if owner else 0.50
+                owner_first = owner.name.split()[0] if owner else "The owner"
+                print(f"\n  {RED}{coach.name}{RESET}  "
+                      f"{MUTED}{tname} · {arch} · Year {coach.tenure}{RESET}")
+                if owner_h < 0.30:
+                    print(f"  {MUTED}{owner_first}'s patience is gone. "
+                          f"A firing is coming unless results turn around immediately.{RESET}")
+                else:
+                    print(f"  {MUTED}{owner_first} is watching closely. "
+                          f"Another poor season likely forces a change.{RESET}")
 
         press_enter()
 
