@@ -4442,8 +4442,8 @@ class CommissionerGame:
         else:
             self._rival_fa_notice = None
 
-        # ── FA pool summary ───────────────────────────────────────────────────
-        self._show_fa_summary(season)
+        # FA pool: auto-resolved silently. Star FA events already had their
+        # own interactive screen above. Rival siphon count surfaced via desk flags.
 
     def _handle_star_fa_event(self, player: Player, season: Season) -> None:
         """Commissioner can nudge or rig where a star free agent signs."""
@@ -4682,41 +4682,6 @@ class CommissionerGame:
         league.draft_pool = []
         press_enter()
 
-    def _show_fa_summary(self, season: Season) -> None:
-        """Show available free agents after draft and auto-signing."""
-        league = self.league
-        sn     = season.number
-        pool   = league.free_agent_pool
-        if not pool:
-            return
-
-        # Pull last season's stats for each FA
-        last_stats = season.player_stats  # already computed for this season
-
-        clear()
-        header("FREE AGENT POOL", f"After Season {sn}")
-        notice = getattr(self, '_rival_fa_notice', None)
-        if notice:
-            short_name, n_gone = notice
-            print(f"\n  {GOLD}⚠ The {short_name} signed {n_gone} player{'s' if n_gone != 1 else ''} "
-                  f"before you got here.{RESET}")
-        print(f"\n  {len(pool)} players available\n")
-        print(f"  {'Name':<22} {'Pos':<6} {'Age':>3}  {'ORtg':>5}  {'DRtg':>5}  "
-              f"{'Zone':<5}  {'PPG':>5}  {'FG%':>5}  {'Mood':<4}  Motivation")
-        divider()
-        for p in sorted(pool, key=lambda p: -p.overall):
-            mot_c = (GREEN if p.motivation == MOT_WINNING
-                     else GOLD if p.motivation == MOT_MARKET else CYAN)
-            ps = last_stats.get(p.player_id)
-            ppg_s = f"{ps.ppg:>5.1f}" if (ps and ps.games > 0) else f"{MUTED}  —  {RESET}"
-            fg_s  = f"{ps.fg_pct:>5.1%}" if (ps and ps.fga > 0) else f"{MUTED}  —  {RESET}"
-            print(f"  {p.name:<22} {p.position:<6} {p.age:>3}  "
-                  f"{p.ortg_contrib:>+5.1f}  {p.drtg_contrib:>+5.1f}  "
-                  f"{p.preferred_zone:<5}  {ppg_s}  {fg_s}  "
-                  f"{happiness_emoji(p.happiness):<4}"
-                  f"  {mot_c}{p.motivation}{RESET}")
-        press_enter()
-
     # ── Commissioner's Desk (always-available proactive actions) ──────────────
 
     def _desk_flags(self, season: Season) -> list[str]:
@@ -4791,6 +4756,15 @@ class CommissionerGame:
             flags.append(
                 f"{strength_c}⚔{RESET}  Rival league active: {BOLD}{rival.name}{RESET}  "
                 f"{strength_c}{sl}  ({rival.strength:.0%}){RESET}"
+            )
+        # Rival FA siphon — happened this offseason
+        fa_notice = getattr(self, '_rival_fa_notice', None)
+        if fa_notice:
+            short_name, n_gone = fa_notice
+            flags.append(
+                f"{GOLD}⚔{RESET}  {BOLD}{short_name}{RESET} signed "
+                f"{GOLD}{n_gone} free agent{'s' if n_gone != 1 else ''}{RESET} "
+                f"from your pool this offseason"
             )
 
         # Type B ringleader detection warning
