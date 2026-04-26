@@ -1247,14 +1247,26 @@ class League:
 
         # ── Helper: build drivers list from weighted components ───────────────
         def _drivers(components):
-            """Return (dir_char, label) pairs sorted by contribution magnitude."""
-            out = []
+            """Return top 2 positive drivers + worst negative driver (if any).
+
+            ↑ = component scores ≥ 0.65 (C+ or better — actively helping)
+            ↓ = component scores <  0.65 (needs attention — dragging the pillar)
+            Threshold at 0.65 ensures labels and arrows agree: anything described
+            negatively in the label text should also score below 0.65.
+            """
+            positives = []
+            negatives = []
             for w, s, label in components:
                 contribution = w * (s - 0.50)
-                if abs(contribution) >= 0.003:
-                    out.append(("↑" if s >= 0.50 else "↓", label, contribution))
-            out.sort(key=lambda x: -abs(x[2]))
-            return out
+                if abs(contribution) < 0.003:
+                    continue
+                if s >= 0.65:
+                    positives.append(("↑", label, contribution))
+                else:
+                    negatives.append(("↓", label, contribution))
+            positives.sort(key=lambda x: -x[2])   # highest positive first
+            negatives.sort(key=lambda x: x[2])    # most negative first
+            return positives[:2] + negatives[:1]
 
         # ══ INTEGRITY ══════════════════════════════════════════════════════════
         # Is this a trustworthy, well-governed league?
@@ -1401,8 +1413,12 @@ class League:
             max_drought, drought_team = max(droughts, key=lambda x: x[0])
             drought_score = max(0.0, 1.0 - max_drought / max(1, len(self.teams)))
             drought_city = drought_team.franchise_at(sn).city
-            if max_drought <= 1:
-                drought_label = "No significant playoff droughts"
+            if drought_score >= 0.65:
+                # Short droughts — frame positively; still mention city if not trivial
+                if max_drought <= 1:
+                    drought_label = "No significant playoff droughts"
+                else:
+                    drought_label = f"Playoff access healthy ({drought_city} longest at {max_drought} seasons)"
             else:
                 drought_label = f"Longest drought: {drought_city} ({max_drought} seasons without playoffs)"
             pc.append((0.20, drought_score, drought_label))
@@ -1628,16 +1644,19 @@ class League:
             excess = abs(deviation) - bandwidth
             ent_val = max(0.0, 1.0 - 1.5 * excess / 0.05)
         scoring_score = 0.30 + 0.70 * ent_val
-        if meta > 0.10:
-            scoring_label = "Extreme offensive era — some fans find it gimmicky"
+        # Label framing: use score threshold (0.65) to pick positive vs negative language,
+        # so the label always agrees with the ↑/↓ arrow.
+        if scoring_score < 0.65:
+            if meta > 0:
+                scoring_label = "Extreme offensive era — some fans find it gimmicky"
+            else:
+                scoring_label = "Extreme defensive era — low-scoring product"
         elif meta > 0.03:
             scoring_label = "Offensive era — high-scoring, fan-friendly"
         elif meta > -0.05:
             scoring_label = "Balanced era — clean basketball"
-        elif meta > -0.10:
-            scoring_label = "Defensive lean — some fans find it a grind"
         else:
-            scoring_label = "Extreme defensive era — low-scoring product"
+            scoring_label = "Defensive lean — some fans find it a grind"
         ec.append((0.25, scoring_score, scoring_label))
 
         # 2. Star power — elite/high player count, market-weighted (Major 0.25)
@@ -1663,8 +1682,10 @@ class League:
             total  = played + missed
             avail  = played / max(1, total)
             avail_score = avail
-            if avail < 0.80:
-                avail_label = f"Star availability low ({avail:.0%}) — injuries dragging product"
+            if avail < 0.65:
+                avail_label = f"Star availability critically low ({avail:.0%}) — injuries dragging product"
+            elif avail < 0.80:
+                avail_label = f"Star availability low ({avail:.0%}) — injury concerns"
             elif avail < 0.92:
                 avail_label = f"Moderate star absences ({1 - avail:.0%} of games missed)"
             else:
