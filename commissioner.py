@@ -4425,6 +4425,7 @@ class CommissionerGame:
 
     def _do_showcase_event(self, season: Season):
         league = self.league
+        cfg    = league.cfg
         sn = season.number
         clear()
         header("SHOWCASE EVENT", f"After Season {sn}")
