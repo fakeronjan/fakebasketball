@@ -1325,7 +1325,55 @@ class CommissionerGame:
         import math as _math
         from coach import ARCHETYPE_LABELS as _ARCH_LBLS
 
-        SLOT_LABELS = ["★", "·", "S"]
+        SLOT_LABELS   = ["★", "·", "S"]
+        _SLOT_WEIGHTS = [0.50, 0.30, 0.20]   # mirrors player rating weights
+
+        def _series_prob(t1: Team, t2: Team) -> tuple[int, int]:
+            """Estimate series win probability, blending four signals.
+
+            1. Actual regular-season win% (60% weight) — what they actually did
+            2. Pre-season net rating (40% weight) — underlying talent
+            3. Weighted fatigue drag — dynasty teams and playoff vets tire out
+            4. Key-player injury penalty — stars/co-stars who missed 5+ games
+
+            Returns (prob_t1, prob_t2) as integers summing to 100.
+            """
+            def _strength(t: Team) -> float:
+                rw = season.reg_wins(t)
+                rl = season.reg_losses(t)
+                win_pct = rw / (rw + rl) if (rw + rl) else 0.5
+                o, d, _, _ = season._start_ratings.get(
+                    t, (t.ortg, t.drtg, t.pace, t.style_3pt))
+                net = _rel_net(o, d, avg_o, avg_d)
+
+                # Blend: actual performance drives 60%, talent ratings 40%
+                # Scale win_pct to same magnitude as net rating (~±10 range)
+                score = 0.60 * (win_pct - 0.5) * 20 + 0.40 * net
+
+                # Fatigue drag — weighted by slot importance
+                fat_sum = fat_w = 0.0
+                for idx, p in enumerate(t.roster[:3]):
+                    if p is not None:
+                        w = _SLOT_WEIGHTS[idx]
+                        fat_sum += w * p.fatigue
+                        fat_w   += w
+                if fat_w > 0:
+                    score -= (fat_sum / fat_w) * 3.0   # max ~−3 pts at full fatigue
+
+                # Key-player injury penalty (star and co-star only)
+                for idx in range(min(2, len(t.roster))):
+                    p = t.roster[idx]
+                    if p:
+                        ps = season.player_stats.get(p.player_id)
+                        if ps and ps.games_missed >= 5:
+                            # Up to −1.5 pts for a star who missed 20+ games
+                            score -= min(ps.games_missed / 20.0, 1.0) * 1.5
+
+                return score
+
+            diff  = _strength(t1) - _strength(t2)
+            prob1 = round(100 / (1 + _math.exp(-diff / 4)))
+            return prob1, 100 - prob1
 
         def _player_row(t: Team, slot_idx: int, indent: str) -> str:
             """One player row: slot  Name  PPG  FG%  3P%  fatigue  [missed]"""
@@ -1402,10 +1450,8 @@ class CommissionerGame:
                 seed1_idx = season.regular_season_standings.index(s1) + 1
                 seed2_idx = season.regular_season_standings.index(s2) + 1
 
-                # Series win probability (logistic on net rating diff)
-                diff_prob = net1 - net2 + cfg.playoff_seed_pscore_bonus * 50
-                prob1 = round(100 / (1 + _math.exp(-diff_prob / 4)))
-                prob2 = 100 - prob1
+                # Series win probability
+                prob1, prob2 = _series_prob(s1, s2)
                 fav, fav_prob = (s1, prob1) if prob1 >= prob2 else (s2, prob2)
                 fav_name = fav.franchise_at(sn).nickname
                 fav_c    = GREEN if fav_prob >= 65 else (GOLD if fav_prob >= 55 else MUTED)
@@ -1481,10 +1527,8 @@ class CommissionerGame:
                 if g.winner is s2 and (g.home is s1 or g.away is s1)
             )
 
-            # Series win probability (logistic on net rating diff)
-            diff = net1 - net2 + cfg.playoff_seed_pscore_bonus * 50  # seed advantage tweak
-            prob1 = round(100 / (1 + _math.exp(-diff / 4)))
-            prob2 = 100 - prob1
+            # Series win probability
+            prob1, prob2 = _series_prob(s1, s2)
 
             # Narrative tags
             def _tags(t: Team) -> str:
