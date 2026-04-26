@@ -56,7 +56,7 @@ ARCHETYPE_MODS: dict[str, dict] = {
         "chem_scale": 1.10,
         "star_hap":   0.08,
         "depth_hap":  0.00,
-        "fa_draw":    0.08,
+        "fa_draw":    0.06,  # trimmed from 0.08 — still best at star retention, not dominant
     },
     ARCH_DEFENSIVE: {
         "ortg_mod":  -1.0,   # sacrifice some offense
@@ -72,7 +72,7 @@ ARCHETYPE_MODS: dict[str, dict] = {
         "chem_scale": 1.00,
         "star_hap":   0.04,
         "depth_hap":  0.01,
-        "fa_draw":    0.04,
+        "fa_draw":    0.06,  # bumped from 0.04 — stars want to play in an exciting system
     },
     ARCH_MOTIVATOR: {
         "ortg_mod":   1.0,
