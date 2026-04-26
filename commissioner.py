@@ -455,6 +455,10 @@ class CommissionerGame:
                  _league_popularity=0.0,
                  finals_mvp_ppg=0.0,
                  finals_mvp_drtg=0.0,
+                 mip=None,
+                 mip_team=None,
+                 mip_delta=0.0,
+                 mip_ppg_delta=0.0,
             )
             # Patch PlayerSeasonStats objects for new zone-split fields
             for ps in getattr(s, 'player_stats', {}).values():
@@ -1053,6 +1057,9 @@ class CommissionerGame:
         season = Season(sn, list(league.teams), league.cfg, league.league_meta)
         self._current_season = season   # expose early so 'r' works during playoffs
         season.play_regular_season()
+        # MIP needs prior-season stats — compute before appending to league.seasons
+        prior_stats = league.seasons[-1].player_stats if league.seasons else {}
+        season.compute_mip(prior_stats)
         self._play_playoffs_interactive(season)
         league.seasons.append(season)
         # Phase 1: advance players, surface retirements/FA for interactive handling
@@ -1900,6 +1907,7 @@ class CommissionerGame:
                 "MVP":        lambda s: s.mvp,
                 "OPOY":       lambda s: s.opoy,
                 "DPOY":       lambda s: s.dpoy,
+                "MIP":        lambda s: s.mip,
                 "Finals MVP": lambda s: s.finals_mvp,
                 "COY":        lambda s: s.coy,
             }
@@ -1922,11 +1930,12 @@ class CommissionerGame:
             "MVP":        "🏆",
             "OPOY":       "🎯",
             "DPOY":       "🛡️",
+            "MIP":        "📈",
             "Finals MVP": "🏅",
             "COY":        "📋",
         }
 
-        if season.mvp or season.opoy or season.dpoy or season.finals_mvp or season.coy:
+        if season.mvp or season.opoy or season.dpoy or season.mip or season.finals_mvp or season.coy:
             print(f"\n  {BOLD}Season Awards{RESET}")
             divider()
 
@@ -1934,6 +1943,7 @@ class CommissionerGame:
                 ("MVP",        season.mvp,        season.mvp_team),
                 ("OPOY",       season.opoy,       season.opoy_team),
                 ("DPOY",       season.dpoy,       season.dpoy_team),
+                ("MIP",        season.mip,        season.mip_team),
                 ("Finals MVP", season.finals_mvp, season.champion),
             ]:
                 if p is None:
@@ -1948,6 +1958,14 @@ class CommissionerGame:
                         stat_str = f"{ps.def_rtg:.1f} DRtg  {ps.poss_defended} poss defended"
                     else:
                         stat_str = f"DRtg {p.drtg_contrib:>+.1f}"
+                elif lbl == "MIP":
+                    ppg_sign = "+" if season.mip_ppg_delta >= 0 else ""
+                    if ps and ps.games > 0:
+                        stat_str = (f"{ps.ppg:.1f} PPG  "
+                                    f"{ppg_sign}{season.mip_ppg_delta:.1f} PPG  "
+                                    f"{season.mip_delta:>+.2f} score vs prior season")
+                    else:
+                        stat_str = f"{season.mip_delta:>+.2f} score vs prior season"
                 elif lbl == "Finals MVP":
                     stat_str = f"{season.finals_mvp_ppg:.1f} PPG  {season.finals_mvp_drtg:.1f} DRtg  (Finals only)"
                 elif lbl == "MVP":
@@ -2684,6 +2702,9 @@ class CommissionerGame:
                     ds = s.player_stats.get(s.dpoy.player_id)
                     drtg_s = f" {ds.def_rtg:.1f}drtg" if (ds and ds.poss_defended) else ""
                     award_parts.append(f"DPOY {s.dpoy.name}{drtg_s}")
+                if s.mip:
+                    mip_s = f" +{s.mip_ppg_delta:.1f}ppg" if s.mip_ppg_delta >= 0 else f" {s.mip_ppg_delta:.1f}ppg"
+                    award_parts.append(f"MIP {s.mip.name}{mip_s}")
                 if s.finals_mvp:
                     fs = s.player_stats.get(s.finals_mvp.player_id)
                     fmvp_stat = (f" {fs.ppg:.1f}ppg {fs.def_rtg:.1f}drtg" if fs else "")

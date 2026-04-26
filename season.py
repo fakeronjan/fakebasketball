@@ -212,6 +212,10 @@ class Season:
         self.finals_mvp:      Player | None = None
         self.finals_mvp_ppg:  float = 0.0   # Finals-only PPG for display
         self.finals_mvp_drtg: float = 0.0   # Finals-only DRtg for display
+        self.mip:             Player | None = None
+        self.mip_team:        Team   | None = None
+        self.mip_delta:       float = 0.0   # composite 60/40 score improvement
+        self.mip_ppg_delta:   float = 0.0   # PPG change for display
         # Coach of the Year (set by league.update_all_coach_happiness)
         self.coy:              "Coach | None" = None
         self.coy_team:         "Team  | None" = None
@@ -443,6 +447,54 @@ class Season:
         dpoy_pool = [(p, t) for p, t in pool if p is not self.opoy]
         if dpoy_pool:
             self.dpoy, self.dpoy_team = min(dpoy_pool, key=lambda pt: _raw_def_rtg(pt[0]))
+
+    def compute_mip(self, prior_stats: dict) -> None:
+        """Most Improved Player: biggest positive delta in the 60/40 two-way score.
+
+        Same formula as the MVP numerator — 60% PPG + 40% defensive value — applied
+        to the change from the prior season. All slots eligible. Current MVP excluded
+        so the award goes to a genuine breakout story rather than the dominant player
+        who was already dominant.
+
+        Requires stats in both seasons; minimum 15 games each.
+        Only fires when a prior season exists (season 2+).
+        """
+        MIN_GAMES = 15
+        if not prior_stats:
+            return
+
+        def _two_way(ps: "PlayerSeasonStats") -> float:
+            """60/40 composite — same numerator as MVP formula."""
+            def_val = -(ps.def_rtg - 110.0) if ps.poss_defended > 0 else 0.0
+            return 0.60 * ps.ppg + 0.40 * def_val
+
+        best_p    = None
+        best_t    = None
+        best_delta = -999.0
+        best_ppg_delta = 0.0
+
+        for t in self.teams:
+            for p in t.roster:
+                if p is None or p is self.mvp:
+                    continue
+                curr = self.player_stats.get(p.player_id)
+                prev = prior_stats.get(p.player_id)
+                if curr is None or prev is None:
+                    continue
+                if curr.games < MIN_GAMES or prev.games < MIN_GAMES:
+                    continue
+                delta = _two_way(curr) - _two_way(prev)
+                if delta > best_delta:
+                    best_delta     = delta
+                    best_ppg_delta = curr.ppg - prev.ppg
+                    best_p = p
+                    best_t = t
+
+        if best_p is not None and best_delta > 0:
+            self.mip           = best_p
+            self.mip_team      = best_t
+            self.mip_delta     = round(best_delta, 2)
+            self.mip_ppg_delta = round(best_ppg_delta, 1)
 
     def _compute_finals_mvp(self) -> None:
         """Compute Finals MVP from championship series game logs.
