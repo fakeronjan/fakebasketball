@@ -4774,15 +4774,24 @@ class CommissionerGame:
               f"  ORtg {player.ortg_contrib:+.1f}  DRtg {player.drtg_contrib:+.1f}  "
               f"{player.trend}  Motivation: {mot_c}{player.motivation}{RESET}\n")
 
-        print(f"  {'Destination':<28}  {'Market':>6}  {'Net':>5}  {'Odds':>5}  Notes")
+        print(f"  {'Destination':<28}  {'Market':>6}  {'Net':>5}  {'Odds':>5}  {'Coach draw':>10}  Notes")
         divider()
         dest_list = sorted(candidates, key=lambda t: -probs[t])
         for i, t in enumerate(dest_list, 1):
+            from coach import ARCHETYPE_LABELS
             pct  = probs[t] * 100
             net  = _rel_net(t.ortg, t.drtg, fa_avg_o, fa_avg_d)
-            slot = next(i for i, s in enumerate(t.roster) if s is None)
+            slot = next(j for j, s in enumerate(t.roster) if s is None)
+            if t.coach:
+                draw  = t.coach.compute_modifiers()["fa_draw"]
+                draw_c = GREEN if draw > 0 else (RED if draw < 0 else MUTED)
+                arch_short = ARCHETYPE_LABELS.get(t.coach.archetype, "")[:10]
+                draw_str = f"{draw_c}{draw:>+.2f}{RESET} {MUTED}{arch_short}{RESET}"
+            else:
+                draw_str = f"{MUTED}  no coach{RESET}"
             print(f"  {CYAN}[{i}]{RESET} {t.franchise_at(sn).name:<28}  "
                   f"{t.franchise.effective_metro:>6.1f}  {net:>+5.1f}  {pct:>4.0f}%  "
+                  f"  {draw_str:<10}  "
                   f"{MUTED}{league.teams[0].slot_label(slot)} slot open{RESET}")
 
         legit = league.legitimacy
@@ -5658,6 +5667,28 @@ class CommissionerGame:
         print(f"  {mood_c}{owner_happiness_label(player.happiness)}{RESET}  "
               f"{MUTED}Contract: {player.contract_years_remaining}yr remaining{RESET}"
               f"{ctr_tag}\n")
+
+        # Coach fit
+        if team.coach:
+            from coach import ARCHETYPE_LABELS
+            c     = team.coach
+            fit   = c.player_fit(player.peak_overall, player.motivation, player.happiness)
+            mods  = c.compute_modifiers()
+            if fit >= 0.70:
+                fit_label, fit_c = "Good fit", GREEN
+            elif fit >= 0.45:
+                fit_label, fit_c = "Neutral", MUTED
+            else:
+                fit_label, fit_c = "Poor fit", RED
+            arch_lbl = ARCHETYPE_LABELS.get(c.archetype, c.archetype)
+            hs_tag   = f"  {RED}(hot seat){RESET}" if c.hot_seat else ""
+            hap_note = ""
+            star_hap = mods.get("star_hap", 0.0)
+            if player.peak_overall >= 12 and abs(star_hap) >= 0.01:
+                sign = "+" if star_hap > 0 else ""
+                hap_note = f"  {MUTED}star happiness {sign}{star_hap:+.0%}/yr{RESET}"
+            print(f"  Coach: {c.name}  {MUTED}{arch_lbl}{RESET}  "
+                  f"{fit_c}{fit_label}{RESET}{hap_note}{hs_tag}\n")
 
         # Quote
         quote = self._player_feedback_text(player, team, season)
@@ -6668,6 +6699,13 @@ class CommissionerGame:
             hs_tag = f"  {RED}HOT SEAT{RESET}" if c.hot_seat else ""
             print(f"  Coach: {c.name}  {MUTED}{ARCHETYPE_LABELS.get(c.archetype, c.archetype)} "
                   f"· Year {c.tenure}{RESET}{hs_tag}")
+            # Coach impact note — tell the commissioner what this decision means for the bench
+            if c.hot_seat:
+                print(f"  {RED}⚠ Coach impact:{RESET} {MUTED}Another denial increases "
+                      f"firing risk for {c.name}. Satisfying this demand may clear the hot seat.{RESET}")
+            elif owner.happiness < 0.45:
+                print(f"  {GOLD}Coach impact:{RESET} {MUTED}{c.name} is safe for now, "
+                      f"but sustained owner pressure could put them on the hot seat.{RESET}")
         print(f"  Treasury: {GREEN if self._treasury >= 15 else RED}${self._treasury:.0f}M{RESET}\n")
 
         choice = choose(options, "Commissioner Decision:", default=len(options) - 1)
