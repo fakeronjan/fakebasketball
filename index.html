@@ -247,7 +247,7 @@ term.onKey(({ key, domEvent }) => {
 
 // ── Web Worker ────────────────────────────────────────────────────────────────
 const savedData = localStorage.getItem('fakebb_save') || null;
-const worker    = new Worker('./worker.js');
+const worker    = new Worker('./worker.js?v=20260425b');
 
 worker.onmessage = function (e) {
   const msg = e.data;
