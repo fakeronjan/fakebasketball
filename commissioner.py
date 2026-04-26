@@ -355,6 +355,43 @@ class CommissionerGame:
         print()
         input("\n  Press Enter to start a new league...")
 
+    def _setup_quick(self) -> None:
+        """Quick start — all defaults, no prompts."""
+        self._show_wip_status()
+        seed = random.randint(1, 9999)
+        random.seed(seed)
+
+        all_primaries = sorted([f for f in ALL_FRANCHISES if not f.secondary],
+                               key=lambda f: -f.effective_metro)
+        selected = all_primaries[:8]
+        n = len(selected)
+
+        cfg = Config(
+            num_seasons=999,
+            initial_teams=n,
+            games_per_pair=_games_per_pair(n),
+            playoff_teams_override=_playoff_count(n),
+            series_length=7,
+            initial_rating_mode="moderate",
+            # Balanced variance defaults
+            ortg_min=100.0, ortg_max=120.0,
+            drtg_min=100.0, drtg_max=120.0,
+            ortg_sigma=2.0, drtg_sigma=2.0,
+        )
+        self.league_name = "Fake Basketball Association"
+        self.league = League(cfg, selected_franchises=selected)
+        self._prev_league_pop = self.league.league_popularity
+
+        clear()
+        header("FAKE BASKETBALL ASSOCIATION", f"Quick Start  ·  Seed {seed}")
+        print(f"\n  {GREEN}League ready.{RESET}  8 teams  ·  {_games_per_pair(n) * (n - 1)}-game season  "
+              f"·  {_playoff_count(n)}-team playoffs  ·  Best-of-7\n")
+        for f in selected:
+            print(f"  {CYAN}{f.name}{RESET}  {MUTED}({f.city}  {f.effective_metro:.0f}M market){RESET}")
+        press_enter("\nPress Enter to meet your founding franchises...")
+        self._show_founding_teams()
+        press_enter("Press Enter to tip off Season 1...")
+
     def _setup(self):
         self._show_wip_status()
         clear()
@@ -831,11 +868,29 @@ class CommissionerGame:
         if _save_exists():
             print(f"\n  {GREEN}Save file found.{RESET}\n")
             idx = choose(
-                ["Continue saved game", "New league", "Quit"],
+                ["Continue saved game",
+                 "New league  —  quick start",
+                 "New league  —  manual setup",
+                 "Quit"],
                 title="What would you like to do?", default=0,
             )
             if idx == 0:
                 self._load_game()
+                return
+            elif idx == 1:
+                self._setup_quick()
+                return
+            elif idx == 3:
+                raise _QuitSignal()
+        else:
+            idx = choose(
+                ["New league  —  quick start",
+                 "New league  —  manual setup",
+                 "Quit"],
+                title="What would you like to do?", default=0,
+            )
+            if idx == 0:
+                self._setup_quick()
                 return
             elif idx == 2:
                 raise _QuitSignal()
