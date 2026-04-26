@@ -1145,51 +1145,46 @@ class CommissionerGame:
         def_leader   = min(standings, key=lambda t: season.team_papg(t))
         diff_leader  = max(standings, key=lambda t: season.team_ppg(t) - season.team_papg(t))
 
-        cfg = season.cfg
-        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'Record':<13} {'ORtg':>4}  {'DRtg':>4}  "
+        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'W–L':>5}  {'ORtg':>4}  {'DRtg':>4}  "
               f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}{RESET}")
         divider()
         for i, team in enumerate(standings):
             rank = i + 1
             rw, rl = season.reg_wins(team), season.reg_losses(team)
             fname = team.franchise_at(sn).name
-            ortg, drtg, pace, _ = season._start_ratings.get(team, (team.ortg, team.drtg, team.pace, team.style_3pt))
-            record   = _wl(rw, rl)
+            ortg, drtg, _, _ = season._start_ratings.get(team, (team.ortg, team.drtg, team.pace, team.style_3pt))
+            record   = f"{rw}–{rl}"
             padded   = f"{fname:<28}"
             ppg  = season.team_ppg(team)
             papg = season.team_papg(team)
             diff = ppg - papg
 
-            # Record column color — highlight best/worst
+            # Record column — highlight best/worst
             if team is best_record:
-                rec_str  = f"{GREEN}{BOLD}{record:<13}{RESET}"
+                rec_str = f"{GREEN}{BOLD}{record:>5}{RESET}"
             elif team is worst_record:
-                rec_str  = f"{RED}{record:<13}{RESET}"
+                rec_str = f"{RED}{record:>5}{RESET}"
             else:
-                rec_str  = f"{record:<13}"
+                rec_str = f"{record:>5}"
 
             # PS/G — highlight top offense
-            ppg_c    = (f"{GREEN}{BOLD}{ppg:>5.1f}{RESET}" if team is ppg_leader
-                        else f"{ppg:>5.1f}")
+            ppg_c  = (f"{GREEN}{BOLD}{ppg:>5.1f}{RESET}" if team is ppg_leader
+                      else f"{ppg:>5.1f}")
             # PA/G — highlight top defense (fewest allowed)
-            papg_c   = (f"{GREEN}{BOLD}{papg:>5.1f}{RESET}" if team is def_leader
-                        else f"{papg:>5.1f}")
-            # Diff — highlight best margin
+            papg_c = (f"{GREEN}{BOLD}{papg:>5.1f}{RESET}" if team is def_leader
+                      else f"{papg:>5.1f}")
+            # Diff — highlight best margin; positive/negative otherwise
             if team is diff_leader:
                 diff_str = f"{GOLD}{BOLD}{diff:>+5.1f}{RESET}"
             else:
                 diff_c   = GREEN if diff > 0 else (RED if diff < 0 else MUTED)
                 diff_str = f"{diff_c}{diff:>+5.1f}{RESET}"
 
-            if rank <= n_playoff:
-                seed_tag = f"{CYAN}({rank}){RESET}"
-                name_str = f"{BOLD}{padded}{RESET}"
-            else:
-                seed_tag = f"{MUTED}    {RESET}"
-                name_str = f"{MUTED}{padded}{RESET}"
+            # Bold name for playoff teams, muted for non-playoff
+            name_str = f"{BOLD}{padded}{RESET}" if rank <= n_playoff else f"{MUTED}{padded}{RESET}"
 
-            print(f"  {rank:>2}. {name_str} {rec_str} {ortg:>4.0f}  {drtg:>4.0f}  "
-                  f"{seed_tag} {ppg_c}  {papg_c}  {diff_str}")
+            print(f"  {rank:>2}. {name_str} {rec_str}  {ortg:>4.0f}  {drtg:>4.0f}  "
+                  f"{ppg_c}  {papg_c}  {diff_str}")
 
         divider()
         print(f"\n  Top {n_playoff} of {n_teams} teams advance to the playoffs.")
@@ -1205,14 +1200,18 @@ class CommissionerGame:
 
             print(f"\n  {BOLD}SCORING LEADERS{RESET}")
             # Header: name | team | PPG | Paint (ppg / make%) | Mid | 3PT | FT
+            # Zone columns are 11 chars wide (e.g. "12.4 (100%)" = 11)
             print(f"  {MUTED}{'Player':<22} {'Team':<18} {'PPG':>5}  "
-                  f"{'Paint':>10}  {'Mid':>10}  {'3PT':>10}  {'FT':>9}{RESET}")
+                  f"{'Paint':>11}  {'Mid':>11}  {'3PT':>11}  {'FT':>11}{RESET}")
             divider()
 
-            def _zone_cell(pts_per_game: float, pct: float) -> str:
-                """Format a zone cell: '12.4 (57%)' right-aligned in 10 chars."""
-                inner = f"{pts_per_game:.1f} ({pct:.0%})"
-                return f"{inner:>10}"
+            def _zone_cell(pts_per_game: float, pct: float, width: int = 11) -> str:
+                """Number in default color, (%) in muted; manually padded to visual width."""
+                num   = f"{pts_per_game:.1f}"
+                pct_s = f"({pct:.0%})"
+                visual_len = len(num) + 1 + len(pct_s)   # "12.4 (64%)" = 10
+                pad   = " " * max(0, width - visual_len)
+                return f"{pad}{num} {MUTED}{pct_s}{RESET}"
 
             for p, t, s in top_scorers:
                 tname = t.franchise_at(sn).nickname[:16]
@@ -1230,7 +1229,7 @@ class CommissionerGame:
                 ft_cell    = _zone_cell(ft_ppg,    s.ft_pct)
 
                 print(f"  {tc}{p.name:<22}{RESET} {MUTED}{tname:<18}{RESET} {s.ppg:>5.1f}  "
-                      f"{MUTED}{paint_cell}  {mid_cell}  {three_cell}  {ft_cell[:9]}{RESET}")
+                      f"{paint_cell}  {mid_cell}  {three_cell}  {ft_cell}")
 
         press_enter("Press Enter to see injury report...")
 
