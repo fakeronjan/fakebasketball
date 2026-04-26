@@ -907,12 +907,18 @@ class CommissionerGame:
                 next_bracket.append(winner)
 
             season.playoff_rounds.append(round_series)
+
+            # If this is the Finals (one winner left), crown champion and
+            # compute Finals MVP *before* the celebration screen so they
+            # can be shown on the championship screen.
+            if len(next_bracket) == 1:
+                season.champion = next_bracket[0]
+                season.champion.championships += 1
+                season._compute_finals_mvp()
+
             self._show_round_results(round_series, season, rname)
             bracket = next_bracket
             round_idx += 1
-
-        season.champion = bracket[0]
-        season.champion.championships += 1
 
     def _show_regular_season_recap(self, season: Season) -> None:
         """Show final regular season standings before the playoff bracket locks."""
@@ -1445,6 +1451,16 @@ class CommissionerGame:
             if repeat:
                 print(f"  {GOLD}★ REPEAT{RESET}", end="")
             print()
+            # Finals MVP — computed before this screen; show it right here
+            if season.finals_mvp:
+                fmvp = season.finals_mvp
+                fs   = season.player_stats.get(fmvp.player_id)
+                stat_str = (f"{fs.ppg:.1f} PPG  {fs.def_rtg:.1f} DRtg"
+                            if fs else f"ORtg {fmvp.ortg_contrib:>+.1f}")
+                tc = GOLD if fmvp.peak_overall >= 14 else CYAN
+                print(f"     {GOLD}Finals MVP:{RESET}  "
+                      f"{happiness_emoji(fmvp.happiness)} {tc}{fmvp.name}{RESET}  "
+                      f"{MUTED}{fmvp.position}  {stat_str}{RESET}")
 
         press_enter()
 
@@ -2153,7 +2169,9 @@ class CommissionerGame:
                     drtg_s = f" {ds.def_rtg:.1f}drtg" if (ds and ds.poss_defended) else ""
                     award_parts.append(f"DPOY {s.dpoy.name}{drtg_s}")
                 if s.finals_mvp:
-                    award_parts.append(f"FMVP {s.finals_mvp.name}")
+                    fs = s.player_stats.get(s.finals_mvp.player_id)
+                    fmvp_stat = (f" {fs.ppg:.1f}ppg {fs.def_rtg:.1f}drtg" if fs else "")
+                    award_parts.append(f"FMVP {s.finals_mvp.name}{fmvp_stat}")
                 if s.coy:
                     coy_metric_s = (f"NR {s.coy_delta:+.1f}" if s.coy_first_season
                                     else f"Δ{s.coy_delta:+.1f}")
