@@ -1322,71 +1322,130 @@ class CommissionerGame:
         sn = season.number
         avg_o, avg_d = _season_avg_ratings(season)
 
+        import math as _math
+        from coach import ARCHETYPE_LABELS as _ARCH_LBLS
+
+        SLOT_LABELS = ["★", "·", "S"]
+
+        def _player_row(t: Team, slot_idx: int, indent: str) -> str:
+            """One player row: slot  Name  PPG  FG%  3P%  fatigue  [missed]"""
+            p = t.roster[slot_idx] if slot_idx < len(t.roster) else None
+            lbl = SLOT_LABELS[slot_idx]
+            if p is None:
+                return f"{indent}{lbl}  {'— empty':<22}"
+            tc  = GOLD if p.ceiling_tier == TIER_ELITE else (CYAN if p.ceiling_tier == TIER_HIGH else "")
+            ps  = season.player_stats.get(p.player_id)
+            if ps and ps.games > 0:
+                stat_str = (f"{ps.ppg:>5.1f} PPG  {ps.fg_pct:.0%} FG  {ps.fg3_pct:.0%} 3P")
+            else:
+                stat_str = (f"ORtg {p.ortg_contrib:>+.1f}  DRtg {p.drtg_contrib:>+.1f}     ")
+            gm     = ps.games_missed if ps else 0
+            miss_s = f"  {RED}[{gm} missed]{RESET}" if gm >= 5 else ("  " if gm == 0 else f"  {MUTED}[{gm} missed]{RESET}")
+            nrg    = (1 - p.fatigue) * 100
+            fat_c  = RED if nrg < 60 else (GOLD if nrg < 80 else MUTED)
+            fat_s  = f"{fat_c}🔋 {nrg:.0f}%{RESET}"
+            return (f"{indent}{lbl}  {tc}{p.name:<22}{RESET}  "
+                    f"{MUTED}{p.position:<3}{RESET}  {stat_str}{miss_s}  {fat_s}")
+
+        def _coach_row(t: Team, indent: str) -> str:
+            """Coach row: 📋  Name  Archetype  net rating mod  COY count"""
+            c = t.coach
+            if c is None:
+                return f"{indent}📋  {'— no coach'}"
+            mods      = c.compute_modifiers()
+            net_delta = mods["ortg_mod"] - mods["drtg_mod"]
+            net_c     = GREEN if net_delta > 1 else (MUTED if net_delta >= -1 else RED)
+            arch      = _ARCH_LBLS.get(c.archetype, c.archetype)
+            coy_s     = f"  {GOLD}{c.coy_wins}× COY{RESET}" if c.coy_wins else ""
+            hot_s     = f"  {RED}🔥 hot seat{RESET}" if c.hot_seat else ""
+            fp_s      = f"  {MUTED}ex-player{RESET}" if c.former_player else ""
+            return (f"{indent}📋  {CYAN}{c.name:<22}{RESET}  "
+                    f"{arch:<22}  {net_c}{net_delta:>+.1f} net{RESET}{coy_s}{hot_s}{fp_s}")
+
+        def _team_block(t: Team, seed_idx: int, indent: str) -> None:
+            """Print all rows for one team in the matchup block."""
+            fname  = t.franchise_at(sn).name
+            rw, rl = season.reg_wins(t), season.reg_losses(t)
+            o, d, _, _ = season._start_ratings.get(t, (t.ortg, t.drtg, t.pace, t.style_3pt))
+            ppg    = season.team_ppg(t)
+            papg   = season.team_papg(t)
+            margin = ppg - papg
+            mar_c  = GREEN if margin > 3 else (RED if margin < -3 else MUTED)
+            champ_s = f"  {GOLD}🏆 {t.championships}×{RESET}" if t.championships else ""
+            # stats line
+            print(f"{indent}{BOLD}{fname}{RESET}{champ_s}")
+            print(f"{indent}  {rw}–{rl}   ORtg {o:.0f}  DRtg {d:.0f}  "
+                  f"{mar_c}{margin:>+.1f} margin{RESET}  "
+                  f"{MUTED}Pop {t.popularity:.0%}{RESET}")
+            # 3 players
+            for slot_idx in range(3):
+                print(_player_row(t, slot_idx, indent + "  "))
+            # coach
+            print(_coach_row(t, indent + "  "))
+
         while True:
             clear()
-            header(f"PLAYOFFS  —  {rname}", f"Season {sn}")
-            legit = league.legitimacy
-            legit_color = GREEN if legit >= 0.8 else (GOLD if legit >= 0.5 else RED)
-            print(f"\n  Legitimacy: {legit_color}{legit:.0%}{RESET}"
-                  + (f"  {MUTED}({n_done} intervention{'s' if n_done!=1 else ''} this season){RESET}"
-                     if n_done > 0 else ""))
+            header(f"PLAYOFFS  —  {rname}", f"Season {sn}  ·  Legitimacy: "
+                   + (GREEN if league.legitimacy >= 0.8 else
+                      (GOLD if league.legitimacy >= 0.5 else RED))
+                   + f"{league.legitimacy:.0%}" + RESET
+                   + (f"  {MUTED}({n_done} intervention{'s' if n_done!=1 else ''} this season){RESET}"
+                      if n_done > 0 else ""))
 
-            # Show matchups
-            print()
+            print(f"\n  {BOLD}Playoff Round Preview  —  {len(matchups)} series{RESET}")
+
             for i, (s1, s2) in enumerate(matchups, 1):
                 o1, d1, _, _ = season._start_ratings.get(s1, (s1.ortg, s1.drtg, s1.pace, s1.style_3pt))
                 o2, d2, _, _ = season._start_ratings.get(s2, (s2.ortg, s2.drtg, s2.pace, s2.style_3pt))
                 net1 = _rel_net(o1, d1, avg_o, avg_d)
                 net2 = _rel_net(o2, d2, avg_o, avg_d)
-                s1n = s1.franchise_at(sn).name[:24]
-                s2n = s2.franchise_at(sn).name[:24]
-                net1_c = GREEN if net1 > net2 else (RED if net1 < net2 else MUTED)
-                net2_c = GREEN if net2 > net1 else (RED if net2 < net1 else MUTED)
                 seed1_idx = season.regular_season_standings.index(s1) + 1
                 seed2_idx = season.regular_season_standings.index(s2) + 1
+
+                # Series win probability (logistic on net rating diff)
+                diff_prob = net1 - net2 + cfg.playoff_seed_pscore_bonus * 50
+                prob1 = round(100 / (1 + _math.exp(-diff_prob / 4)))
+                prob2 = 100 - prob1
+                fav, fav_prob = (s1, prob1) if prob1 >= prob2 else (s2, prob2)
+                fav_name = fav.franchise_at(sn).nickname
+                fav_c    = GREEN if fav_prob >= 65 else (GOLD if fav_prob >= 55 else MUTED)
+
+                # H2H regular season
+                h2h1 = sum(1 for g in season.regular_season_games
+                           if g.winner is s1 and (g.home is s2 or g.away is s2))
+                h2h2 = sum(1 for g in season.regular_season_games
+                           if g.winner is s2 and (g.home is s1 or g.away is s1))
+
+                # Intervention status
                 if (s1, s2) in bonuses:
-                    fav, bv = bonuses[(s1, s2)]
-                    btype  = "RIG" if bv >= RIG_BONUS else "nudge"
-                    b_col  = RED if btype == "RIG" else GOLD
-                    status = f"  {b_col}★ {btype} → {fav.franchise_at(sn).name[:14]}{RESET}"
+                    fav_b, bv = bonuses[(s1, s2)]
+                    btype = "RIGGED" if bv >= RIG_BONUS else "nudged"
+                    b_col = RED if btype == "RIGGED" else GOLD
+                    iv_tag = f"  {b_col}[{btype} → {fav_b.franchise_at(sn).nickname}]{RESET}"
                 else:
-                    status = ""
-                # Per-team roster row: star + co-star with fatigue + games missed
-                def _fat_str(player) -> str:
-                    nrg = (1 - player.fatigue) * 100
-                    fat_c = RED if nrg < 60 else (GOLD if nrg < 80 else MUTED)
-                    ps = season.player_stats.get(player.player_id)
-                    gm = ps.games_missed if ps else 0
-                    gm_str = f" {RED}({gm}out){RESET}" if gm >= 5 else ""
-                    return f"{fat_c}🔋{nrg:.0f}%{RESET}{gm_str}"
+                    iv_tag = ""
 
-                def _roster_row(t: Team) -> str:
-                    star   = t.roster[0] if len(t.roster) > 0 else None
-                    costar = t.roster[1] if len(t.roster) > 1 else None
-                    parts = []
-                    for lbl, p in [("★", star), ("·", costar)]:
-                        if p is None:
-                            continue
-                        tc = GOLD if p.ceiling_tier == TIER_ELITE else (CYAN if p.ceiling_tier == TIER_HIGH else "")
-                        parts.append(
-                            f"{lbl} {happiness_emoji(p.happiness)}"
-                            f"{tc}{p.name} ({p.ceiling_tier[0]}){RESET}"
-                            f" {_fat_str(p)}"
-                        )
-                    return "   ".join(parts)
-
-                champ_tag1 = f"  {GOLD}🏆×{s1.championships}{RESET}" if s1.championships else ""
-                champ_tag2 = f"  {GOLD}🏆×{s2.championships}{RESET}" if s2.championships else ""
+                # Matchup header
                 divider()
-                print(f"  {CYAN}{i}.{RESET} "
-                      f"({seed1_idx}) {BOLD}{s1n:<24}{RESET}  vs  "
-                      f"({seed2_idx}) {BOLD}{s2n:<24}{RESET}"
-                      f"  Net {net1_c}{net1:>+.0f}{RESET} v {net2_c}{net2:<+.0f}{RESET}"
-                      f"{status}")
-                print(f"      {CYAN}({seed1_idx}){RESET}  {_roster_row(s1)}{champ_tag1}")
-                print(f"      {CYAN}({seed2_idx}){RESET}  {_roster_row(s2)}{champ_tag2}")
-            divider()
+                s1n = s1.franchise_at(sn).name
+                s2n = s2.franchise_at(sn).name
+                print(f"\n  {CYAN}{i}.{RESET}  "
+                      f"({seed1_idx}) {BOLD}{s1n}{RESET}  vs  ({seed2_idx}) {BOLD}{s2n}{RESET}"
+                      f"  {MUTED}—  {fav_c}{fav_name} favored {fav_prob}%{RESET}{iv_tag}")
+                print()
 
+                # Team blocks
+                _team_block(s1, seed1_idx, "     ")
+                print()
+                _team_block(s2, seed2_idx, "     ")
+                print()
+
+                # Footer
+                print(f"     {MUTED}H2H this season:  "
+                      f"{s1.franchise_at(sn).nickname} {h2h1}–{h2h2} "
+                      f"{s2.franchise_at(sn).nickname}{RESET}")
+
+            divider()
             print()
             raw = prompt("Intervene in a series? Enter series # (or Enter to play):")
             if raw == "":
@@ -1398,7 +1457,6 @@ class CommissionerGame:
             s1, s2 = matchups[idx]
 
             # Pick favored team — full scouting card
-            import math as _math
             clear()
             header(f"SERIES SCOUT  —  {rname}", f"Season {sn}")
             o1, d1, p1, _  = season._start_ratings.get(s1, (s1.ortg, s1.drtg, s1.pace, s1.style_3pt))
