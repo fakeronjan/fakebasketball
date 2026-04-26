@@ -99,6 +99,7 @@ class Coach:
     happiness:           float = 0.70
     tenure:              int   = 0      # seasons with current team
     seasons_coached:     int   = 0      # career total
+    coy_wins:            int   = 0      # career Coach of the Year awards
     hot_seat:            bool  = False
     former_player:       bool  = False
     former_player_id:    str | None = None  # player_id of the playing career
@@ -133,13 +134,16 @@ class Coach:
         rating_scale = 0.50 + self.rating                # 0.50 poor  → 1.50 great
         scale = flex_scale * rating_scale
 
+        # COY reputation bonus: each win adds +0.02 fa_draw, capped at 3 wins
+        coy_bonus = min(3, self.coy_wins) * 0.02
+
         return {
             "ortg_mod":   base["ortg_mod"]   * scale,
             "drtg_mod":   base["drtg_mod"]   * scale,
             "chem_scale": 1.0 + (base["chem_scale"] - 1.0) * scale,
             "star_hap":   base["star_hap"]   * scale,
             "depth_hap":  base["depth_hap"]  * scale,
-            "fa_draw":    base["fa_draw"]    * scale,
+            "fa_draw":    base["fa_draw"]    * scale + coy_bonus,
         }
 
     # ── Fit scores ────────────────────────────────────────────────────────────
@@ -304,3 +308,38 @@ def coach_from_retired_player(player_id: str, name: str, gender: str,
 def generate_coaching_pool(n: int) -> list[Coach]:
     """Generate a pool of n lifer coaches for league initialization."""
     return [generate_coach() for _ in range(n)]
+
+
+def generate_coaches_balanced(n: int) -> list[Coach]:
+    """Generate n coaches with near-equal archetype distribution.
+
+    Ensures no archetype exceeds ~35% or falls below ~10% of the batch,
+    preventing the league from drifting into a single tactical meta at init.
+    Each archetype gets a base floor of n // len(ARCHETYPES) slots; the
+    remainder is distributed randomly across all archetypes.
+    """
+    base = n // len(ARCHETYPES)
+    remainder = n % len(ARCHETYPES)
+    arch_list: list[str] = []
+    for arch in ARCHETYPES:
+        arch_list.extend([arch] * base)
+    # Distribute remainder randomly (without repeating archetypes in the tail)
+    extra = random.sample(ARCHETYPES, min(remainder, len(ARCHETYPES)))
+    arch_list.extend(extra)
+    random.shuffle(arch_list)
+
+    coaches: list[Coach] = []
+    for arch in arch_list:
+        name, gender = _make_coach_name()
+        coaches.append(Coach(
+            coach_id     = _next_coach_id(),
+            name         = name,
+            gender       = gender,
+            archetype    = arch,
+            flexibility  = random.betavariate(2, 2),
+            horizon      = random.betavariate(2, 2),
+            rating       = random.betavariate(2, 3),
+            happiness    = random.uniform(0.60, 0.85),
+            former_player= False,
+        ))
+    return coaches

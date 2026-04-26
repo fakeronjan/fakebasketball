@@ -7,7 +7,8 @@ from collections import Counter
 from typing import Optional
 
 from coach import (Coach, generate_coach, generate_coaching_pool,
-                   coach_from_retired_player, ARCHETYPE_LABELS)
+                   generate_coaches_balanced, coach_from_retired_player,
+                   ARCHETYPE_LABELS)
 from config import Config
 from franchises import ALL_FRANCHISES, Franchise
 from owner import (Owner, generate_owner, generate_heir, generate_buyers,
@@ -201,10 +202,12 @@ class League:
         (roughly one per team) so the commissioner can make hires after
         firings or retirements.
         """
-        for team in self.teams:
-            team.coach = generate_coach()
-        # Seed pool: ~1 available coach per team as reserves
-        self._coaching_pool = generate_coaching_pool(max(4, len(self.teams)))
+        # Founding coaches: balanced across archetypes so no meta starts dominant
+        founding = generate_coaches_balanced(len(self.teams))
+        for team, coach in zip(self.teams, founding):
+            team.coach = coach
+        # Seed pool: ~1 available coach per team, also balanced
+        self._coaching_pool = generate_coaches_balanced(max(4, len(self.teams)))
 
     def _coaching_pool_hire(self, team: "Team") -> None:
         """Assign the best-fit available coach to a team (from the pool).
@@ -508,9 +511,11 @@ class League:
         if coy_candidates:
             best_delta, best_coach, best_team = max(coy_candidates, key=lambda x: x[0])
             if best_delta > 0.5:   # meaningful improvement threshold
-                season.coy       = best_coach
-                season.coy_team  = best_team
-                season.coy_delta = round(best_delta, 2)
+                season.coy        = best_coach
+                season.coy_team   = best_team
+                season.coy_delta  = round(best_delta, 2)
+                best_coach.coy_wins += 1          # builds long-term FA draw reputation
+                best_coach.hot_seat  = False      # COY win clears the hot seat
 
     # ── Losing-streak tracker ─────────────────────────────────────────────────
 
@@ -962,19 +967,27 @@ class League:
         available = sorted(self.free_agent_pool, key=lambda p: -p.overall)
         signed: list[Player] = []
 
+        def _fa_coach_bonus(team: "Team") -> float:
+            """Coach fa_draw modifier, scaled to be meaningful vs. other score axes."""
+            if team.coach is None:
+                return 0.0
+            return team.coach.compute_modifiers()["fa_draw"] * 10.0
+
         for player in available:
             open_teams = [t for t in self.teams if any(s is None for s in t.roster)]
             if not open_teams:
                 break
 
             if player.motivation == MOT_WINNING:
-                scored = sorted(open_teams, key=lambda t: -(t.ortg - t.drtg))
+                scored = sorted(open_teams,
+                                key=lambda t: -(t.ortg - t.drtg) - _fa_coach_bonus(t))
             elif player.motivation == MOT_MARKET:
                 scored = sorted(open_teams,
                                 key=lambda t: -(t.franchise.draw_factor
-                                                * t.franchise.effective_metro))
-            else:  # MOT_LOYALTY — no strong directional preference
-                scored = open_teams
+                                                * t.franchise.effective_metro)
+                                              - _fa_coach_bonus(t))
+            else:  # MOT_LOYALTY — culture/chemistry coach draws loyal players
+                scored = sorted(open_teams, key=lambda t: -_fa_coach_bonus(t))
 
             target = scored[0]
             slot_idx = next(i for i, s in enumerate(target.roster) if s is None)

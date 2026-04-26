@@ -3812,12 +3812,14 @@ class CommissionerGame:
         def dest_score(team: Team) -> float:
             win_score    = _rel_net(team.ortg, team.drtg, fa_avg_o, fa_avg_d)  # relative contention proxy
             market_score = team.franchise.draw_factor * team.franchise.effective_metro
+            # Coach reputation bonus: star_whisperer / chemistry coaches draw players
+            coach_bonus  = team.coach.compute_modifiers()["fa_draw"] if team.coach else 0.0
             if player.motivation == MOT_WINNING:
-                return 0.80 * win_score + 0.20 * market_score
+                return 0.80 * win_score + 0.20 * market_score + coach_bonus
             elif player.motivation == MOT_MARKET:
-                return 0.20 * win_score + 0.80 * market_score
-            else:  # loyalty — won't reach here normally, but handle gracefully
-                return win_score + market_score
+                return 0.20 * win_score + 0.80 * market_score + coach_bonus
+            else:  # loyalty — culture matters most
+                return win_score + market_score + coach_bonus
 
         scores = {t: max(0.01, dest_score(t)) for t in candidates}
         total  = sum(scores.values())
