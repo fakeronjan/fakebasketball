@@ -129,7 +129,7 @@ class Coach:
           - flexibility (0–1): rigid (0) amplifies archetype; flexible (1) dampens it
         """
         base = ARCHETYPE_MODS[self.archetype]
-        flex_scale   = 1.50 - 0.80 * self.flexibility   # 1.50 rigid → 0.70 flexible
+        flex_scale   = 1.35 - 0.70 * self.flexibility   # 1.35 rigid → 0.65 flexible
         rating_scale = 0.50 + self.rating                # 0.50 poor  → 1.50 great
         scale = flex_scale * rating_scale
 

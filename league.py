@@ -682,20 +682,28 @@ class League:
                 )
                 self._coaching_pool.append(coach)
 
-        # 4. Compute happiness and popularity for all rostered players
+        # 4. Compute happiness, popularity, and development boost for rostered players
         for team in self.teams:
             coach_mods = team.coach.compute_modifiers() if team.coach else {}
+            # Horizon: high-horizon coaches accelerate developing players
+            # boost of 0–4% to mult for players still before their peak season
+            horizon_boost = 0.0
+            if team.coach is not None and team.coach.horizon > 0.5:
+                horizon_boost = 0.04 * (team.coach.horizon - 0.5) * 2.0
+
             for slot_idx, player in enumerate(team.roster):
                 if player is not None:
                     h = self._compute_player_happiness(player, team, season)
                     if coach_mods:
-                        # Apply archetype-specific happiness mod
                         is_star = player.peak_overall >= 12
                         delta = (coach_mods["star_hap"] if is_star
                                  else coach_mods["depth_hap"])
                         h = max(0.0, min(1.0, h + delta))
-                    player.happiness   = h
-                    player.popularity  = self._compute_player_popularity(player, season)
+                    player.happiness  = h
+                    player.popularity = self._compute_player_popularity(player, season)
+                    # Development boost: only for pre-peak players
+                    if horizon_boost > 0 and not player.is_declining:
+                        player.dev_boost = horizon_boost
 
         # 5. Contract expirations — re-sign or enter FA pool
         new_fas: list[Player] = []

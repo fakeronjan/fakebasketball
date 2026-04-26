@@ -312,6 +312,7 @@ class Player:
     seasons_with_team: int = 0     # resets on team change; drives loyalty happiness
     fatigue: float = 0.0           # accumulated playoff load (0.0–1.0); decays each offseason
     crossed_picket: bool = False   # True if player signed a scab/replacement contract (Type C)
+    dev_boost: float = 0.0        # development accelerator from high-horizon coach; reset each season
 
     # ── Computed: current ratings ─────────────────────────────────────────────
 
@@ -323,12 +324,12 @@ class Player:
     @property
     def ortg_contrib(self) -> float:
         """Current offensive contribution delta from baseline."""
-        return round(self.peak_ortg * self.mult, 2)
+        return round(self.peak_ortg * min(1.0, self.mult + self.dev_boost), 2)
 
     @property
     def drtg_contrib(self) -> float:
         """Current defensive contribution delta (negative = suppresses scoring)."""
-        return round(self.peak_drtg * self.mult, 2)
+        return round(self.peak_drtg * min(1.0, self.mult + self.dev_boost), 2)
 
     @property
     def pronoun(self) -> str:
@@ -385,6 +386,7 @@ class Player:
 
     def advance_season(self) -> bool:
         """Increment age and career counter. Returns True if player retires."""
+        self.dev_boost = 0.0   # reset; league reapplies based on current coach
         self.seasons_played += 1
         self.age += 1
         if self.contract_years_remaining > 0:
