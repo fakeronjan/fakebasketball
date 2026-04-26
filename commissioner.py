@@ -4334,16 +4334,37 @@ class CommissionerGame:
     # ── Post-season decisions ─────────────────────────────────────────────────
 
     def _post_season(self, season: Season):
+        league = self.league
+        sn     = season.number
+
+        # ── Snapshot pre-offseason state for recap diff ───────────────────────
+        pre_coaches = {
+            t.team_id: (getattr(t.coach, 'coach_id', None), getattr(t.coach, 'name', None))
+            for t in league.teams
+        }
+        pre_owners = {
+            t.team_id: (id(t.owner), getattr(t.owner, 'name', None))
+            for t in league.teams
+        }
+        pre_rosters = {
+            t.team_id: {p.player_id for p in t.roster if p is not None}
+            for t in league.teams
+        }
+        pre_expansion_len  = len(getattr(league, 'expansion_log',  []))
+        pre_merger_len     = len(getattr(league, 'merger_log',     []))
+        pre_relocation_len = len(getattr(league, 'relocation_log', []))
+        self._offseason_cba_summary: str | None = None   # set by CBA handler if it fires
+
         # Revenue: 20% to commissioner treasury, 80% to team owners (with competence penalty)
-        commissioner_take = self.league.distribute_revenue()
+        commissioner_take = league.distribute_revenue()
         self._treasury += commissioner_take
         self._last_revenue = commissioner_take
         # Update owner happiness now that P&L is finalized
         # (coach happiness already computed in _run_one_season so COY shows in awards)
-        self.league.update_all_owner_happiness(season)
+        league.update_all_owner_happiness(season)
         self._handle_player_offseason(season)
         self._owner_actions = self._generate_all_owner_actions(season)
-        if season.number >= 5 and season.number % 5 == 0:
+        if sn >= 5 and sn % 5 == 0:
             self._handle_cba_negotiation(season)
         self._handle_rival_league(season)
         self._commissioner_desk(season)
@@ -4352,6 +4373,12 @@ class CommissionerGame:
         self._handle_owner_meeting(season)
         self._handle_expansion_decision(season)
         self._handle_merger_decision(season)
+
+        # ── Offseason recap (last thing before next season) ───────────────────
+        self._show_offseason_recap(
+            season, pre_coaches, pre_owners, pre_rosters,
+            pre_expansion_len, pre_merger_len, pre_relocation_len,
+        )
 
     # ── Player offseason ──────────────────────────────────────────────────────
 
@@ -4444,6 +4471,216 @@ class CommissionerGame:
 
         # FA pool: auto-resolved silently. Star FA events already had their
         # own interactive screen above. Rival siphon count surfaced via desk flags.
+
+    def _show_offseason_recap(
+        self,
+        season: Season,
+        pre_coaches:       dict,
+        pre_owners:        dict,
+        pre_rosters:       dict,
+        pre_expansion_len: int,
+        pre_merger_len:    int,
+        pre_relocation_len:int,
+    ) -> None:
+        """Summary of everything that changed this offseason, before next season starts."""
+        from coach import ARCHETYPE_LABELS as _ARCH_LBLS
+        league = self.league
+        sn     = season.number
+
+        # ── Derive each category ──────────────────────────────────────────────
+
+        # a) Retirements — star/co-star tier only for the main list; others as a count
+        retiring = self._retiring_this_season
+        retiring_notable = [p for p in retiring if p.ceiling_tier in (TIER_ELITE, TIER_HIGH)]
+        retiring_others  = len(retiring) - len(retiring_notable)
+
+        # Build a set of all player IDs known pre-offseason (across all teams)
+        all_pre_pids: set[int] = set()
+        pre_team_of: dict[int, int] = {}  # player_id → team_id
+        for tid, pids in pre_rosters.items():
+            for pid in pids:
+                all_pre_pids.add(pid)
+                pre_team_of[pid] = tid
+
+        # b) Star-quality draft picks — new players on rosters not seen pre-offseason
+        draft_stars: list[tuple] = []
+        for t in league.teams:
+            for p in t.roster:
+                if p is None:
+                    continue
+                if p.player_id not in all_pre_pids and p.ceiling_tier in (TIER_ELITE, TIER_HIGH):
+                    draft_stars.append((p, t))
+
+        # c) Star players who changed teams (skip retirees and new draftees)
+        retiring_pids = {p.player_id for p in retiring}
+        moved_stars: list[tuple] = []  # (player, old_team_id, new_team)
+        for t in league.teams:
+            for p in t.roster:
+                if p is None or p.player_id in retiring_pids:
+                    continue
+                if p.player_id not in all_pre_pids:
+                    continue  # new draftee
+                old_tid = pre_team_of.get(p.player_id)
+                if old_tid is not None and old_tid != t.team_id:
+                    if p.ceiling_tier in (TIER_ELITE, TIER_HIGH):
+                        old_team = next((x for x in league.teams if x.team_id == old_tid), None)
+                        moved_stars.append((p, old_team, t))
+
+        # d) Coaching changes
+        coach_changes: list[tuple] = []  # (team, old_name, new_coach_or_None)
+        for t in league.teams:
+            old_cid, old_cname = pre_coaches.get(t.team_id, (None, None))
+            new_cid  = getattr(t.coach, 'coach_id', None)
+            new_name = getattr(t.coach, 'name', None)
+            if old_cid != new_cid:
+                coach_changes.append((t, old_cname, t.coach))
+
+        # e) Ownership changes
+        owner_changes: list[tuple] = []  # (team, old_name, new_name)
+        for t in league.teams:
+            old_oid, old_oname = pre_owners.get(t.team_id, (None, None))
+            new_oid  = id(t.owner)
+            new_oname = getattr(t.owner, 'name', None)
+            if old_oid != new_oid:
+                owner_changes.append((t, old_oname, new_oname))
+
+        # f) Rule changes
+        rule_changed = season.meta_shock
+
+        # g) Rival league — new entries in logs since snapshot
+        new_expansions  = league.expansion_log[pre_expansion_len:]
+        new_mergers     = league.merger_log[pre_merger_len:]
+        new_relocations = league.relocation_log[pre_relocation_len:]
+        rival_notice    = getattr(self, '_rival_fa_notice', None)
+        rival           = league.rival_league
+
+        # CBA
+        cba_summary = getattr(self, '_offseason_cba_summary', None)
+
+        # ── Bail early if nothing notable happened ────────────────────────────
+        has_content = any([
+            retiring_notable, retiring_others,
+            draft_stars, moved_stars,
+            coach_changes, owner_changes,
+            rule_changed, cba_summary,
+            new_expansions, new_mergers, new_relocations,
+            rival_notice, (rival and rival.active),
+        ])
+        if not has_content:
+            return
+
+        # ── Display ───────────────────────────────────────────────────────────
+        clear()
+        header("OFFSEASON RECAP", f"Between Season {sn} and Season {sn + 1}")
+
+        def _section(title: str) -> None:
+            print(f"\n  {BOLD}{title}{RESET}")
+            divider()
+
+        # a) Retirements
+        if retiring_notable or retiring_others:
+            _section("RETIREMENTS")
+            for p in sorted(retiring_notable, key=lambda x: -x.peak_overall):
+                tc     = GOLD if p.ceiling_tier == TIER_ELITE else CYAN
+                ps     = season.player_stats.get(p.player_id)
+                ppg_s  = f"  {MUTED}{ps.ppg:.1f} PPG this season{RESET}" if (ps and ps.games > 0) else ""
+                age_s  = f"Age {p.age}"
+                print(f"  {tc}{'★' if p.ceiling_tier==TIER_ELITE else '·'}  {p.name:<22}{RESET}"
+                      f"  {p.position}  {age_s}{ppg_s}")
+            if retiring_others:
+                print(f"  {MUTED}  + {retiring_others} other player{'s' if retiring_others != 1 else ''} retired{RESET}")
+
+        # b) Draft standouts
+        if draft_stars:
+            _section("DRAFT CLASS STANDOUTS")
+            for p, t in sorted(draft_stars, key=lambda x: -x[0].peak_overall):
+                tc    = GOLD if p.ceiling_tier == TIER_ELITE else CYAN
+                tier_s = "Elite ceiling" if p.ceiling_tier == TIER_ELITE else "High ceiling"
+                tname  = t.franchise_at(sn + 1).name if t else "—"
+                print(f"  {tc}{'⭐' if p.ceiling_tier==TIER_ELITE else '◆'}  {p.name:<22}{RESET}"
+                      f"  {p.position} · Age {p.age}"
+                      f"  →  {tname}"
+                      f"  {MUTED}{tier_s}{RESET}")
+
+        # c) Player movement
+        if moved_stars:
+            _section("PLAYER MOVEMENT")
+            for p, old_t, new_t in sorted(moved_stars, key=lambda x: -x[0].peak_overall):
+                tc       = GOLD if p.ceiling_tier == TIER_ELITE else CYAN
+                old_name = old_t.franchise_at(sn).nickname if old_t else "?"
+                new_name = new_t.franchise_at(sn + 1).nickname
+                slot_lbl = "Star" if p.ceiling_tier == TIER_ELITE else "Co-Star"
+                mot_c    = GREEN if p.motivation == MOT_WINNING else (GOLD if p.motivation == MOT_MARKET else CYAN)
+                print(f"  {tc}{p.name:<22}{RESET}  {MUTED}{slot_lbl}{RESET}"
+                      f"  {old_name}  →  {new_name}"
+                      f"  {MUTED}({mot_c}{p.motivation}{RESET}{MUTED}){RESET}")
+
+        # d) Coaching changes
+        if coach_changes:
+            _section("COACHING CHANGES")
+            for t, old_name, new_coach in coach_changes:
+                tname   = t.franchise_at(sn).name
+                old_s   = f"{MUTED}{old_name or '—'}{RESET}"
+                if new_coach:
+                    arch  = _ARCH_LBLS.get(new_coach.archetype, new_coach.archetype)
+                    new_s = f"{CYAN}{new_coach.name}{RESET}  {MUTED}({arch}){RESET}"
+                else:
+                    new_s = f"{MUTED}— vacant{RESET}"
+                print(f"  {tname:<28}  {old_s}  →  {new_s}")
+
+        # e) Ownership changes
+        if owner_changes:
+            _section("OWNERSHIP CHANGES")
+            for t, old_name, new_name in owner_changes:
+                tname = t.franchise_at(sn).name
+                mot_s = f"  {MUTED}{t.owner.motivation} · {t.owner.loyalty}{RESET}" if t.owner else ""
+                print(f"  {tname:<28}  {MUTED}{old_name or '—'}{RESET}  →  {BOLD}{new_name or '—'}{RESET}{mot_s}")
+
+        # f) Rule changes
+        if rule_changed:
+            _section("RULE CHANGES")
+            meta = league.league_meta
+            if meta > 0.3:
+                era_desc = "three-point era — pace and spacing rewarded"
+            elif meta < -0.3:
+                era_desc = "paint-dominant era — bigs and post play in focus"
+            else:
+                era_desc = "balanced era — no dominant style"
+            print(f"  {RED}⚡{RESET}  New rules shift the league toward a {BOLD}{era_desc}{RESET}")
+
+        # g) League structure (expansion, relocation, merger)
+        has_structure = new_expansions or new_mergers or new_relocations
+        if has_structure:
+            _section("LEAGUE STRUCTURE")
+            for log_sn, fname, is_sec in new_expansions:
+                label = "Expansion team" if not is_sec else "Merger addition"
+                print(f"  {GREEN}+{RESET}  {label}: {BOLD}{fname}{RESET}  ({len(league.teams)} teams total)")
+            for log_sn, fname, is_sec in new_mergers:
+                print(f"  {CYAN}↗{RESET}  Rival league absorbed: {BOLD}{fname}{RESET}")
+            for entry in new_relocations:
+                log_sn, old_city, new_city = entry[0], entry[1], entry[2]
+                print(f"  {GOLD}→{RESET}  Relocation: {old_city}  →  {BOLD}{new_city}{RESET}")
+
+        # CBA
+        if cba_summary:
+            _section("COLLECTIVE BARGAINING")
+            stop_c = RED if "stoppage" in cba_summary.lower() else GREEN
+            print(f"  {stop_c}{cba_summary}{RESET}")
+
+        # h) Rival league
+        has_rival = rival_notice or (rival and rival.active)
+        if has_rival:
+            _section("RIVAL LEAGUE")
+            if rival and rival.active:
+                strength_c = RED if rival.strength >= 0.70 else (GOLD if rival.strength >= 0.50 else CYAN)
+                print(f"  {strength_c}⚔{RESET}  {BOLD}{rival.name}{RESET}  "
+                      f"{strength_c}{rival_strength_label(rival.strength)}  ({rival.strength:.0%}){RESET}")
+            if rival_notice:
+                rname, n_gone = rival_notice
+                print(f"  {GOLD}⚔{RESET}  {rname} signed {GOLD}{n_gone} free agent{'s' if n_gone != 1 else ''}{RESET} from your pool")
+
+        print()
+        press_enter(f"Press Enter to begin Season {sn + 1}...")
 
     def _handle_star_fa_event(self, player: Player, season: Season) -> None:
         """Commissioner can nudge or rig where a star free agent signs."""
@@ -4757,15 +4994,7 @@ class CommissionerGame:
                 f"{strength_c}⚔{RESET}  Rival league active: {BOLD}{rival.name}{RESET}  "
                 f"{strength_c}{sl}  ({rival.strength:.0%}){RESET}"
             )
-        # Rival FA siphon — happened this offseason
-        fa_notice = getattr(self, '_rival_fa_notice', None)
-        if fa_notice:
-            short_name, n_gone = fa_notice
-            flags.append(
-                f"{GOLD}⚔{RESET}  {BOLD}{short_name}{RESET} signed "
-                f"{GOLD}{n_gone} free agent{'s' if n_gone != 1 else ''}{RESET} "
-                f"from your pool this offseason"
-            )
+        # (Rival FA siphon now surfaced in the offseason recap screen)
 
         # Type B ringleader detection warning
         if (league._defection_warning_season is not None
@@ -7409,6 +7638,19 @@ class CommissionerGame:
             "risk":     risk_pct,
             "stoppage": league.work_stoppage_this_season,
         })
+        # Store a one-line summary for the offseason recap
+        if league.work_stoppage_this_season:
+            self._offseason_cba_summary = (
+                "Work stoppage — CBA ratified after season shortened" if risk_pct < 55
+                else "Full work stoppage — season cancelled, legitimacy and popularity crashed"
+            )
+        else:
+            agreed_items = [DEMANDS[did]["title"].title()
+                            for did, dec, _ in results if dec != "3" and did in DEMANDS]
+            self._offseason_cba_summary = (
+                f"CBA ratified — {', '.join(agreed_items[:3])}" if agreed_items
+                else "CBA ratified — no new concessions"
+            )
         press_enter()
 
     def _cba_apply(self, league, demand_id: str, decision: str) -> None:
