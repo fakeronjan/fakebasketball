@@ -52,7 +52,7 @@ class Config:
     # At avg popularity 0.50: effective bonus ≈ base + scale×0.50 = 0.007 + 0.007 = 0.014 (unchanged league avg).
     home_pscore_bonus_base: float = 0.007      # fixed floor — travel fatigue, court familiarity
     home_pscore_bonus_pop_scale: float = 0.014  # crowd component; multiplied by home team's popularity
-    playoff_seed_pscore_bonus: float = 0.005    # reduced — popular/better teams already get more home court
+    playoff_seed_pscore_bonus: float = 0.0      # removed — home court + team quality carry playoff edge
     pace_home_weight: float = 0.80       # home team weight in game pace calculation
     # ── Offseason random walk ─────────────────────────────────────────────────
     ortg_sigma: float = 2.0
@@ -134,12 +134,6 @@ class Config:
     slot_weight_star:    float = 0.50        # Star weight in team rating aggregation
     slot_weight_costar:  float = 0.30        # Co-Star weight
     slot_weight_starter: float = 0.20        # Starter weight
-    # Shot selection weights: who initiates each possession (≠ rating weights)
-    # Bench slot absorbs remaining weight — top-3 total ≈ 66% of possessions.
-    slot_shot_star:    float = 0.21   # was 0.28→0.24→0.21 — reduced to bring scoring leader PPG to ~26-30
-    slot_shot_costar:  float = 0.22
-    slot_shot_starter: float = 0.16
-    slot_shot_bench:   float = 0.37   # aggregate "rest of team" (no individual tracking)
     player_career_min: int = 8
     player_career_max: int = 20
     player_founding_contract: int = 3        # all founding players start on 3-year deals

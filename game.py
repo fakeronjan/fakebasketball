@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -134,27 +135,98 @@ def _game_pace(home: Team, away: Team, cfg: Config, league_meta: float = 0.0) ->
     return max(50, round(base + league_meta * cfg.meta_pace_scale))
 
 
-def _pick_shooter(team: Team, cfg: Config,
-                  out_players: frozenset[int] = frozenset()) -> tuple[Player | None, int]:
-    """Select which player initiates this possession.
+def _pick_shooter(
+    team:        Team,
+    cfg:         Config,
+    out_players: frozenset[int] = frozenset(),
+    defense:     Team | None    = None,
+    out_def:     frozenset[int] = frozenset(),
+    league_meta: float          = 0.0,
+) -> tuple[Player | None, int]:
+    """Select which player initiates this possession using dynamic usage weights.
 
-    Named-player shot weights (28/22/16%) + bench slot (34%) ensure the top-3
-    account for ~66% of possessions, matching historical norms. Returns
-    (None, -1) for bench possessions; bench scoring is tracked under player_id=0.
-    Injured players (out_players) are excluded; their weight shifts to others naturally
-    via random.choices normalization.
+    Weight = role_base × talent_factor × fatigue_factor × matchup_factor
+
+    role_base: Star 1.12 / Co-Star 1.00 / Starter 0.86 (tighter spread than hard
+      slots so balanced rosters stay balanced; coach mods applied multiplicatively).
+
+    talent_factor = clamp(1.0 + 0.025 × ortg_contrib, 0.75, 1.35):
+      Capped linear — elite star (+14) gets 1.35×, weak player (−10) floors at 0.75.
+      Avoids exponential explosion while still creating natural heliocentric drift.
+
+    fatigue_factor = 1 − fatigue × 0.25:
+      Tired stars still play but usage bends toward fresher options.
+
+    matchup_factor: capped at 18% suppression so elite defenders reduce usage
+      without erasing stars (elite −10 defender → ×0.82 on star usage).
+
+    bench_weight = 1.75 (coach-adjusted) — bench stays a real share of possessions.
+
+    Returns (None, -1) for bench possessions (tracked under player_id=0).
     """
-    shot_weights = [cfg.slot_shot_star, cfg.slot_shot_costar, cfg.slot_shot_starter]
+    from coach import ARCH_WHISPERER, ARCH_MOTIVATOR, ARCH_CHEMISTRY, ARCH_OFFENSIVE
+
+    # ── Base role weights and bench ───────────────────────────────────────────
+    # Index: 0=Star, 1=Co-Star, 2=Starter
+    role_wts = [1.12, 1.00, 0.86]
+    bench_wt = 1.75
+
+    # ── Coach usage modifiers (multiplicative, gentle) ────────────────────────
+    coach = getattr(team, 'coach', None)
+    if coach is not None:
+        arch = coach.archetype
+        if arch == ARCH_WHISPERER:
+            role_wts[0] *= 1.12   # amplify star
+            role_wts[2] *= 0.94   # compress starter
+            bench_wt    *= 0.92
+        elif arch == ARCH_MOTIVATOR:
+            role_wts[0] *= 0.96   # soften star
+            role_wts[1] *= 1.06   # lift co-star
+            role_wts[2] *= 1.10   # lift starter
+            bench_wt    *= 1.12
+        elif arch == ARCH_CHEMISTRY:
+            # Smooth named-player weights 20% toward their mean
+            mean = sum(role_wts) / 3
+            role_wts = [0.80 * w + 0.20 * mean for w in role_wts]
+        elif arch == ARCH_OFFENSIVE:
+            role_wts[0] *= 1.05   # slight star/costar lift
+            role_wts[1] *= 1.03
+            bench_wt    *= 0.98
+
+    # ── Likely-defender quality by position ───────────────────────────────────
+    pos_def_drtg: dict[str, float] = {}
+    if defense is not None:
+        active_def = [p for p in defense.roster
+                      if p is not None and p.player_id not in out_def]
+        for pos in set(p.position for p in active_def):
+            same = [p.drtg_contrib for p in active_def if p.position == pos]
+            if same:
+                pos_def_drtg[pos] = sum(same) / len(same)
+
+    # ── Per-player weights ────────────────────────────────────────────────────
     filled = [(team.roster[i], i) for i in range(len(team.roster))
               if team.roster[i] is not None
               and team.roster[i].player_id not in out_players]
 
-    # Choices: each named player + the bench aggregate slot
+    wts: list[float] = []
+    for player, slot_idx in filled:
+        # Capped linear talent: +10 → 1.25×, +14+ caps at 1.35×, negative floors at 0.75
+        talent    = max(0.75, min(1.35, 1.0 + 0.025 * player.ortg_contrib))
+        # fatigue: heavy miles push usage toward fresher options
+        fatigue_f = max(0.10, 1.0 - player.fatigue * 0.25)
+        # matchup: elite defender (drtg_contrib ≈ −10) suppresses usage by ≤18%
+        def_drtg  = pos_def_drtg.get(player.position, 0.0)
+        suppression = min(0.18, max(0.0, -def_drtg) * 0.018)
+        matchup_f = 1.0 - suppression
+
+        w = role_wts[slot_idx] * talent * fatigue_f * matchup_f
+        wts.append(max(0.05, w))
+
     choices = filled + [(None, -1)]
-    wts     = [shot_weights[idx] for _, idx in filled] + [cfg.slot_shot_bench]
+    wts     = wts + [max(0.10, bench_wt)]
 
     chosen = random.choices(choices, weights=wts)[0]
-    return chosen   # (Player | None, slot_idx)  — None signals a bench possession
+    return chosen   # (Player | None, slot_idx) — None signals a bench possession
 
 
 def _pick_zone(shooter: Player | None) -> str:
@@ -250,7 +322,7 @@ def _sim_possession(
     rest of the make% computation is unchanged.
     Injured players (out_off, out_def) are excluded from shooter and defender selection.
     """
-    shooter, _  = _pick_shooter(offense, cfg, out_off)
+    shooter, _  = _pick_shooter(offense, cfg, out_off, defense, out_def, league_meta)
     zone        = _pick_zone(shooter)
     defender    = _pick_defender(defense, shooter, out_def)
     ortg_scale  = cfg.ortg_baseline
