@@ -2519,6 +2519,7 @@ class CommissionerGame:
                 else f"{MUTED}Rival League     no rival league yet{RESET}"
             )
             idx = choose([
+                f"Power Structure  {MUTED}star · coach · owner · risk — one row per team{RESET}",
                 f"League History   {MUTED}season-by-season champions, scorer, era & parity{RESET}",
                 f"Team History     {MUTED}full record for any team with top player each year{RESET}",
                 f"Player Stats     {MUTED}season leaders · best single seasons · career leaders{RESET}",
@@ -2533,21 +2534,157 @@ class CommissionerGame:
                 f"League Health    {MUTED}pillar scores trend — Integrity · Parity · Drama · Entertainment{RESET}",
                 rival_label,
                 f"{MUTED}Back{RESET}",
-            ], default=13)
-            if   idx == 0:  self._show_league_history(season)
-            elif idx == 1:  self._show_team_history(season)
-            elif idx == 2:  self._show_player_stats(season)
-            elif idx == 3:  self._show_rosters(season)
-            elif idx == 4:  self._show_owner_dashboard(season)
-            elif idx == 5:  self._show_coach_dashboard(season)
-            elif idx == 6:  self._show_market_map(season)
-            elif idx == 7:  self._show_event_log(season)
-            elif idx == 8:  self._show_alltime_records(season)
-            elif idx == 9:  self._show_rivalries(season)
-            elif idx == 10: self._show_playoff_analysis(season)
-            elif idx == 11: self._show_league_health_report(season)
-            elif idx == 12: self._show_rival_league_report(season)
+            ], default=14)
+            if   idx == 0:  self._show_power_structure(season)
+            elif idx == 1:  self._show_league_history(season)
+            elif idx == 2:  self._show_team_history(season)
+            elif idx == 3:  self._show_player_stats(season)
+            elif idx == 4:  self._show_rosters(season)
+            elif idx == 5:  self._show_owner_dashboard(season)
+            elif idx == 6:  self._show_coach_dashboard(season)
+            elif idx == 7:  self._show_market_map(season)
+            elif idx == 8:  self._show_event_log(season)
+            elif idx == 9:  self._show_alltime_records(season)
+            elif idx == 10: self._show_rivalries(season)
+            elif idx == 11: self._show_playoff_analysis(season)
+            elif idx == 12: self._show_league_health_report(season)
+            elif idx == 13: self._show_rival_league_report(season)
             else: break
+
+    # ── Report: Team Power Structure ─────────────────────────────────────────
+
+    def _show_power_structure(self, season: Season) -> None:
+        """One-row-per-team synthesis: star mood · coach security · owner pressure · risk."""
+        import re as _re
+        from coach import ARCHETYPE_LABELS, ARCH_OFFENSIVE, ARCH_DEFENSIVE
+        league = self.league
+        sn     = season.number
+        _ANSI  = _re.compile(r'\x1b\[[0-9;]*m')
+        def _vpad(s: str, w: int) -> str:
+            """Pad s to visual width w, ignoring ANSI escape codes."""
+            return s + ' ' * max(0, w - len(_ANSI.sub('', s)))
+
+        # ── Risk score + label per team ───────────────────────────────────────
+        def _risk(team) -> tuple[int, str, str]:
+            """Return (sort_score, label, color)."""
+            score = 0
+            star_bad = star_exp = coach_hs = owner_dem = reloc_bad = False
+
+            star = next((p for p in team.roster if p is not None), None)
+            if star:
+                if star.happiness < 0.40:
+                    score += 3; star_bad = True
+                elif star.happiness < 0.55:
+                    score += 1
+                if star.contract_years_remaining <= 1:
+                    score += 2; star_exp = True
+
+            if team.coach and team.coach.hot_seat:
+                score += 2; coach_hs = True
+
+            owner = team.owner
+            if owner:
+                if owner.threat_level == THREAT_DEMAND:
+                    score += 3; owner_dem = True
+                elif owner.threat_level == THREAT_LEAN:
+                    score += 1
+                if team._consecutive_losing_seasons >= 4:
+                    score += 1; reloc_bad = True
+
+            # Synthesise into a label
+            n_red = sum([star_bad, coach_hs, owner_dem])
+            if n_red >= 2 or score >= 7:
+                return score, "FRACTURE",     RED
+            if owner_dem and reloc_bad:
+                return score, "reloc risk",   RED
+            if star_bad or (star_exp and star and star.happiness < 0.55):
+                return score, "star flight",  GOLD
+            if owner_dem:
+                return score, "owner crisis", GOLD
+            if coach_hs:
+                return score, "coach fire",   GOLD
+            if score >= 3:
+                return score, "unstable",     GOLD
+            return score, "stable",           GREEN
+
+        teams = sorted(league.teams, key=lambda t: -_risk(t)[0])
+
+        clear()
+        header("TEAM POWER STRUCTURE", f"After Season {sn}  ·  {len(teams)} teams")
+        print(f"\n  {MUTED}{'Team':<24} {'Star':<26} {'Coach':<22} {'Owner':<20} {'Risk'}{RESET}\n")
+
+        for t in teams:
+            tname = t.franchise_at(sn).name[:22]
+            _, risk_lbl, risk_c = _risk(t)
+
+            # ── Star column ───────────────────────────────────────────────────
+            star = next((p for p in t.roster if p is not None), None)
+            if star:
+                slot_idx = t.roster.index(star)
+                slot_tag = "" if slot_idx == 0 else (f"{MUTED}co{RESET} " if slot_idx == 1 else f"{MUTED}st{RESET} ")
+                ctr = star.contract_years_remaining
+                ctr_c = RED if ctr <= 1 else (GOLD if ctr <= 2 else MUTED)
+                mot_s = star.motivation[:3].title()
+                # Short name: first initial + last name
+                parts = star.name.split()
+                short = f"{parts[0][0]}. {parts[-1]}" if len(parts) > 1 else star.name
+                short = short[:14]
+                mood_c = GREEN if star.happiness >= 0.60 else (GOLD if star.happiness >= 0.40 else RED)
+                star_col = (f"{slot_tag}{happiness_emoji(star.happiness)} "
+                            f"{mood_c}{short:<14}{RESET} "
+                            f"{ctr_c}{ctr}yr{RESET} {MUTED}{mot_s}{RESET}")
+            else:
+                star_col = f"{MUTED}— no players{RESET}"
+
+            # ── Coach column ──────────────────────────────────────────────────
+            c = t.coach
+            if c:
+                arch_short = ARCHETYPE_LABELS.get(c.archetype, c.archetype)
+                # Abbreviate archetype
+                arch_abbr = {
+                    "Culture Coach":        "Culture",
+                    "Star Whisperer":       "Whisperer",
+                    "Defensive Mastermind": "Defensive",
+                    "Offensive Innovator":  "Offensive",
+                    "Motivator":            "Motivator",
+                }.get(arch_short, arch_short[:10])
+                if c.hot_seat:
+                    coach_col = f"{RED}HOT SEAT{RESET} {MUTED}{arch_abbr}{RESET}"
+                else:
+                    ch_c = GREEN if c.happiness >= 0.60 else (GOLD if c.happiness >= 0.40 else MUTED)
+                    mood_word = "content" if c.happiness >= 0.60 else ("uneasy" if c.happiness >= 0.40 else "unhappy")
+                    coach_col = f"{ch_c}{mood_word:<8}{RESET} {MUTED}{arch_abbr}{RESET}"
+            else:
+                coach_col = f"{MUTED}— no coach{RESET}"
+
+            # ── Owner column ──────────────────────────────────────────────────
+            o = t.owner
+            if o:
+                thr_lbl = {0: "Content", 1: "Watching", 2: "Demanding"}.get(o.threat_level, "")
+                thr_c   = RED if o.threat_level == 2 else (GOLD if o.threat_level == 1 else GREEN)
+                mot_lbl = o.motivation_label()[:8]
+                mot_c   = (GREEN if o.motivation == MOT_WINNING
+                           else GOLD if o.motivation == MOT_MONEY else CYAN)
+                owner_col = f"{thr_c}{thr_lbl:<10}{RESET} {mot_c}{mot_lbl}{RESET}"
+            else:
+                owner_col = f"{MUTED}— no owner{RESET}"
+
+            print(f"  {tname:<24} {_vpad(star_col, 26)} {_vpad(coach_col, 22)} "
+                  f"{_vpad(owner_col, 20)} {risk_c}{risk_lbl}{RESET}")
+
+        # ── Summary footer ────────────────────────────────────────────────────
+        divider()
+        n_fracture  = sum(1 for t in teams if _risk(t)[1] == "FRACTURE")
+        n_risk      = sum(1 for t in teams if _risk(t)[2] in (RED, GOLD))
+        n_stable    = sum(1 for t in teams if _risk(t)[1] == "stable")
+        parts = []
+        if n_fracture:  parts.append(f"{RED}{n_fracture} fracture{RESET}")
+        at_risk = n_risk - n_fracture
+        if at_risk:     parts.append(f"{GOLD}{at_risk} at risk{RESET}")
+        if n_stable:    parts.append(f"{GREEN}{n_stable} stable{RESET}")
+        if parts:
+            print(f"\n  {' · '.join(parts)}")
+        press_enter()
 
     # ── Report: League Health Trend ───────────────────────────────────────────
 
