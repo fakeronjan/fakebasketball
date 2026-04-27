@@ -322,6 +322,7 @@ class CommissionerGame:
         self.season_num = 0
         self._prev_league_pop = 0.0
         self._rule_changes_made: int = 0  # cumulative rule changes (drives cost escalation)
+        self._heavy_sharing_seasons: int = 0  # consecutive seasons of heavy revenue sharing
         self._last_pop_signals: dict = {}   # signal breakdown from most recent season
         self._last_pillar_scores: dict = {}  # four-pillar health scores from most recent season
         self._treasury: float = 0.0       # accumulated commissioner funds (carry-over)
@@ -488,6 +489,7 @@ class CommissionerGame:
              _defection_warning_shown=set(),
              _walkout_just_formed=False,
              _current_season=None,
+             _heavy_sharing_seasons=0,
         )
 
         return patched
@@ -5335,48 +5337,102 @@ class CommissionerGame:
                 self._do_format_review(season)
 
     def _do_revenue_sharing(self, season: Season) -> None:
-        """Redistribute a portion of the league treasury to loss-making teams.
+        """Redistribute treasury to struggling teams — broader than accounting losses.
 
-        Levels:
-          None  — no redistribution, treasury untouched
-          Light — $5M pool split among loss-making teams proportional to deficit
-          Heavy — $15M pool, same distribution
+        Recipient tiers:
+          Operating loss — teams that literally lost money this season
+          Market distress — small-market teams with low engagement or unhappy owners
+          Owner crisis    — owner happiness < 40% anywhere (systemic signal)
 
-        Effect: each recipient team's owner gets a direct happiness boost
-        proportional to the relief they receive. Small-market owners benefit most.
+        Rich-owner resentment: profitable large-market owners take a small happiness
+        hit when heavy sharing is used repeatedly — they're subsidising weaker markets.
         """
         league = self.league
-        sn = season.number
+        sn     = season.number
+        cfg    = league.cfg
+
+        # ── Build recipient pool ──────────────────────────────────────────────
+        # Tier 1: accounting loss
+        loss_set = {t for t in league.teams
+                    if t.owner and t.owner.last_net_profit < 0}
+        # Tier 2: small-market distress (engagement < 35% or owner happiness < 40%)
+        distress_set = {t for t in league.teams
+                        if t not in loss_set
+                        and t.owner
+                        and t.franchise.effective_metro < 4.0
+                        and (t.market_engagement < 0.35 or t.owner.happiness < 0.40)}
+        # Tier 3: owner crisis regardless of market size (happiness < 40%)
+        crisis_set = {t for t in league.teams
+                      if t not in loss_set and t not in distress_set
+                      and t.owner and t.owner.happiness < 0.40}
+
+        all_recipients = list(loss_set | distress_set | crisis_set)
+
+        # Rich teams that could resent heavy redistribution
+        rich_teams = [t for t in league.teams
+                      if t.owner
+                      and t.owner.last_net_profit > 5.0
+                      and t.franchise.effective_metro >= 5.0]
+
         clear()
         header("REVENUE SHARING", f"After Season {sn}")
 
-        loss_teams = [
-            (t, t.owner) for t in league.teams
-            if t.owner is not None and t.owner.last_net_profit < 0
-        ]
-
-        if not loss_teams:
-            print(f"\n  {GREEN}All teams ran a profit this season.{RESET}  "
+        if not all_recipients:
+            print(f"\n  {GREEN}All teams are financially and operationally stable.{RESET}  "
                   f"No revenue sharing needed.\n")
+            self._heavy_sharing_seasons = 0
             press_enter()
             return
 
-        total_deficit = sum(-o.last_net_profit for _, o in loss_teams)
-
-        print(f"\n  {len(loss_teams)} team(s) ran a loss this season "
-              f"(total deficit: {RED}${total_deficit:.1f}M{RESET}):\n")
-        print(f"  {'Team':<28} {'Owner':<24} {'P&L':>8}")
+        # ── Display struggling teams ──────────────────────────────────────────
+        print(f"\n  {len(all_recipients)} team(s) could benefit from support:\n")
+        print(f"  {'Team':<28} {'Owner':<22} {'P&L':>8}  {'Eng':>5}  {'Mood':>6}  Reason")
         divider()
-        for team, owner in loss_teams:
-            print(f"  {team.name:<28} {owner.name:<24} "
-                  f"{RED}${owner.last_net_profit:+.1f}M{RESET}")
+        for t in sorted(all_recipients,
+                        key=lambda t: t.owner.last_net_profit if t.owner else 0):
+            o = t.owner
+            if t in loss_set:
+                reason = f"{RED}operating loss{RESET}"
+            elif t in distress_set:
+                if t.market_engagement < 0.35:
+                    reason = f"{GOLD}low engagement{RESET}"
+                else:
+                    reason = f"{GOLD}owner distress{RESET}"
+            else:
+                reason = f"{GOLD}owner crisis{RESET}"
+            p_c = RED if o.last_net_profit < 0 else MUTED
+            h_c = RED if o.happiness < 0.40 else (GOLD if o.happiness < 0.55 else MUTED)
+            print(f"  {t.franchise_at(sn).name[:26]:<28} {o.name[:20]:<22} "
+                  f"{p_c}{o.last_net_profit:>+7.1f}M{RESET}  "
+                  f"{t.market_engagement:>4.0%}  "
+                  f"{h_c}{o.happiness:>5.0%}{RESET}  {reason}")
 
-        print(f"\n  Treasury available: {GREEN}${self._treasury:.0f}M{RESET}\n")
+        print(f"\n  Treasury available: {GREEN}${self._treasury:.0f}M{RESET}")
 
+        # ── Rich-owner resentment warning ─────────────────────────────────────
+        if rich_teams and self._heavy_sharing_seasons >= 1:
+            seasons_str = (f"{self._heavy_sharing_seasons} consecutive season"
+                           f"{'s' if self._heavy_sharing_seasons != 1 else ''}")
+            print(f"\n  {GOLD}⚠ Large-market owners are watching:{RESET}  "
+                  f"{MUTED}Heavy sharing for {seasons_str} — "
+                  f"{len(rich_teams)} profitable owner{'s' if len(rich_teams)!=1 else ''} "
+                  f"may resent continued redistribution.{RESET}")
+        print()
+
+        # ── Decision ──────────────────────────────────────────────────────────
         can_heavy = self._treasury >= 15.0
         can_light = self._treasury >= 5.0
         heavy_tag = "" if can_heavy else f"  {RED}(need $15M){RESET}"
         light_tag = "" if can_light else f"  {RED}(need $5M){RESET}"
+
+        # Constituency framing
+        print(f"  {MUTED}─── decision context ──────────────────────────────────────────────{RESET}")
+        print(f"  {GREEN}Benefits:{RESET}  {MUTED}struggling owners · small markets · league parity{RESET}")
+        resent_note = (f"  {MUTED}· large-market owners resent repeated heavy use{RESET}"
+                       if rich_teams else "")
+        print(f"  {RED}Resents:{RESET}   {MUTED}treasury flexibility lost · no direct fan impact{RESET}"
+              f"{resent_note}")
+        print()
 
         choice = choose([
             f"Heavy sharing  {RED}$15M{RESET} pool — meaningful relief, owner mood boost{heavy_tag}",
@@ -5386,11 +5442,13 @@ class CommissionerGame:
 
         if choice == 2:
             print(f"\n  {MUTED}No revenue sharing this season.{RESET}")
+            self._heavy_sharing_seasons = 0
             press_enter()
             return
 
         pool  = 15.0 if choice == 0 else 5.0
         label = "Heavy" if choice == 0 else "Light"
+        is_heavy = choice == 0
 
         if self._treasury < pool:
             print(f"\n  {RED}Insufficient treasury.{RESET}")
@@ -5399,21 +5457,44 @@ class CommissionerGame:
 
         self._treasury -= pool
 
-        print(f"\n  {GREEN}{label} revenue sharing approved.{RESET}  "
-              f"${pool:.0f}M distributed:\n")
-        for team, owner in loss_teams:
-            deficit   = -owner.last_net_profit
-            share     = pool * (deficit / total_deficit)
-            # Happiness boost: larger share = more relief, capped at +0.15
-            hap_boost = min(0.15, share / max(pool, 1.0) * 0.20)
-            owner.happiness = min(1.0, owner.happiness + hap_boost)
-            # Soften threat level slightly if in LEAN
-            if owner.threat_level == THREAT_LEAN and hap_boost >= 0.05:
-                owner._seasons_unhappy = max(0, owner._seasons_unhappy - 1)
-            print(f"  {team.name:<28} {MUTED}receives{RESET} "
+        # Distribute proportional to need (losses get priority; distress/crisis get flat share)
+        loss_total = sum(-t.owner.last_net_profit for t in loss_set if t.owner)
+        n_other    = len(distress_set | crisis_set)
+
+        print(f"\n  {GREEN}{label} revenue sharing approved.{RESET}  ${pool:.0f}M distributed:\n")
+        for t in sorted(all_recipients, key=lambda t: t.owner.last_net_profit if t.owner else 0):
+            o = t.owner
+            if t in loss_set and loss_total > 0:
+                # Loss teams: proportional to deficit, taking 70% of pool
+                deficit = -o.last_net_profit
+                share   = pool * 0.70 * (deficit / loss_total) if loss_total > 0 else 0
+            else:
+                # Distress/crisis teams split the remaining 30% equally
+                denom = max(1, n_other)
+                share = pool * (0.30 / denom) if loss_set else pool / max(1, len(all_recipients))
+            share = max(0.5, round(share, 1))
+            hap_boost = min(0.15, share / max(pool, 1.0) * 0.25)
+            o.happiness = min(1.0, o.happiness + hap_boost)
+            if o.threat_level == THREAT_LEAN and hap_boost >= 0.04:
+                o._seasons_unhappy = max(0, o._seasons_unhappy - 1)
+            print(f"  {t.franchise_at(sn).name[:26]:<28} {MUTED}receives{RESET} "
                   f"{GREEN}+${share:.1f}M{RESET}  "
-                  f"{MUTED}owner mood {'+' if hap_boost >= 0.005 else ''}"
-                  f"{hap_boost:.0%}{RESET}")
+                  f"{MUTED}owner mood +{hap_boost:.0%}{RESET}")
+
+        # Rich-owner resentment for heavy sharing
+        if is_heavy:
+            self._heavy_sharing_seasons += 1
+            if self._heavy_sharing_seasons >= 2 and rich_teams:
+                hap_hit = min(0.06, 0.02 * self._heavy_sharing_seasons)
+                print(f"\n  {GOLD}Large-market backlash:{RESET}  "
+                      f"{MUTED}{len(rich_teams)} profitable owner"
+                      f"{'s' if len(rich_teams)!=1 else ''} "
+                      f"unhappy with continued redistribution "
+                      f"(mood -{hap_hit:.0%}){RESET}")
+                for t in rich_teams:
+                    t.owner.happiness = max(0.0, t.owner.happiness - hap_hit)
+        else:
+            self._heavy_sharing_seasons = 0
 
         press_enter()
 
