@@ -392,7 +392,7 @@ class Season:
         self._compute_finals_mvp()
 
     def _compute_regular_season_awards(self) -> None:
-        """Compute MVP, OPOY, and DPOY from the regular-season player pool.
+        """Compute MVP, OPOY, DPOY, and ROY from the regular-season player pool.
 
         MVP: restricted to playoff teams; scored 60% PPG + 40% defensive value,
              weighted by regular-season win%. Best two-way performer on a good team.
@@ -403,6 +403,11 @@ class Season:
         DPOY: all players except OPOY winner eligible (including MVP); pure defensive
               champ — lowest def_rtg (pts allowed per 100 poss defended). No win%
               weighting. Falls back to player attribute if no game-log data.
+
+        ROY: rostered players with seasons_played == 0 (first year in the league);
+             same 60/40 two-way formula as MVP, win%-weighted. No playoff restriction.
+             Founding slot-2 starters have 1-year deals so their slot opens for a
+             true drafted rookie in season 2; ROY reliably fires from season 2 onward.
         """
         pool = [
             (p, t)

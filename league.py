@@ -154,15 +154,13 @@ class League:
             )
             teams.append(team)
 
-        # Seed initial popularity from market size
-        log_metros = [math.log(t.franchise.effective_metro) for t in teams]
-        lo, hi = min(log_metros), max(log_metros)
+        # All teams start at equal market penetration — no historical advantage at founding.
+        # Market size drives long-run equilibrium (via _market_popularity_baseline) and
+        # absolute fan counts (metro × popularity), but not day-one penetration rate.
+        # 0.40 is deliberately below the league's long-run average: a new league hasn't
+        # earned its audience yet; the natural trajectory for most markets is upward.
         for team in teams:
-            if hi > lo:
-                norm = (math.log(team.franchise.effective_metro) - lo) / (hi - lo)
-                team.popularity = 0.25 + norm * 0.50
-            else:
-                team.popularity = 0.5
+            team.popularity = 0.40
 
         # Founding co-tenants split popularity 50/50 — no history gives either an edge
         city_teams = {}
@@ -551,7 +549,13 @@ class League:
     # ── Founding player generation ────────────────────────────────────────────
 
     def _generate_founding_players(self, team: Team) -> None:
-        """Assign one founding player per slot to a team and compute its ratings."""
+        """Assign one founding player per slot to a team and compute its ratings.
+
+        Contracts are staggered so that slot-2 (Starter) deals expire after season 1,
+        creating open slots for the first draft class and ensuring ROY fires from
+        season 2 onward.  Star (slot 0) keeps the full founding contract length;
+        Co-Star (slot 1) gets one year fewer; Starter (slot 2) gets a 1-year deal.
+        """
         positions = list(POSITIONS)  # [Guard, Wing, Big]
         random.shuffle(positions)    # randomise which position fills which slot
         # Tier weights per slot: Star leans high, Starter leans low
@@ -560,11 +564,14 @@ class League:
             1: [5,  20, 50, 25],   # Co-Star:  5% elite, 20% high, 50% mid, 25% low
             2: [2,  10, 45, 43],   # Starter:  2% elite, 10% high, 45% mid, 43% low
         }
+        # Staggered contracts: Star = full length, Co-Star = full-1, Starter = 1 yr
+        base = self.cfg.player_founding_contract
+        contract_lengths = {0: base, 1: max(1, base - 1), 2: 1}
         tiers = ["elite", "high", "mid", "low"]
         for i, pos in enumerate(positions):
             tier = random.choices(tiers, weights=tier_weights[i])[0]
             player = generate_player(position=pos, tier=tier, founding=True,
-                                     contract_length=self.cfg.player_founding_contract)
+                                     contract_length=contract_lengths[i])
             player.team_id = team.team_id
             team.roster[i] = player
         team.compute_ratings_from_roster(self.cfg)
@@ -576,18 +583,14 @@ class League:
     # ── Market helpers ────────────────────────────────────────────────────────
 
     def _market_popularity_baseline(self, team: Team) -> float:
-        """Natural popularity equilibrium for a team, driven by relative market size.
+        """Natural popularity equilibrium for a team.
 
-        Larger cities have more potential fans so the brand naturally settles higher.
-        Log-normalised across the current league: smallest market → 0.35, largest → 0.65.
+        All markets share the same baseline: market size advantage is already captured
+        by the fan-count formula (metro × popularity), so biasing the penetration rate
+        toward big cities would double-count the advantage.  Performance, star power,
+        and legacy are the levers that move teams above or below this floor.
         """
-        log_metros = [math.log(t.franchise.effective_metro) for t in self.teams]
-        lo, hi = min(log_metros), max(log_metros)
-        if hi > lo:
-            norm = (math.log(team.franchise.effective_metro) - lo) / (hi - lo)
-        else:
-            norm = 0.5
-        return 0.35 + norm * 0.30
+        return 0.50
 
     def _market_bias(self, team: Team) -> float:
         log_metros = [math.log(t.franchise.effective_metro) for t in self.teams]
@@ -1014,7 +1017,22 @@ class League:
             if p in self.free_agent_pool:
                 self.free_agent_pool.remove(p)
 
+    def _sort_rosters(self) -> None:
+        """Sort each team's roster so the best player occupies slot 0 (Star, 50%),
+        second-best occupies slot 1 (Co-Star, 30%), third-best slot 2 (Starter, 20%).
+
+        Called at the end of every offseason after all signings are complete.
+        Preserves None slots (empty slots sink to the back).
+        """
+        for team in self.teams:
+            players = [p for p in team.roster if p is not None]
+            players.sort(key=lambda p: p.overall, reverse=True)
+            n = len(team.roster)
+            for i in range(n):
+                team.roster[i] = players[i] if i < len(players) else None
+
     def _recompute_all_ratings(self) -> None:
+        self._sort_rosters()
         for team in self.teams:
             team.compute_ratings_from_roster(self.cfg)
         # Championship entropy: defending champion's ratings regress toward baseline.
