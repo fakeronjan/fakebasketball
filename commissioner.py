@@ -5318,6 +5318,49 @@ class CommissionerGame:
             print(f"  {MUTED}({n_prev} rule change{'s' if n_prev!=1 else ''} already made — costs escalate){RESET}")
         print()
 
+        # ── Political pressure ─────────────────────────────────────────────────
+        from coach import ARCH_OFFENSIVE, ARCH_DEFENSIVE, ARCH_WHISPERER, ARCH_CHEMISTRY, ARCH_MOTIVATOR
+        n_off_players = sum(
+            1 for t in league.teams for p in t.roster
+            if p and self._player_style_lean(p, t) == 'offensive'
+        )
+        n_def_players = sum(
+            1 for t in league.teams for p in t.roster
+            if p and self._player_style_lean(p, t) == 'defensive'
+        )
+        n_off_coaches = sum(1 for t in league.teams if t.coach and t.coach.archetype == ARCH_OFFENSIVE)
+        n_def_coaches = sum(1 for t in league.teams if t.coach and t.coach.archetype == ARCH_DEFENSIVE)
+        n_whi_coaches = sum(1 for t in league.teams if t.coach and t.coach.archetype == ARCH_WHISPERER)
+        n_mot_coaches = sum(1 for t in league.teams if t.coach and t.coach.archetype == ARCH_MOTIVATOR)
+
+        print(f"  {MUTED}Political pressure:{RESET}")
+        p_off_c = GREEN if n_off_players > n_def_players else MUTED
+        p_def_c = GREEN if n_def_players > n_off_players else MUTED
+        print(f"  {MUTED}Players:{RESET}  "
+              f"{p_off_c}{n_off_players} want offense{RESET}  "
+              f"{p_def_c}{n_def_players} want defense{RESET}  "
+              f"{MUTED}(rest balanced){RESET}")
+        coach_notes = []
+        if n_off_coaches:
+            coach_notes.append(f"{GREEN}{n_off_coaches} Offensive Innovator{'s' if n_off_coaches!=1 else ''} favor offense{RESET}")
+        if n_def_coaches:
+            coach_notes.append(f"{CYAN}{n_def_coaches} Defensive Mastermind{'s' if n_def_coaches!=1 else ''} favor defense{RESET}")
+        if n_whi_coaches:
+            coach_notes.append(f"{MUTED}{n_whi_coaches} Star Whisperer{'s' if n_whi_coaches!=1 else ''} follow stars{RESET}")
+        if n_mot_coaches:
+            coach_notes.append(f"{MUTED}{n_mot_coaches} Motivator{'s' if n_mot_coaches!=1 else ''} neutral{RESET}")
+        if coach_notes:
+            print(f"  {MUTED}Coaches:{RESET}  " + "  ·  ".join(coach_notes))
+        if n_prev >= 4:
+            print(f"  {RED}Integrity:{RESET}  {MUTED}Frequent rule changes erode trust — "
+                  f"rival leagues exploit instability{RESET}")
+        elif n_prev >= 2:
+            print(f"  {GOLD}Integrity:{RESET}  {MUTED}Moderate change history — "
+                  f"further changes draw scrutiny{RESET}")
+        else:
+            print(f"  {MUTED}Integrity:  Early era — rule changes still read as leadership{RESET}")
+        print()
+
         PUSH = 0.08
         COUNTER_PUSH = 0.10
 
@@ -5406,7 +5449,7 @@ class CommissionerGame:
                 tags.append(f"{RED}grudge{RESET}")
             for t in teams:
                 if t._consecutive_losing_seasons >= cfg.relocation_threshold - 3:
-                    tags.append(f"{RED}relocation risk{RESET}")
+                    tags.append(f"{RED}reloc risk{RESET}")
                     break
             for t in teams:
                 if t.owner and t.owner.threat_level == THREAT_DEMAND:
@@ -5414,6 +5457,24 @@ class CommissionerGame:
                     break
                 elif t.owner and t.owner.threat_level == THREAT_LEAN:
                     tags.append(f"{GOLD}owner watching{RESET}")
+                    break
+            # Contender / champion buzz
+            standings = getattr(season, 'regular_season_standings', [])
+            for t in teams:
+                if season.champion and t.team_id == season.champion.team_id:
+                    tags.append(f"{GOLD}champion buzz{RESET}")
+                    break
+                elif t in standings[:4]:
+                    tags.append(f"{GOLD}contender buzz{RESET}")
+                    break
+            # Market size signal
+            avg_metro = sum(t.franchise.effective_metro for t in teams) / len(teams)
+            if avg_metro >= 6.0:
+                tags.append(f"{CYAN}big market{RESET}")
+            # Surging — popularity notably ahead of engagement (untapped upside)
+            for t in teams:
+                if t.popularity > t.market_engagement + 0.12:
+                    tags.append(f"{GREEN}surging{RESET}")
                     break
             tag_str = ("  " + "  ".join(tags)) if tags else ""
             print(f"  {i:>2}. {city:<20} {nicknames:<26} {pop_bar(avg_eng, 10)}{tag_str}")
@@ -5458,6 +5519,15 @@ class CommissionerGame:
               f"          Mid/Low picks become noticeably rarer.\n")
         print(f"  Cost: {RED}$75M{RESET}  ·  Treasury after: "
               f"{(GREEN if self._treasury-75 >= 0 else RED)}${self._treasury-75:.0f}M{RESET}\n")
+        # Constituency framing
+        print(f"  {MUTED}─── decision context ──────────────────────────────────────────────{RESET}")
+        print(f"  {GREEN}Benefits:{RESET}  {MUTED}winning-motivated owners  ·  small-market teams  ·  "
+              f"fans (better prospects){RESET}")
+        print(f"  {RED}Resents:{RESET}   {MUTED}money-motivated owners (no immediate ROI)  ·  "
+              f"treasury locked for 10 seasons{RESET}")
+        print(f"  {GOLD}Downstream:{RESET} {MUTED}stronger draft classes raise future player "
+              f"salary expectations at CBA time{RESET}")
+        print()
 
         choice = choose([
             f"Approve the investment  {RED}($75M){RESET}",
@@ -5748,6 +5818,27 @@ class CommissionerGame:
 
         options.append(f"{MUTED}Continue{RESET}")
         actions.append(None)
+
+        # ── Constituency framing ───────────────────────────────────────────────
+        active_actions = set(a for a in actions if a)
+        if active_actions:
+            print(f"  {MUTED}─── decision context ──────────────────────────────────────────────{RESET}")
+            if "marketing" in active_actions:
+                print(f"  {MUTED}Marketing:{RESET}  {GREEN}+{player.name} popularity & mood  "
+                      f"+league presence{RESET}  {RED}−$10M{RESET}  "
+                      f"{MUTED}· other stars may expect similar treatment{RESET}")
+            if "rule_change" in active_actions:
+                dir_label = "offensive" if lean == "offensive" else "defensive"
+                opp_label = "defensive" if lean == "offensive" else "offensive"
+                print(f"  {MUTED}Rule change:{RESET}  "
+                      f"{GREEN}+{dir_label} stars and coaches satisfied{RESET}  "
+                      f"{RED}−legitimacy{RESET}  "
+                      f"{MUTED}· {opp_label} coaches will resist  · integrity concerns{RESET}")
+            if "pledge" in active_actions:
+                print(f"  {MUTED}Pledge:{RESET}  {GREEN}+{player.name} stability & happiness{RESET}  "
+                      f"{MUTED}· owner relocation frozen 3 seasons  "
+                      f"· no treasury cost{RESET}")
+            print()
 
         choice = choose(options, default=len(options) - 1)
         action = actions[choice]
