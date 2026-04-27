@@ -1023,8 +1023,30 @@ class CommissionerGame:
 
     def _start_menu(self) -> None:
         """Startup menu — new game or continue a saved one."""
+        ORANGE = "\033[38;5;214m"
+        PINK   = "\033[38;5;213m"
+        O = ORANGE
+        P = PINK + BOLD
+        R = RESET
         clear()
-        header("FAKE BASKETBALL", "Commissioner Mode")
+        logo = [
+            f"{O}          .-----------|-----------.{R}",
+            f"{O}         /  )         |         (  \\{R}",
+            f"{O}        /    )        |        (    \\{R}",
+            f"{O}       |      )     {P}FAKE{O}      (      |{R}",
+            f"{O}       |        )     |     (        |{R}",
+            f"{O}       |---------{P}BASKETBALL{O}----------|{R}",
+            f"{O}       |        )     |     (        |{R}",
+            f"{O}       |      ) {P}COMMISSIONER{O}  (      |{R}",
+            f"{O}        \\    )        |        (    /{R}",
+            f"{O}         \\  )         |         (  /{R}",
+            f"{O}          `-----------.-----------`{R}",
+            f"                {MUTED}a fakeronjan game{R}",
+        ]
+        print()
+        for line in logo:
+            print("  " + line)
+        print()
         if _save_exists():
             print(f"\n  {GREEN}Save file found.{RESET}\n")
             idx = choose(
@@ -2755,125 +2777,93 @@ class CommissionerGame:
             press_enter("No seasons played yet.")
             return
 
-        # Pre-build event tags per season
+        # Pre-build event tags per season (short nicknames to avoid line bloat)
         ev: dict[int, list[str]] = {}
         for sn, name, _ in league.expansion_log:
-            ev.setdefault(sn, []).append(f"{GREEN}+{name.split()[-1]}{RESET}")
+            ev.setdefault(sn, []).append(f"{GREEN}+{name.split()[-1][:8]}{RESET}")
         for sn, name, _ in league.merger_log:
-            ev.setdefault(sn, []).append(f"{CYAN}M:{name.split()[-1]}{RESET}")
+            ev.setdefault(sn, []).append(f"{CYAN}~{name.split()[-1][:8]}{RESET}")
         for sn, old, new, *_ in league.relocation_log:
-            ev.setdefault(sn, []).append(f"{GOLD}→{new.split()[-1]}{RESET}")
+            ev.setdefault(sn, []).append(f"{GOLD}→{new.split()[-1][:8]}{RESET}")
 
         PAGE = 20
         page = max(0, len(seasons) - PAGE)  # start at most recent page
+
+        # Column widths (visible chars):
+        #   S(3)  Champion(21)  W-L(5)  Runner-up(13)  Pop(3)  Era(3)
+        COL_CHAMP = 20  # visible chars for champion name (star prefix adds 1 = 21 total)
+        COL_REC   = 5
+        COL_RU    = 13
+        COL_POP   = 3
 
         while True:
             clear()
             header("LEAGUE HISTORY", self.league_name)
             chunk = seasons[page: page + PAGE]
 
-            print(f"\n  {'S':>3}  {'Champion':<20} {'Record':<13} {'Runner-up':<14} "
-                  f"{'N':>3}  {'Pop':>4}  {'Bal':>4}  {'Era':>4}  Top Scorer")
+            print(f"\n  {'S':>3}  {'Champion':<{COL_CHAMP+1}} {'W-L':<{COL_REC}}  "
+                  f"{'Runner-up':<{COL_RU}}  {'Pop':>{COL_POP}}  Era")
             divider()
 
             for s in chunk:
+                # ── Champion / record / runner-up ────────────────────────────
                 if s.champion:
-                    champ_name = s.champion.franchise_at(s.number).name[:19]
+                    champ_name = s.champion.franchise_at(s.number).name[:COL_CHAMP]
                     w  = s.reg_wins(s.champion)
                     lo = s.reg_losses(s.champion)
-                    record = _wl(w, lo)
+                    record = f"{w}–{lo}"
+                    rs_leader = s.regular_season_standings[0] if s.regular_season_standings else None
+                    star = rs_leader is s.champion
                     if s.playoff_rounds:
                         finals = s.playoff_rounds[-1][0]
                         ru = finals.seed2 if finals.winner is finals.seed1 else finals.seed1
-                        ru_name = ru.franchise_at(s.number).nickname[:13]
-                        rs_leader = s.regular_season_standings[0] if s.regular_season_standings else None
-                        rs_tag = f"{GOLD}★{RESET}" if rs_leader is s.champion else " "
+                        ru_name = ru.franchise_at(s.number).nickname[:COL_RU]
                     else:
-                        ru_name, rs_tag = "—", " "
+                        ru_name = "—"
                 else:
-                    champ_name, record, ru_name, rs_tag = "—", "—", "—", " "
+                    champ_name, record, ru_name, star = "—", "—", "—", False
 
-                n_teams = len(s.teams)
+                # ── League pop ───────────────────────────────────────────────
                 lp = getattr(s, '_league_popularity', 0.0)
-                lp_str = f"{lp:.0%}" if lp else "  —"
-                shock_tag = f"{RED}⚡{RESET}" if s.meta_shock else ""
-                tags = " ".join(ev.get(s.number, []))
-                tags_str = f"  {shock_tag}{tags}" if (shock_tag or tags) else ""
+                lp_str = f"{lp:.0%}" if lp else " —"
 
-                # Parity: std dev of win%
-                win_pcts = [s.reg_win_pct(t) for t in s.teams
-                            if s.reg_wins(t) + s.reg_losses(t) > 0]
-                if len(win_pcts) >= 2:
-                    mean = sum(win_pcts) / len(win_pcts)
-                    sd = (sum((x - mean) ** 2 for x in win_pcts) / len(win_pcts)) ** 0.5
-                    bal_c = GREEN if sd < 0.14 else (RED if sd > 0.20 else MUTED)
-                    bal_str = f"{bal_c}{sd:.2f}{RESET}"
-                else:
-                    bal_str = "  —"
-
-                # Era tag (3pt meta)
-                meta_val = s._league_popularity  # use stored league_pop as proxy; real meta in _meta
-                # Use actual meta if stored (we snapshot it from league.league_meta)
+                # ── Era ──────────────────────────────────────────────────────
                 stored_meta = getattr(s, '_meta', None)
                 if stored_meta is not None:
-                    if stored_meta > 0.07:   era_s = f"{GREEN}OFF{RESET}"
-                    elif stored_meta < -0.07: era_s = f"{RED}DEF{RESET}"
-                    else:                     era_s = f"{MUTED}BAL{RESET}"
+                    if stored_meta > 0.07:    era_s, era_plain = f"{GREEN}OFF{RESET}", "OFF"
+                    elif stored_meta < -0.07: era_s, era_plain = f"{RED}DEF{RESET}",  "DEF"
+                    else:                     era_s, era_plain = f"{MUTED}BAL{RESET}", "BAL"
                 else:
-                    era_s = f"{MUTED} — {RESET}"
+                    era_s, era_plain = f"{MUTED} — {RESET}", " — "
 
-                # Top scorer
-                top_scorer_str = ""
-                if s.player_stats:
-                    qualified = [(pid, st) for pid, st in s.player_stats.items()
-                                 if pid != _BENCH_ID and st.games >= 5]
-                    if qualified:
-                        top_pid, top_st = max(qualified, key=lambda x: x[1].ppg)
-                        # Find player name
-                        top_name = next(
-                            (p.name for t in s.teams for p in t.roster
-                             if p is not None and p.player_id == top_pid),
-                            f"P{top_pid}"
-                        )
-                        top_scorer_str = f"{top_name[:14]} {top_st.ppg:.1f}"
+                # ── Event / shock tags ───────────────────────────────────────
+                shock = f" {RED}⚡{RESET}" if s.meta_shock else ""
+                tags  = "  " + " ".join(ev.get(s.number, [])) if ev.get(s.number) else ""
 
-                print(f"  {s.number:>3}  {rs_tag}{champ_name:<20} {record:<13} "
-                      f"{ru_name:<14} {n_teams:>3}  {lp_str:>4}  {bal_str}  {era_s}  "
-                      f"{MUTED}{top_scorer_str}{RESET}{tags_str}")
+                # ── Champion cell: star prefix + name, padded to COL_CHAMP+1 visible ──
+                star_ch  = f"{GOLD}★{RESET}" if star else " "
+                champ_pad = COL_CHAMP - len(champ_name)   # spaces after name
 
+                print(f"  {s.number:>3}  {star_ch}{champ_name}{' ' * champ_pad} "
+                      f"{record:<{COL_REC}}  {ru_name:<{COL_RU}}  "
+                      f"{lp_str:>{COL_POP}}  {era_s}{shock}{tags}")
+
+                # ── Awards line: MVP · FMVP · COY ───────────────────────────
                 award_parts = []
                 if s.mvp:
                     ms = s.player_stats.get(s.mvp.player_id)
-                    ppg_s  = f" {ms.ppg:.1f}ppg" if ms else ""
-                    drtg_s = f" {ms.def_rtg:.1f}drtg" if ms else ""
-                    seed_s = (f" ({s.regular_season_standings.index(s.mvp_team)+1})"
-                              if s.mvp_team in s.regular_season_standings else "")
-                    award_parts.append(f"MVP {s.mvp.name}{ppg_s}{drtg_s}{seed_s}")
-                if s.opoy:
-                    os = s.player_stats.get(s.opoy.player_id)
-                    ppg_s = f" {os.ppg:.1f}ppg" if os else ""
-                    award_parts.append(f"OPOY {s.opoy.name}{ppg_s}")
-                if s.dpoy:
-                    ds = s.player_stats.get(s.dpoy.player_id)
-                    drtg_s = f" {ds.def_rtg:.1f}drtg" if (ds and ds.poss_defended) else ""
-                    award_parts.append(f"DPOY {s.dpoy.name}{drtg_s}")
-                if s.mip:
-                    mip_s = f" +{s.mip_ppg_delta:.1f}ppg" if s.mip_ppg_delta >= 0 else f" {s.mip_ppg_delta:.1f}ppg"
-                    award_parts.append(f"MIP {s.mip.name}{mip_s}")
-                if s.roy:
-                    rs = s.player_stats.get(s.roy.player_id)
-                    roy_s = f" {rs.ppg:.1f}ppg" if rs else ""
-                    award_parts.append(f"ROY {s.roy.name}{roy_s}")
+                    ppg_s = f" {ms.ppg:.1f}" if ms else ""
+                    award_parts.append(f"MVP {s.mvp.name[:14]}{ppg_s}")
                 if s.finals_mvp:
                     fs = s.player_stats.get(s.finals_mvp.player_id)
-                    fmvp_stat = (f" {fs.ppg:.1f}ppg {fs.def_rtg:.1f}drtg" if fs else "")
-                    award_parts.append(f"FMVP {s.finals_mvp.name}{fmvp_stat}")
+                    fppg_s = f" {fs.ppg:.1f}" if fs else ""
+                    award_parts.append(f"FMVP {s.finals_mvp.name[:14]}{fppg_s}")
                 if s.coy:
-                    coy_metric_s = (f"NR {s.coy_delta:+.1f}" if s.coy_first_season
-                                    else f"Δ{s.coy_delta:+.1f}")
-                    award_parts.append(f"COY {s.coy.name} {coy_metric_s}")
+                    coy_m = (f"NR {s.coy_delta:+.1f}" if s.coy_first_season
+                             else f"Δ{s.coy_delta:+.1f}")
+                    award_parts.append(f"COY {s.coy.name[:14]} {coy_m}")
                 if award_parts:
-                    print(f"       {MUTED}{('  ·  ').join(award_parts)}{RESET}")
+                    print(f"       {MUTED}{'  ·  '.join(award_parts)}{RESET}")
 
             divider()
             total = len(seasons)
