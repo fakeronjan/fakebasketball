@@ -35,8 +35,8 @@ A text-based basketball league simulation / management game. Two modes:
 - **Fatigue** (`fatigue: float`, 0.0–1.0): accumulated playoff load. Decays 32% each offseason (68% carries over). Displayed as energy % (`(1−fatigue)×100%`) — 🔋100% = fresh, 🔋0% = exhausted
 - **Fatigue in-game effect**: tired players perform worse each possession — offensive `ortg_contrib` scaled by `(1 − fatigue×0.12)` (max ~12% penalty), defensive `drtg_contrib` scaled by `(1 − fatigue×0.07)` (max ~7% penalty). Dynasty teams entering the playoffs fatigued are genuinely weaker, not just injury-prone.
 - **Injury system**: pre-season roll per player. Probability = `base (12%) + (1−dur)×20% + fatigue×28% + age_penalty`. If injured: misses 5–20 games; those slots use bench production. Repeat champions compound fatigue → rising injury risk
-- Season stats accumulated in `PlayerSeasonStats` (PPG, FG%, 3P%, FT%, Def Rtg, games missed)
-- Awards: MVP (PPG × win% weighting), OPOY (pure PPG, non-MVP), DPOY (lowest Def Rtg), Finals MVP
+- Season stats accumulated in `PlayerSeasonStats` (PPG, FG%, 3P%, FT%, Def Rtg, games missed) + zone split (paint/mid/3pt/ft points and FG%)
+- Awards: MVP (60/40 two-way × win% weight), OPOY (pure PPG), DPOY (lowest Def Rtg), Finals MVP, **MIP** (60/40 delta vs prior season, MVP excluded, all slots eligible), **ROY** (same formula, rookies only, `seasons_played == 0`), COY
 - Award pool is league-wide — lottery team stars can win with dominant enough production
 - Career leaders and best single seasons tracked; name/team snapshots baked into each Season object (survives retirements without showing placeholder IDs)
 
@@ -87,13 +87,15 @@ All three types integrate with the FA pool, legitimacy, treasury, owner pressure
 
 ### Commissioner Game Features
 - **Playoff interventions**: nudge or rig series outcomes at legitimacy cost; cost compounds per intervention per season
-- **Star FA events**: commissioner can influence where star free agents land
-- **Rule changes**: shift league meta; legitimacy cost escalates with prior changes
-- **Talent investment**: boost draft class quality for N seasons
+- **Star FA events**: commissioner can influence where star free agents land; destination table shows coach draw column (fa_draw value + archetype) so the mechanic is legible
+- **Rule changes**: shift league meta; legitimacy cost escalates with prior changes; political pressure block shows player appetite (N want offense/defense), coach archetype alignment, and integrity signal
+- **Talent investment**: boost draft class quality for 10 seasons; constituency framing shows who benefits (winning owners, small markets) and who resents (money owners, treasury locked)
 - **Expansion / merger decisions**: interactive approval with financial projections
-- **Owner meetings**: respond to demands, discipline, negotiate — consequences affect legitimacy and team behavior
+- **Owner meetings**: respond to demands, discipline, negotiate — consequences affect legitimacy and team behavior; coach impact note surfaces hot seat / firing risk at decision time
 - **CBA negotiations**: union proposals, commissioner counter-offers, work stoppage risk; random default pre-selected
-- **Revenue sharing toggle**: reduce commissioner take to help struggling teams
+- **Revenue sharing**: three recipient tiers (operating loss / market distress / owner crisis); rich-owner resentment mechanic — profitable large-market owners take stacking happiness hit when heavy sharing used repeatedly; constituency framing block on all levels
+- **Showcase events**: city tags surface champion buzz, contender buzz, big market, surging — differentiates repair vs amplify strategy
+- **Player meetings**: per-player audience shows coach fit (Good/Neutral/Poor), star happiness modifier, hot seat flag; constituency framing block before each decision (who benefits / who resents)
 
 ### Save / Load System
 - Single save slot (`save.pkl`) in the game directory
@@ -106,7 +108,8 @@ All three types integrate with the FA pool, legitimacy, treasury, owner pressure
 - Version mismatch or corruption: graceful error, offers "Start new league / Quit"
 
 ### Reporting System
-- **League History**: season-by-season champion, runner-up, top scorer, era tag, parity (win% σ), events
+- **Team Power Structure** *(first in menu — quick diagnostic)*: one row per team sorted by risk; columns: star mood + contract + motivation / coach security + archetype / owner threat + motivation / synthesized risk label (FRACTURE → reloc risk → star flight → owner crisis → coach fire → unstable → stable); ANSI-aware column padding; summary footer
+- **League History**: season-by-season champion, runner-up, top scorer, era tag, parity (win% σ), events; awards line includes MIP and ROY
 - **Team History**: franchise season log with top player + PPG per season
 - **Player Stats**: season leaderboards (scoring, defense, efficiency) · best single seasons all-time · career leaders; all screens use season-start snapshots (no placeholder P{id} names for retired players)
 - **Rosters**: current players with last season's actual stats (PPG, FG%, Def Rtg, games missed) + Dur label + 🔋 fatigue level (color-coded)
@@ -127,7 +130,7 @@ Three places surface the system during play:
 ### Season Summary (3 screens)
 **Screen A — Standings**: champion callout (defeated runner-up, series score), regular season standings table with seed/record/pts/diff/net rtg/top player, playoff bracket recap with `(#N)` seeds on every team.
 
-**Screen B — Awards Night**: MVP / OPOY / DPOY / Finals MVP / COY — each with the exact selection metric, career win count (e.g. "3×"), and streak badge ("2 in a row" when applicable). Stars to Watch block (top 8 by tier with mood/contract/trend flags).
+**Screen B — Awards Night**: MVP / OPOY / DPOY / MIP / ROY / Finals MVP / COY — each with the exact selection metric, career win count (e.g. "3×"), and streak badge ("2 in a row" when applicable). MIP shows PPG delta + DRtg delta when ≥1.0 improvement. ROY shows full rookie season stat line. Stars to Watch block (top 8 by tier with mood/contract/trend flags).
 
 **Screen C — League Health / Fan Engagement**: per-market table (sorted by market size) showing pop bar, %, fans, engagement %, and commissioner flags (CHAMP, RELOC RISK, LOSING STREAK, HOT SEAT, STAR RISK, STAR EXP, SURGING, FADING, LOW POP). Four-pillar summary with top 2 drivers. Notable events. [H] for full pillar breakdown.
 
@@ -157,17 +160,14 @@ Notes:
 
 ## Backlog (top items)
 
-See `devlog/2026-04-26 revision backlog.md` for full list with priority picks.
-
+- **Coach hire/fire cycle** — interactive coaching market when a seat opens; coach contracts and poaching (highest-leverage remaining commissioner agency gap)
 - **Fan dialogue** — commissioner receives fan sentiment signals (letters, social pulse, market reactions) as flavor and pressure
 - **Career stat tracking / Hall of Fame** — cumulative stats across seasons; HOF induction as late-game prestige moment
 - **Generational prospect event** — flag elite-ceiling prospects the season *before* the draft; LeBron 2003 / Wemby 2023 model
-- **Star FA as league-wide event** — when a big name hits FA, it's broadcast-level entertainment for the whole league, not just a commissioner decision
 - **In-game box scores** — per-game stat display during playoff interactive mode
-- **Coach hire/fire cycle** — interactive coaching market when a seat opens; coach contracts and poaching
-- **Calibration**: money owner happiness rescale (#1), engagement pull config (#4), happiness as slope not cliff (#22)
-- **Multi-slot saves** — currently single slot only
 - **Expansion bidding** — franchise fees, market research, owner vetting; currently auto-triggered
+- **Multi-slot saves** — currently single slot only
+- **Calibration**: money owner happiness rescale, engagement pull config, happiness as slope not cliff
 
 ---
 
