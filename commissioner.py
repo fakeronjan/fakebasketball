@@ -1041,7 +1041,7 @@ class CommissionerGame:
             f"{O}        \\    )        |        (    /{R}",
             f"{O}         \\  )         |         (  /{R}",
             f"{O}          `-----------.-----------`{R}",
-            f"                {MUTED}a fakeronjan game{R}",
+            f"              {MUTED}a fakeronjan game{R}",
         ]
         print()
         for line in logo:
