@@ -2579,8 +2579,9 @@ class CommissionerGame:
                 f"League Health    {MUTED}pillar scores trend — Integrity · Parity · Drama · Entertainment{RESET}",
                 hof_label,
                 rival_label,
+                f"Export to file   {MUTED}write all reports to fakebasketball_s{season.number}.txt{RESET}",
                 f"{MUTED}Back{RESET}",
-            ], default=15)
+            ], default=16)
             if   idx == 0:  self._show_power_structure(season)
             elif idx == 1:  self._show_league_history(season)
             elif idx == 2:  self._show_team_history(season)
@@ -2596,7 +2597,866 @@ class CommissionerGame:
             elif idx == 12: self._show_league_health_report(season)
             elif idx == 13: self._show_hall_of_fame(season)
             elif idx == 14: self._show_rival_league_report(season)
+            elif idx == 15: self._export_all_reports(season)
             else: break
+
+    # ── Export: all reports to plain-text file ───────────────────────────────
+
+    def _export_all_reports(self, season: Season) -> None:
+        """Write every report section to a plain-text file (no ANSI, no prompts)."""
+        import re as _re, datetime
+        from collections import defaultdict
+        from coach import ARCHETYPE_LABELS
+
+        _ANSI = _re.compile(r'\x1b\[[0-9;]*m')
+
+        def _s(txt: object) -> str:
+            return _ANSI.sub('', str(txt))
+
+        league = self.league
+        sn     = season.number
+        W68    = 68
+
+        out: list[str] = []
+
+        def w(line: object = "") -> None:
+            out.append(_s(line))
+
+        def sep(char: str = "=") -> None:
+            w(char * W68)
+
+        def section(title: str) -> None:
+            w(); sep("="); w(f"  {title}"); sep("=")
+
+        def sub(title: str) -> None:
+            w(); w(f"  {title}"); sep("-")
+
+        # ── Cover page ────────────────────────────────────────────────────────
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        sep()
+        w(f"  FAKE BASKETBALL — COMPLETE LEAGUE REPORT")
+        w(f"  {self.league_name}   |   Through Season {sn}   |   {now_str}")
+        sep()
+        w()
+        for i, t in enumerate([
+            "League History", "Team History", "Player Stats", "Rosters",
+            "Power Structure", "Owner Dashboard", "Coach Dashboard & History",
+            "Market Map", "Event Log", "All-Time Records", "Rivalries",
+            "Playoff Analysis", "League Health", "Hall of Fame", "Rival League",
+        ], 1):
+            w(f"    {i:>2}. {t}")
+
+        # ── 1. LEAGUE HISTORY ─────────────────────────────────────────────────
+        section(f"1. LEAGUE HISTORY  |  {self.league_name}")
+        seasons = league.seasons
+        if not seasons:
+            w("  No seasons played yet.")
+        else:
+            ev: dict = {}
+            for esn, name, _ in league.expansion_log:
+                ev.setdefault(esn, []).append(f"+{name.split()[-1][:8]}")
+            for esn, name, _ in league.merger_log:
+                ev.setdefault(esn, []).append(f"~{name.split()[-1][:8]}")
+            for esn, old, new, *_ in league.relocation_log:
+                ev.setdefault(esn, []).append(f">{new.split()[-1][:8]}")
+
+            CC, REC, RU = 22, 10, 16
+            w(f"  {'S':>3}  {'Champion':<{CC}}  {'W-L':<{REC}}  "
+              f"{'Runner-up':<{RU}}  {'Pop':>4}  Era  Events")
+            sep("-")
+            for s in seasons:
+                if s.champion:
+                    ch_name = _s(s.champion.franchise_at(s.number).name)[:CC]
+                    ww = s.reg_wins(s.champion); ll = s.reg_losses(s.champion)
+                    record = f"{ww}-{ll}"
+                    if s.playoff_rounds:
+                        fin = s.playoff_rounds[-1][0]
+                        ru  = fin.seed2 if fin.winner is fin.seed1 else fin.seed1
+                        ru_name = _s(ru.franchise_at(s.number).nickname)[:RU]
+                    else:
+                        ru_name = "—"
+                    rs_lead = s.regular_season_standings[0] if s.regular_season_standings else None
+                    star_m  = "*" if rs_lead is s.champion else " "
+                else:
+                    ch_name, record, ru_name, star_m = "—", "—", "—", " "
+
+                lp = getattr(s, '_league_popularity', None)
+                lp_s = f"{lp:.0%}" if lp is not None else " —"
+                meta = getattr(s, '_meta', None)
+                era_s = ("OFF" if meta is not None and meta > 0.07 else
+                         "DEF" if meta is not None and meta < -0.07 else "BAL")
+                shock = " !" if s.meta_shock else ""
+                tags  = " " + " ".join(ev.get(s.number, [])) if ev.get(s.number) else ""
+
+                w(f"  {s.number:>3}  {star_m}{ch_name:<{CC}}  {record:<{REC}}  "
+                  f"{ru_name:<{RU}}  {lp_s:>4}  {era_s}{shock}{tags}")
+
+                parts_aw = []
+                if s.mvp:
+                    ms = s.player_stats.get(s.mvp.player_id)
+                    parts_aw.append(f"MVP {s.mvp.name[:14]}{(' ' + f'{ms.ppg:.1f}') if ms else ''}")
+                if s.finals_mvp:
+                    fs = s.player_stats.get(s.finals_mvp.player_id)
+                    parts_aw.append(f"FMVP {s.finals_mvp.name[:14]}{(' ' + f'{fs.ppg:.1f}') if fs else ''}")
+                if s.coy:
+                    cm = (f"NR {s.coy_delta:+.1f}" if s.coy_first_season else f"d{s.coy_delta:+.1f}")
+                    parts_aw.append(f"COY {s.coy.name[:14]} {cm}")
+                if parts_aw:
+                    w(f"       {'  |  '.join(parts_aw)}")
+
+        # ── 2. TEAM HISTORY ───────────────────────────────────────────────────
+        section("2. TEAM HISTORY")
+        for t in sorted(league.teams, key=lambda x: x.franchise.name):
+            t_seasons = [(s, t.franchise_at(s.number)) for s in league.seasons
+                         if t in s.teams]
+            if not t_seasons:
+                continue
+            total_w = sum(s.reg_wins(t) for s, _ in t_seasons)
+            total_l = sum(s.reg_losses(t) for s, _ in t_seasons)
+            titles  = sum(1 for s, _ in t_seasons if s.champion is t)
+            fname   = _s(t.franchise.name)
+            fmr     = (f"  (fmr. {_s(t.franchise_history[0][1].city)})"
+                       if len(t.franchise_history) > 1 else "")
+            sub(f"{fname}{fmr}  —  All-time: {total_w}-{total_l}  ·  "
+                f"{titles} title{'s' if titles != 1 else ''}")
+            w(f"  {'S':>3}  {'W-L':<14}  {'Playoff':<14}  Top Scorer")
+            sep("-")
+            for s, _ in t_seasons:
+                ww = s.reg_wins(t); ll = s.reg_losses(t)
+                record = _wl(ww, ll)
+                po_res = _s(self._playoff_result_label(t, s))
+                team_pids = [p.player_id for p in t.roster if p is not None]
+                top_str = ""
+                if s.player_stats and team_pids:
+                    scored = [(s.player_stats[pid], pid)
+                              for pid in team_pids
+                              if pid in s.player_stats and pid != _BENCH_ID
+                              and s.player_stats[pid].games >= 5]
+                    if scored:
+                        best_st, best_pid = max(scored, key=lambda x: x[0].ppg)
+                        pname = s.player_names.get(best_pid, "")[:16]
+                        top_str = f"{pname}  {best_st.ppg:.1f} PPG"
+                champ_star = "  *" if s.champion is t else ""
+                w(f"  {s.number:>3}  {record:<14}  {po_res:<14}  {top_str}{champ_star}")
+
+        # ── 3. PLAYER STATS ───────────────────────────────────────────────────
+        section(f"3. PLAYER STATS  |  Season {sn}")
+        ps      = season.player_stats
+        all_pl  = [(p, t) for t in season.teams for p in t.roster if p is not None]
+        scored  = [(p, t, ps[p.player_id])
+                   for p, t in all_pl
+                   if p.player_id in ps and p.player_id != _BENCH_ID
+                   and ps[p.player_id].games >= 5]
+
+        if not scored:
+            w("  No player stats yet.")
+        else:
+            sub("Season Scoring Leaders")
+            w(f"  {'Player':<22} {'Team':<18}  {'PPG':>5}  {'FG%':>5}  "
+              f"{'3P%':>5}  {'FT%':>5}  {'GP':>3}  Miss")
+            sep("-")
+            for p, t, st in sorted(scored, key=lambda x: -x[2].ppg)[:12]:
+                tn  = _s(t.franchise_at(sn).nickname)[:16]
+                fg3 = f"{st.fg3_pct:.1%}" if st.fga_3 > 0 else "  —  "
+                ft  = f"{st.ft_pct:.1%}"  if st.fta  > 0 else "  —  "
+                w(f"  {p.name:<22} {tn:<18}  {st.ppg:>5.1f}  {st.fg_pct:>5.1%}  "
+                  f"{fg3:>5}  {ft:>5}  {st.games:>3}  {st.games_missed}")
+
+            def_sc = [(p, t, st) for p, t, st in scored if st.poss_defended >= 10]
+            if def_sc:
+                sub("Season Defensive Leaders  (lower Def Rtg = better)")
+                w(f"  {'Player':<22} {'Team':<18}  {'Def Rtg':>7}  {'Poss':>5}  Pts Allowed")
+                sep("-")
+                for p, t, st in sorted(def_sc, key=lambda x: x[2].def_rtg)[:10]:
+                    tn = _s(t.franchise_at(sn).nickname)[:16]
+                    w(f"  {p.name:<22} {tn:<18}  {st.def_rtg:>7.1f}  "
+                      f"{st.poss_defended:>5}  {st.pts_allowed}")
+
+        # All-time best single seasons
+        all_rec: list = []
+        for s in league.seasons:
+            for pid, st in s.player_stats.items():
+                if pid == _BENCH_ID or st.games < 5: continue
+                pn = s.player_names.get(pid)
+                tn = s.player_teams.get(pid)
+                if pn and tn:
+                    all_rec.append((s.number, pn, tn, s.champion, st))
+
+        if all_rec:
+            sub("Best Single Seasons All-Time — Scoring")
+            w(f"  {'S':>3}  {'Player':<22} {'Team':<18}  "
+              f"{'PPG':>5}  {'FG%':>5}  {'3P%':>5}")
+            sep("-")
+            for snum, pn, tn, champ_t, st in sorted(all_rec, key=lambda x: -x[4].ppg)[:12]:
+                champ = " *" if champ_t is not None else ""
+                fg3 = f"{st.fg3_pct:.1%}" if st.fga_3 > 0 else "  —  "
+                w(f"  {snum:>3}  {pn:<22} {tn:<18}  "
+                  f"{st.ppg:>5.1f}  {st.fg_pct:>5.1%}  {fg3:>5}{champ}")
+
+            def_rec = [r for r in all_rec if r[4].poss_defended >= 20]
+            if def_rec:
+                sub("Best Single Seasons All-Time — Defense  (min 20 poss)")
+                w(f"  {'S':>3}  {'Player':<22} {'Team':<18}  "
+                  f"{'Def Rtg':>7}  {'Poss':>5}")
+                sep("-")
+                for snum, pn, tn, _, st in sorted(def_rec, key=lambda x: x[4].def_rtg)[:10]:
+                    w(f"  {snum:>3}  {pn:<22} {tn:<18}  "
+                      f"{st.def_rtg:>7.1f}  {st.poss_defended:>5}")
+
+        # Career leaders
+        c_pts = defaultdict(int); c_gms = defaultdict(int)
+        c_fga = defaultdict(int); c_fgm = defaultdict(int)
+        c_fa3 = defaultdict(int); c_fm3 = defaultdict(int)
+        c_pos = defaultdict(int); c_all = defaultdict(int)
+        p2n: dict = {};           p2t: dict = {}
+        for s in league.seasons:
+            for pid, st in s.player_stats.items():
+                if pid == _BENCH_ID: continue
+                c_pts[pid] += st.points;  c_gms[pid] += st.games
+                c_fga[pid] += st.fga;     c_fgm[pid] += st.fgm
+                c_fa3[pid] += st.fga_3;   c_fm3[pid] += st.fgm_3
+                c_pos[pid] += st.poss_defended; c_all[pid] += st.pts_allowed
+                if pid in s.player_names: p2n[pid] = s.player_names[pid]
+                if pid in s.player_teams: p2t[pid] = s.player_teams[pid]
+        qual = [pid for pid in c_gms if c_gms[pid] >= 10]
+        if qual:
+            def _cppg(pid): return c_pts[pid] / c_gms[pid] if c_gms[pid] else 0.0
+            def _cfg(pid):  return c_fgm[pid] / c_fga[pid] if c_fga[pid] else 0.0
+            def _c3p(pid):  return c_fm3[pid] / c_fa3[pid] if c_fa3[pid] else 0.0
+            def _cdrtg(pid):return c_all[pid] / c_pos[pid] * 100 if c_pos[pid] else 999.0
+
+            sub("Career Scoring Leaders  (min 10 games)")
+            w(f"  {'Player':<22} {'Team':<18}  "
+              f"{'PPG':>5}  {'FG%':>5}  {'3P%':>5}  {'GP':>4}")
+            sep("-")
+            for pid in sorted(qual, key=lambda p: -_cppg(p))[:12]:
+                n = p2n.get(pid, f"P{pid}"); t = p2t.get(pid, "—")
+                fg3s = f"{_c3p(pid):.1%}" if c_fa3[pid] else "  —  "
+                w(f"  {n:<22} {t:<18}  "
+                  f"{_cppg(pid):>5.1f}  {_cfg(pid):>5.1%}  {fg3s:>5}  {c_gms[pid]:>4}")
+
+            dq = [pid for pid in qual if c_pos[pid] >= 30]
+            if dq:
+                sub("Career Defensive Leaders  (min 30 poss defended)")
+                w(f"  {'Player':<22} {'Team':<18}  {'Def Rtg':>7}  {'Poss':>5}")
+                sep("-")
+                for pid in sorted(dq, key=_cdrtg)[:10]:
+                    n = p2n.get(pid, f"P{pid}"); t = p2t.get(pid, "—")
+                    w(f"  {n:<22} {t:<18}  {_cdrtg(pid):>7.1f}  {c_pos[pid]:>5}")
+
+        # ── 4. ROSTERS ────────────────────────────────────────────────────────
+        section(f"4. ROSTERS  |  Season {sn}")
+        teams_s  = sorted(league.teams, key=lambda t: -t.net_rating())
+        avg_o, avg_d = _avg_ratings(league.teams)
+        last_s   = league.seasons[-1] if league.seasons else None
+        last_ps  = last_s.player_stats if last_s else {}
+        for team in teams_s:
+            net = _rel_net(team.ortg, team.drtg, avg_o, avg_d)
+            w()
+            w(f"  {_s(team.franchise_at(sn).name)}  "
+              f"Net {net:+.1f}  ORtg {team.ortg:.1f}  DRtg {team.drtg:.1f}")
+            w(f"  {'Slot':<8} {'Name':<22} {'Pos':<5} {'Age':>3}  "
+              f"{'ORtg':>5}  {'DRtg':>5}  {'Yrs':>3}  {'PPG':>5}  "
+              f"{'FG%':>5}  {'GP':>3}  Miss  Durability")
+            sep("-")
+            for idx2, player in enumerate(team.roster):
+                slot_lbl = team.slot_label(idx2)
+                if player is None:
+                    w(f"  {slot_lbl:<8} — empty")
+                else:
+                    pst = last_ps.get(player.player_id)
+                    ppg_s = f"{pst.ppg:>5.1f}" if (pst and pst.games > 0) else "   —  "
+                    fg_s  = f"{pst.fg_pct:>5.1%}" if (pst and pst.fga  > 0) else "   —  "
+                    gms   = f"{pst.games:>3}"      if (pst and pst.games > 0) else "  0"
+                    miss  = str(pst.games_missed)  if (pst and pst.games_missed > 0) else "0"
+                    dur   = _s(durability_label(player.durability))
+                    w(f"  {slot_lbl:<8} {player.name:<22} {player.position:<5}"
+                      f" {player.age:>3}"
+                      f"  {player.ortg_contrib:>+5.1f}  {player.drtg_contrib:>+5.1f}"
+                      f"  {player.contract_years_remaining:>3}"
+                      f"  {ppg_s}  {fg_s}  {gms}  {miss:<4}  {dur}")
+
+        # ── 5. POWER STRUCTURE ────────────────────────────────────────────────
+        section("5. POWER STRUCTURE")
+
+        def _risk_label(t) -> tuple:
+            """Return (score, label) for export."""
+            score = 0
+            star_bad = star_exp = coach_hs = owner_dem = reloc_bad = False
+            star = next((p for p in t.roster if p is not None), None)
+            if star:
+                if star.happiness < 0.40:   score += 3; star_bad = True
+                elif star.happiness < 0.55: score += 1
+                if star.contract_years_remaining <= 1: score += 2; star_exp = True
+            if t.coach and t.coach.hot_seat: score += 2; coach_hs = True
+            o = t.owner
+            if o:
+                if o.threat_level == THREAT_DEMAND: score += 3; owner_dem = True
+                elif o.threat_level == THREAT_LEAN:  score += 1
+                if t._consecutive_losing_seasons >= 4: score += 1; reloc_bad = True
+            n_red = sum([star_bad, coach_hs, owner_dem])
+            if n_red >= 2 or score >= 7:   return score, "FRACTURE"
+            if owner_dem and reloc_bad:     return score, "reloc risk"
+            if star_bad or (star_exp and star and star.happiness < 0.55):
+                                            return score, "star flight"
+            if owner_dem:                  return score, "owner crisis"
+            if coach_hs:                   return score, "coach fire"
+            if score >= 3:                 return score, "unstable"
+            return score, "stable"
+
+        ps_teams = sorted(league.teams, key=lambda t: -_risk_label(t)[0])
+        w(f"  {'Team':<24} {'Star':<20} {'Coach':<18} {'Owner':<18} Risk")
+        sep("-")
+        for t in ps_teams:
+            tname = _s(t.franchise_at(sn).name)[:22]
+            _, risk_lbl = _risk_label(t)
+
+            star = next((p for p in t.roster if p is not None), None)
+            if star:
+                parts = star.name.split()
+                short = f"{parts[0][0]}. {parts[-1]}" if len(parts) > 1 else star.name
+                mood  = "content" if star.happiness >= 0.60 else ("uneasy" if star.happiness >= 0.40 else "unhappy")
+                ctr   = star.contract_years_remaining
+                star_col = f"{short[:14]} {mood} {ctr}yr"[:20]
+            else:
+                star_col = "— no players"
+
+            c = t.coach
+            if c:
+                arch_s = {
+                    "chemistry": "Culture", "star_whisperer": "Whisperer",
+                    "defensive": "Defensive", "offensive": "Offensive",
+                    "motivator": "Motivator",
+                }.get(c.archetype, c.archetype[:10])
+                coach_col = f"{'HOT SEAT' if c.hot_seat else ('content' if c.happiness >= 0.60 else 'uneasy')} {arch_s}"[:18]
+            else:
+                coach_col = "— no coach"
+
+            o = t.owner
+            if o:
+                thr_lbl = {0: "Content", 1: "Watching", 2: "Demanding"}.get(o.threat_level, "")
+                owner_col = f"{thr_lbl} {o.motivation_label()[:8]}"[:18]
+            else:
+                owner_col = "— no owner"
+
+            w(f"  {tname:<24} {star_col:<20} {coach_col:<18} {owner_col:<18} {risk_lbl}")
+
+        n_fracture = sum(1 for t in league.teams if _risk_label(t)[1] == "FRACTURE")
+        n_atrisk   = sum(1 for t in league.teams if _risk_label(t)[1] not in ("stable",))
+        n_stable   = sum(1 for t in league.teams if _risk_label(t)[1] == "stable")
+        sep("-")
+        w(f"  {n_fracture} fracture  ·  {n_atrisk - n_fracture} at risk  ·  {n_stable} stable")
+
+        # ── 6. OWNER DASHBOARD ────────────────────────────────────────────────
+        section("6. OWNER DASHBOARD")
+        own_teams = sorted(league.teams,
+                           key=lambda t: -(t.owner.happiness if t.owner else 0))
+        w(f"  {'Team':<26} {'Owner':<22} {'Motivation':<12} {'Happy':>6}  "
+          f"{'P&L':>8}  Threat")
+        sep("-")
+        for t in own_teams:
+            o = t.owner
+            tname = _s(t.franchise_at(sn).name)[:24]
+            if o is None:
+                w(f"  {tname:<26} — no owner"); continue
+            thr_lbl = {0: "Content", 1: "Watching", 2: "Demanding"}.get(o.threat_level, "")
+            w(f"  {tname:<26} {o.name:<22} {o.motivation_label()[:12]:<12} "
+              f"{o.happiness:>6.0%}  {o.last_net_profit:>+7.1f}M  {thr_lbl}")
+        sep("-")
+        owners = [t.owner for t in league.teams if t.owner]
+        if owners:
+            avg_h = sum(o.happiness for o in owners) / len(owners)
+            total_p = sum(o.last_net_profit for o in owners)
+            demanding = sum(1 for o in owners if o.threat_level == 2)
+            w(f"  Avg happiness: {avg_h:.0%}   League P&L: {total_p:+.1f}M   "
+              f"Demanding: {demanding}")
+
+        # ── 7. COACH DASHBOARD & HISTORY ─────────────────────────────────────
+        section("7. COACH DASHBOARD & HISTORY")
+        _ARCH_S = {
+            "chemistry": "Culture", "star_whisperer": "Whisperer",
+            "defensive": "Defensive", "offensive": "Offensive",
+            "motivator": "Motivator",
+        }
+        co_teams = sorted(league.teams, key=lambda t: -t.net_rating())
+        w(f"  {'Team':<24} {'Coach':<22} {'Arch':<11} "
+          f"{'Happy':>6}  {'Yr':>3}  {'COY':>3}  {'ORtg':>5}  {'DRtg':>5}  Status")
+        sep("-")
+        for t in co_teams:
+            tname = _s(t.franchise_at(sn).name)[:22]
+            c = t.coach
+            if c is None:
+                w(f"  {tname:<24} — no coach"); continue
+            mods    = c.compute_modifiers()
+            arch_s  = _ARCH_S.get(c.archetype, c.archetype[:10])
+            h_lbl   = f"{c.happiness:.0%}"
+            coy_lbl = f"x{c.coy_wins}" if c.coy_wins else " —"
+            status  = "HOT SEAT" if c.hot_seat else ""
+            w(f"  {tname:<24} {c.name:<22} {arch_s:<11} "
+              f"{h_lbl:>6}  {c.tenure:>3}  {coy_lbl:>3}  "
+              f"{mods['ortg_mod']:>+5.1f}  {mods['drtg_mod']:>+5.1f}  {status}")
+
+        # COY history
+        coy_seasons = [(s.number, s.coy, s.coy_team, s.coy_delta)
+                       for s in league.seasons if s.coy]
+        if coy_seasons:
+            sub("Coach of the Year History")
+            w(f"  {'S':>3}  {'Coach':<22} {'Team':<20} {'Arch':<11}  Delta")
+            sep("-")
+            for s_num, coy, coy_t, delta in coy_seasons:
+                ct = _s(coy_t.franchise_at(s_num).name)[:18] if coy_t else "—"
+                arch_s = _ARCH_S.get(coy.archetype, coy.archetype)
+                w(f"  {s_num:>3}  {coy.name:<22} {ct:<20} {arch_s:<11}  +{delta:.1f} NR")
+
+        # All coaches (history)
+        sub("All Coaches (Career Records)")
+        w(f"  {'Name':<22} {'Arch':<11} {'Seasons':>7}  {'W-L':<12}  {'Rings':>5}  "
+          f"{'COY':>3}  Status")
+        sep("-")
+        for c in sorted(league._all_coaches, key=lambda c: -(c.seasons_coached or 0)):
+            if not c.seasons_coached: continue
+            arch_s = _ARCH_S.get(c.archetype, c.archetype[:10])
+            wl = f"{c.career_wins}-{c.career_losses}" if hasattr(c, 'career_wins') else "—"
+            rings = getattr(c, 'championships', 0)
+            coy_n = getattr(c, 'coy_wins', 0)
+            status = "Retired" if getattr(c, 'retired', False) else "Active"
+            fp = " (ex-player)" if c.former_player else ""
+            w(f"  {c.name:<22} {arch_s:<11} {c.seasons_coached:>7}  {wl:<12}  "
+              f"{rings:>5}  {coy_n:>3}  {status}{fp}")
+
+        # ── 8. MARKET MAP ─────────────────────────────────────────────────────
+        section("8. MARKET MAP")
+        city_teams: dict = {}
+        for t in league.teams:
+            city_teams.setdefault(t.franchise.city, []).append(t)
+        active_cities = sorted(
+            city_teams.items(),
+            key=lambda x: -sum(_fans_millions(t) for t in x[1]),
+        )
+        w(f"  {'City':<18} {'Team':<22} {'Pop':>5}  {'Fans':>6}M  {'Eng':>5}  Metro")
+        sep("-")
+        for city, teams_c in active_cities:
+            metro = max(t.franchise.effective_metro for t in teams_c)
+            for i, t in enumerate(sorted(teams_c, key=lambda x: x.franchise.secondary)):
+                fans = _fans_millions(t)
+                if i == 0:
+                    w(f"  {city:<18} {_s(t.franchise.nickname):<22} "
+                      f"{t.popularity:>5.0%}  {fans:>6.1f}M  "
+                      f"{t.market_engagement:>5.0%}  {metro:.1f}M")
+                else:
+                    w(f"  {'':18} {_s(t.franchise.nickname):<22} "
+                      f"{t.popularity:>5.0%}  {fans:>6.1f}M  "
+                      f"{t.market_engagement:>5.0%}")
+        grudge_cities = [(c2, sc) for c2, sc in league.market_grudges.items()
+                         if c2 not in city_teams]
+        if grudge_cities:
+            w()
+            w("  Grudge markets (vacated):")
+            sep("-")
+            for city, score in sorted(grudge_cities, key=lambda x: -x[1]):
+                metro = league._grudge_metro.get(city, 0.0)
+                w(f"  {city:<18} grudge {score:.0%}   metro {metro:.1f}M")
+
+        # ── 9. EVENT LOG ──────────────────────────────────────────────────────
+        section("9. EVENT LOG")
+        events: list = []
+        for esn, name, is_sec in league.expansion_log:
+            tag = " (co-tenant)" if is_sec else ""
+            events.append((esn, f"EXPANSION    {name}{tag} joined S{esn+1}"))
+        for esn, name, is_sec in league.merger_log:
+            tag = " (co-tenant)" if is_sec else ""
+            events.append((esn, f"MERGER       {name}{tag} joined S{esn+1}"))
+        for esn, old, new, losing, bot2, pop in league.relocation_log:
+            events.append((esn, f"RELOCATION   {old} > {new}  "
+                               f"({losing} losing seasons, pop {pop:.0%})"))
+        for s in league.seasons:
+            if s.meta_shock:
+                events.append((s.number, f"RULE SHOCK   Era reset after S{s.number}"))
+        events.sort(key=lambda x: x[0])
+        if not events:
+            w("  No notable events yet.")
+        else:
+            w(f"  {'S':>3}  Event")
+            sep("-")
+            for esn, desc in events:
+                w(f"  {esn:>3}  {desc}")
+
+        # ── 10. ALL-TIME RECORDS ──────────────────────────────────────────────
+        section("10. ALL-TIME RECORDS")
+
+        # Championships table
+        sub("Championships & Finals")
+        from collections import defaultdict as _dd
+        titles2       = _dd(int); finals_apps2 = _dd(int)
+        finals_wins2  = _dd(int); rs_firsts2   = _dd(int)
+        po_sets: dict = {}; seasons_in2 = _dd(int)
+        for s in league.seasons:
+            for t in s.teams: seasons_in2[t] += 1
+            if s.champion:
+                titles2[s.champion] += 1; finals_wins2[s.champion] += 1
+                finals_apps2[s.champion] += 1
+            if s.playoff_rounds:
+                fin2 = s.playoff_rounds[-1][0]
+                ru2  = fin2.seed2 if fin2.winner is fin2.seed1 else fin2.seed1
+                finals_apps2[ru2] += 1
+            if s.regular_season_standings: rs_firsts2[s.regular_season_standings[0]] += 1
+            for rnd in s.playoff_rounds:
+                for sr in rnd:
+                    po_sets.setdefault(sr.seed1, set()).add(s.number)
+                    po_sets.setdefault(sr.seed2, set()).add(s.number)
+        all_teams_s = sorted(league.teams,
+                             key=lambda t: (-titles2[t], -finals_apps2[t],
+                                            -len(po_sets.get(t, set()))))
+        w(f"  {'#':>2}  {'Team':<26}  {'Ttls':>5}  {'Finals':>6}  "
+          f"{'Win%':>5}  {'RS#1':>5}  {'PO':>4}  Szns")
+        sep("-")
+        for rank, t in enumerate(all_teams_s, 1):
+            name2  = _s(t.franchise.name)[:26]
+            fmr    = (f" (fmr. {_s(t.franchise_history[0][1].city)})"
+                      if len(t.franchise_history) > 1 else "")
+            ttls   = titles2[t]
+            fa     = finals_apps2[t]
+            wpct   = f"{ttls/fa:.0%}" if fa else "  —  "
+            rs1    = rs_firsts2[t]
+            po     = len(po_sets.get(t, set()))
+            sp     = seasons_in2[t]
+            star2  = "*" if ttls else " "
+            w(f"  {rank:>2}. {name2:<26}  {star2}{ttls:>4}  "
+              f"{fa:>6}  {wpct:>5}  {rs1:>5}  {po:>4}  {sp:>4}{fmr}")
+
+        # Streaks & Droughts
+        sub("Streaks & Droughts")
+        if league.seasons:
+            played_sn: dict = {}; won_sn: dict = {}; po_sn: dict = {}
+            for t in league.teams:
+                fs = t.franchise_history[-1][0]
+                played_sn[t] = sorted(s.number for s in league.seasons
+                                      if t in s.teams and s.number >= fs)
+                won_sn[t]    = {s.number for s in league.seasons
+                                if s.champion is t and s.number >= fs}
+                po_sn[t]     = {s.number for s in league.seasons
+                                if s.number >= fs
+                                for rnd in s.playoff_rounds for sr in rnd
+                                if sr.seed1 is t or sr.seed2 is t}
+
+            def _best_streak(sn_list, good):
+                best = (0, None, None); cur = 0; start = None
+                for ssn in sn_list:
+                    if ssn in good:
+                        if cur == 0: start = ssn
+                        cur += 1
+                        if cur > best[0]: best = (cur, start, ssn)
+                    else: cur = 0
+                return best
+
+            def _best_drought(sn_list, good):
+                bad = set(sn_list) - good
+                return _best_streak(sn_list, bad)
+
+            def _show_streak_block(title, rows, n=8):
+                w(f"\n  {title}")
+                sep("-")
+                w(f"  {'Team':<26}  {'Len':>5}  Seasons")
+                for t, length, start, end in rows[:n]:
+                    if not length: continue
+                    ww = (f"S{start}-S{end}" if start != end else f"S{start}") if start else "—"
+                    name2 = _s(t.franchise.name)[:26]
+                    fmr   = (f" (fmr. {_s(t.franchise_history[0][1].city)})"
+                             if len(t.franchise_history) > 1 else "")
+                    w(f"  {name2:<26}  {length:>5}  {ww}{fmr}")
+
+            dynasty  = sorted([(t, *_best_streak(played_sn[t], won_sn[t]))
+                                for t in league.teams if won_sn[t]], key=lambda x: -x[1])
+            droughts = sorted([(t, *_best_drought(played_sn[t], won_sn[t]))
+                                for t in league.teams if played_sn[t]], key=lambda x: -x[1])
+            po_str   = sorted([(t, *_best_streak(played_sn[t], po_sn[t]))
+                                for t in league.teams if po_sn[t]], key=lambda x: -x[1])
+            po_dry   = sorted([(t, *_best_drought(played_sn[t], po_sn[t]))
+                                for t in league.teams if played_sn[t]], key=lambda x: -x[1])
+            _show_streak_block("Championship Dynasties",    dynasty)
+            _show_streak_block("Championship Droughts",     droughts)
+            _show_streak_block("Longest Playoff Streaks",   po_str)
+            _show_streak_block("Longest Playoff Droughts",  po_dry)
+
+        # Best & worst seasons
+        sub("Best & Worst Seasons")
+        records_bw = []
+        for s in league.seasons:
+            for t in s.teams:
+                ww = s.reg_wins(t); ll = s.reg_losses(t)
+                if ww + ll == 0: continue
+                records_bw.append((s, t, ww, ll, ww / (ww + ll)))
+        if records_bw:
+            def _bw_block(title, rows):
+                w(f"\n  {title}")
+                sep("-")
+                w(f"  {'S':>3}  {'Franchise':<24}  {'Record':<14}  W%")
+                for s, t, ww, ll, pct in rows:
+                    name2  = _s(t.franchise_at(s.number).name)[:24]
+                    record = _wl(ww, ll)
+                    champ_t = " *" if t is s.champion else ""
+                    w(f"  {s.number:>3}  {name2:<24}  {record:<14}  {pct:.0%}{champ_t}")
+            _bw_block("Best Single Seasons",
+                      sorted(records_bw, key=lambda x: (-x[4], -x[2]))[:10])
+            _bw_block("Worst Single Seasons",
+                      sorted(records_bw, key=lambda x: (x[4], x[2]))[:10])
+
+        # ── 11. RIVALRIES ─────────────────────────────────────────────────────
+        section("11. RIVALRIES")
+        team_by_id = {t.team_id: t for t in league.teams}
+
+        rs_wins_r: dict = defaultdict(lambda: defaultdict(int))
+        for s in league.seasons:
+            for g in s.regular_season_games:
+                rs_wins_r[g.winner.team_id][g.loser.team_id] += 1
+        rs_pairs: dict = {}
+        all_ids = set(rs_wins_r) | {lid for d in rs_wins_r.values() for lid in d}
+        for aid in all_ids:
+            for bid in all_ids:
+                if aid >= bid: continue
+                wa = rs_wins_r[aid][bid]; wb = rs_wins_r[bid][aid]
+                if wa + wb: rs_pairs[(aid, bid)] = (wa, wb)
+        rs_sorted = sorted(rs_pairs.items(), key=lambda x: -(x[1][0]+x[1][1]))[:20]
+
+        def _tname(tid):
+            t = team_by_id.get(tid)
+            return _s(t.franchise.name)[:24] if t else f"Team {tid}"
+
+        sub("Regular Season Head-to-Head")
+        w(f"  {'#':>2}  {'Team A':<25} {'Wins':>5}  {'Team B':<25} {'Wins':>5}  Games")
+        sep("-")
+        for i, ((aid, bid), (wa, wb)) in enumerate(rs_sorted, 1):
+            w(f"  {i:>2}. {_tname(aid):<25} {wa:>5}  "
+              f"{_tname(bid):<25} {wb:>5}  {wa+wb:>5}")
+
+        po_wins_r: dict = defaultdict(lambda: defaultdict(int))
+        for s in league.seasons:
+            for rnd in s.playoff_rounds:
+                for sr in rnd:
+                    key = tuple(sorted([sr.seed1.team_id, sr.seed2.team_id]))
+                    po_wins_r[key][sr.winner.team_id] += 1
+        po_sorted = sorted(po_wins_r.items(), key=lambda x: -sum(x[1].values()))[:20]
+
+        sub("Playoff Series Head-to-Head")
+        w(f"  {'#':>2}  {'Team A':<25} {'W':>3}  {'Team B':<25} {'W':>3}  Series")
+        sep("-")
+        for i, (key, wins) in enumerate(po_sorted, 1):
+            aid, bid = key
+            wa = wins.get(aid, 0); wb = wins.get(bid, 0)
+            w(f"  {i:>2}. {_tname(aid):<25} {wa:>3}  "
+              f"{_tname(bid):<25} {wb:>3}  {wa+wb:>5}")
+
+        finals_wins_r: dict = defaultdict(lambda: defaultdict(int))
+        for s in league.seasons:
+            if s.playoff_rounds:
+                fin = s.playoff_rounds[-1][0]
+                key = tuple(sorted([fin.seed1.team_id, fin.seed2.team_id]))
+                finals_wins_r[key][fin.winner.team_id] += 1
+        finals_sorted = sorted(finals_wins_r.items(), key=lambda x: -sum(x[1].values()))
+
+        if finals_sorted:
+            sub("Finals Matchups")
+            w(f"  {'Team A':<25} {'W':>3}  {'Team B':<25} {'W':>3}  Finals")
+            sep("-")
+            for (aid, bid), wins in finals_sorted:
+                wa = wins.get(aid, 0); wb = wins.get(bid, 0)
+                w(f"  {_tname(aid):<25} {wa:>3}  "
+                  f"{_tname(bid):<25} {wb:>3}  {wa+wb:>5}")
+
+        # ── 12. PLAYOFF ANALYSIS ──────────────────────────────────────────────
+        section("12. PLAYOFF ANALYSIS")
+        po_seasons_a = [s for s in league.seasons if s.playoff_rounds]
+        if not po_seasons_a:
+            w("  No playoff data yet.")
+        else:
+            rnd_hs = defaultdict(int); rnd_tot = defaultdict(int)
+            rnd_len: dict = defaultdict(lambda: defaultdict(int))
+            for s in po_seasons_a:
+                n_rnd = len(s.playoff_rounds)
+                labels_r = _round_labels(n_rnd)
+                for ri, rnd in enumerate(s.playoff_rounds):
+                    rn = labels_r[ri]
+                    for sr in rnd:
+                        rnd_tot[rn] += 1
+                        rnd_len[rn][len(sr.games)] += 1
+                        if sr.winner is sr.seed1: rnd_hs[rn] += 1
+            order_r = ["R16", "QF", "SF", "Finals"]
+            present_r = [r for r in order_r if r in rnd_tot]
+            for r in rnd_tot:
+                if r not in present_r: present_r.insert(0, r)
+
+            sub("Higher-Seed Win%  by Round")
+            w(f"  {'Round':<16} {'Series':>7}  {'HS Wins':>8}  {'HS Win%':>8}")
+            sep("-")
+            for rn in present_r:
+                tot = rnd_tot[rn]; wins = rnd_hs[rn]
+                pct = wins / tot if tot else 0
+                w(f"  {rn:<16} {tot:>7}  {wins:>8}  {pct:.0%}")
+            tot_all = sum(rnd_tot.values()); wins_all = sum(rnd_hs.values())
+            if tot_all:
+                sep("-")
+                w(f"  {'All rounds':<16} {tot_all:>7}  {wins_all:>8}  {wins_all/tot_all:.0%}")
+
+            all_len = sorted({n for d in rnd_len.values() for n in d})
+            series_max = league.cfg.series_length
+            series_min = (series_max + 1) // 2
+            def _llen(n):
+                if n == series_min: return "Sweep"
+                if n == series_max: return "Full"
+                return f"{n}G"
+            sub("Series Length Distribution")
+            hdr2 = f"  {'Round':<16}"
+            for n in all_len: hdr2 += f"  {_llen(n):>8}"
+            w(hdr2); sep("-")
+            for rn in present_r:
+                tot = rnd_tot[rn]; row2 = f"  {rn:<16}"
+                for n in all_len:
+                    cnt = rnd_len[rn].get(n, 0)
+                    row2 += f"  {cnt/tot:.0%}({cnt:>2})" if tot else "  —"
+                w(row2)
+
+            # Home court advantage
+            team_hw: dict = {}; pop_hw = [0,0,0]; pop_hg = [0,0,0]
+            for s in league.seasons:
+                for g in s.regular_season_games:
+                    home_pop = getattr(s, '_popularity', {}).get(g.home, g.home.popularity)
+                    bucket = 0 if home_pop < 0.33 else (1 if home_pop < 0.60 else 2)
+                    is_win = 1 if g.home_score > g.away_score else 0
+                    pop_hw[bucket] += is_win; pop_hg[bucket] += 1
+                    tid = g.home.team_id
+                    hw2, hg2 = team_hw.get(tid, (0, 0))
+                    team_hw[tid] = (hw2 + is_win, hg2 + 1)
+            all_hw = sum(w2 for w2, _ in team_hw.values())
+            all_hg = sum(g2 for _, g2 in team_hw.values())
+            sub("Home Court Advantage")
+            if all_hg:
+                w(f"  League overall home win%:  {all_hw/all_hg:.1%}  ({all_hw}/{all_hg} games)")
+            pop_labels = ["Low (pop<0.33)", "Mid (0.33-0.60)", "High (pop>0.60)"]
+            w(f"\n  By popularity tier:")
+            for i, lbl in enumerate(pop_labels):
+                if pop_hg[i]:
+                    w(f"    {lbl:<20} {pop_hw[i]/pop_hg[i]:.1%}  ({pop_hg[i]} games)")
+
+        # ── 13. LEAGUE HEALTH ─────────────────────────────────────────────────
+        section("13. LEAGUE HEALTH")
+        ph = league.pillar_history
+        if not ph:
+            w("  No pillar history yet.")
+        else:
+            w(f"  {'S':>3}  {'Integrity':<12} {'Parity':<12} "
+              f"{'Drama':<12} {'Entertainment':<14} {'Pop':>4}")
+            sep("-")
+            for s in league.seasons:
+                ph_s = ph.get(s.number, {})
+                lp = getattr(s, '_league_popularity', None)
+                lp_s2 = f"{lp:.0%}" if lp is not None else "  —"
+                def _pc(k):
+                    sc = ph_s.get(k)
+                    return f"{_pillar_grade(sc)} {sc:.2f}" if sc is not None else "—"
+                w(f"  {s.number:>3}  {_pc('integrity'):<12} {_pc('parity'):<12} "
+                  f"{_pc('drama'):<12} {_pc('entertainment'):<14} {lp_s2:>4}")
+
+        # ── 14. HALL OF FAME ──────────────────────────────────────────────────
+        section("14. HALL OF FAME")
+        hof = league.hall_of_fame
+        if not hof:
+            w("  No inductees yet.")
+        else:
+            players_h = sorted([e for e in hof if e["type"] == "player"],
+                               key=lambda e: e["season"])
+            coaches_h = sorted([e for e in hof if e["type"] == "coach"],
+                               key=lambda e: e["season"])
+            if players_h:
+                sub(f"Player Wing  ({len(players_h)} inductees)")
+                for entry in players_h:
+                    p = entry["obj"]
+                    rings_s = "  " + ("Ring " * p.championships).strip() if p.championships else ""
+                    teams_l = _s(self._player_hof_teams(p))
+                    first_sn2, last_sn2 = self._player_hof_seasons(p)
+                    span = (f"S{first_sn2}-S{last_sn2}" if first_sn2 else
+                            f"{p.seasons_played - p.pre_league_seasons} seasons")
+                    w(f"  {p.name}  {p.position}{rings_s}  inducted Sn {entry['season']}")
+                    w(f"  {_s(entry['blurb'])}")
+                    w(f"  {span}  ·  Retired age {p.age}")
+                    if teams_l:
+                        w(f"  Teams: {teams_l}  (* most successful)")
+                    sep("-")
+            if coaches_h:
+                sub(f"Coach Wing  ({len(coaches_h)} inductees)")
+                for entry in coaches_h:
+                    c = entry["obj"]
+                    arch = ARCHETYPE_LABELS.get(c.archetype, c.archetype)
+                    rings_s = "  " + ("Ring " * c.championships).strip() if c.championships else ""
+                    fp_note = "  (former player)" if c.former_player else ""
+                    teams_l = _s(self._coach_hof_teams(c))
+                    if c.retirement_season and c.seasons_coached:
+                        first_sn2 = c.retirement_season - c.seasons_coached + 1
+                        span = f"S{first_sn2}-S{c.retirement_season}"
+                    else:
+                        span = f"{c.seasons_coached} seasons"
+                    w(f"  {c.name}  {arch}{rings_s}{fp_note}  inducted Sn {entry['season']}")
+                    w(f"  {_s(entry['blurb'])}")
+                    w(f"  {span}")
+                    if teams_l:
+                        w(f"  Teams: {teams_l}  (* most seasons)")
+                    sep("-")
+
+        # ── 15. RIVAL LEAGUE ──────────────────────────────────────────────────
+        section("15. RIVAL LEAGUE")
+        rival  = league.rival_league
+        r_hist = league.rival_league_history
+        if rival is None and not r_hist:
+            w("  No rival league has formed yet.")
+        else:
+            if rival and rival.active:
+                r = rival
+                w(f"  {r.name}  ({r.short_name})  ACTIVE  —  {r.formation_label}")
+                w(f"  Formed S{r.formed_season}  ·  {r.seasons_active} seasons active")
+                if r.formation_type == "defection" and r.ringleader_owner_name:
+                    w(f"  Ringleader: {r.ringleader_owner_name}")
+                w(f"  Strength: {r.strength:.0%}  "
+                  f"({rival_strength_label(r.strength)})")
+                if r.funding_revealed:
+                    w(f"  Funding: {rival_funding_label(r.funding)}")
+                w(f"  FA pull: {r.rival_fa_pull:.0%} per offseason")
+                w()
+                w(f"  Teams ({len(r.teams)}):")
+                for rt in r.teams:
+                    w(f"    - {rt.name:<30}  strength {rt.strength:.0%}")
+            else:
+                w("  No active rival league.")
+            if r_hist:
+                w()
+                w(f"  Former rival leagues ({len(r_hist)}):")
+                for r in r_hist:
+                    status = "Collapsed" if not r.active else "Merged"
+                    w(f"    - {r.name}  S{r.formed_season}-S{r.formed_season + r.seasons_active}"
+                      f"  {r.formation_label}  {status}")
+            # Standings from active or last historical
+            r_for_recs = rival if (rival and rival.active) else (r_hist[-1] if r_hist else None)
+            if r_for_recs and r_for_recs.season_records:
+                sub("Standings & Champions")
+                for rec in r_for_recs.season_records:
+                    w(f"  S{rec.season}  Champion: {rec.champion}")
+                    for i, (tname, ww, ll) in enumerate(rec.standings[:6]):
+                        tot = ww + ll; pct = ww / tot if tot else 0
+                        w(f"    {i+1:>2}. {tname:<28} {ww:>3}-{ll:>3}  {pct:.1%}")
+
+        # ── Write file ────────────────────────────────────────────────────────
+        export_path = f"fakebasketball_s{sn}.txt"
+        try:
+            with open(export_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(out))
+                f.write("\n")
+            clear()
+            header("EXPORT COMPLETE", f"Season {sn}")
+            print(f"\n  {GREEN}Saved:{RESET}  {export_path}")
+            total_lines = len(out)
+            size_kb = sum(len(line) + 1 for line in out) // 1024
+            print(f"  {MUTED}{total_lines} lines  ·  ~{size_kb} KB{RESET}")
+        except OSError as e:
+            print(f"\n  {RED}Export failed: {e}{RESET}")
+        press_enter()
 
     # ── Report: Team Power Structure ─────────────────────────────────────────
 
