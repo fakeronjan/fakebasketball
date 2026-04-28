@@ -1180,20 +1180,34 @@ class CommissionerGame:
         def_leader   = min(standings, key=lambda t: season.team_papg(t))
         diff_leader  = max(standings, key=lambda t: season.team_ppg(t) - season.team_papg(t))
 
-        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'W–L':>5}  {'%':>4}  {'ORtg':>4}  {'DRtg':>4}  "
-              f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}{RESET}")
+        # Top scorer per team (last name + PPG)
+        def _top_scorer(team) -> tuple[str, float]:
+            candidates = [
+                (p, season.player_stats[p.player_id])
+                for p in team.roster if p is not None
+                and p.player_id in season.player_stats
+                and p.player_id != _BENCH_ID
+            ]
+            if not candidates:
+                return "—", 0.0
+            top_p, top_s = max(candidates, key=lambda x: x[1].ppg)
+            last = top_p.name.split()[-1][:13]   # last name, max 13 chars
+            return last, round(top_s.ppg, 1)
+
+        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'W–L':>5}  {'%':>4}  "
+              f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  {'Top Scorer':<18}{RESET}")
         divider()
         for i, team in enumerate(standings):
             rank = i + 1
             rw, rl = season.reg_wins(team), season.reg_losses(team)
             fname = team.franchise_at(sn).name
-            ortg, drtg, _, _ = season._start_ratings.get(team, (team.ortg, team.drtg, team.pace, team.style_3pt))
             record   = f"{rw}–{rl}"
             win_pct  = rw / (rw + rl) if (rw + rl) else 0.0
             padded   = f"{fname:<28}"
             ppg  = season.team_ppg(team)
             papg = season.team_papg(team)
             diff = ppg - papg
+            scorer_name, scorer_ppg = _top_scorer(team)
 
             # Record column — highlight best/worst
             if team is best_record:
@@ -1221,9 +1235,10 @@ class CommissionerGame:
 
             # Bold name for playoff teams, muted for non-playoff
             name_str = f"{BOLD}{padded}{RESET}" if rank <= n_playoff else f"{MUTED}{padded}{RESET}"
+            scorer_str = f"{MUTED}{scorer_name} {scorer_ppg:.1f}{RESET}"
 
-            print(f"  {rank:>2}. {name_str} {rec_str}  {pct_str:>4}  {ortg:>4.0f}  {drtg:>4.0f}  "
-                  f"{ppg_c}  {papg_c}  {diff_str}")
+            print(f"  {rank:>2}. {name_str} {rec_str}  {pct_str:>4}  "
+                  f"{ppg_c}  {papg_c}  {diff_str}  {scorer_str}")
 
         divider()
         print(f"\n  Top {n_playoff} of {n_teams} teams advance to the playoffs.")
