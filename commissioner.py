@@ -1656,6 +1656,7 @@ class CommissionerGame:
             print()
 
             # Compounding cost display
+            legit  = league.legitimacy
             mult   = 1.0 + 0.5 * n_done
             n_cost = NUDGE_BASE * mult
             r_cost = RIG_BASE   * mult
@@ -4560,7 +4561,7 @@ class CommissionerGame:
         if sn >= 5 and sn % 5 == 0:
             self._handle_cba_negotiation(season)
         self._handle_rival_league(season)
-        self._show_fan_inbox(season)
+        self._show_fanbase_pulse(season)
         if getattr(self.league, '_new_hof_inductees', []):
             self._show_hof_ceremony(season)
         self._commissioner_desk(season)
@@ -5391,10 +5392,56 @@ class CommissionerGame:
         n = len(inductees)
         header("HALL OF FAME  INDUCTION CEREMONY",
                f"Season {sn}  ·  {n} new inductee{'s' if n != 1 else ''}")
-        print(f"\n  {MUTED}The league pauses to honour those who shaped its history.{RESET}\n")
+        print(f"\n  {MUTED}The league pauses to honor those who shaped its history.{RESET}\n")
 
         players  = [e for e in inductees if e["type"] == "player"]
         coaches  = [e for e in inductees if e["type"] == "coach"]
+
+        all_seasons = self.league.seasons
+
+        def _player_team_line(p) -> str:
+            """Return ordered unique team list with * on the most meaningful team.
+
+            Priority: most rings → most seasons → most points.
+            """
+            team_order: list[str] = []
+            seen: set[str] = set()
+            champ_counts:  dict[str, int] = {}
+            season_counts: dict[str, int] = {}
+            point_counts:  dict[str, int] = {}
+            for s in all_seasons:
+                tn = s.player_teams.get(p.player_id)
+                if tn:
+                    if tn not in seen:
+                        seen.add(tn)
+                        team_order.append(tn)
+                    season_counts[tn] = season_counts.get(tn, 0) + 1
+                    ps = s.player_stats.get(p.player_id)
+                    if ps:
+                        point_counts[tn] = point_counts.get(tn, 0) + ps.points
+                    if s.champion:
+                        champ_nick = s.champion.franchise_at(s.number).nickname[:16]
+                        if champ_nick == tn:
+                            champ_counts[tn] = champ_counts.get(tn, 0) + 1
+            if not team_order:
+                return ""
+            best = max(
+                team_order,
+                key=lambda t: (champ_counts.get(t, 0),
+                               season_counts.get(t, 0),
+                               point_counts.get(t, 0)),
+            )
+            parts = [f"{t}*" if t == best else t for t in team_order]
+            return "  ".join(parts)
+
+        def _coach_team_line(c) -> str:
+            """Return ordered team list with * on the team with most seasons."""
+            ts = c.career_team_seasons
+            if not ts:
+                return ""
+            best = max(ts, key=ts.get)
+            parts = [f"{t}*" if t == best else t for t in ts]
+            return "  ".join(parts)
 
         if players:
             print(f"  {BOLD}{GOLD}★  PLAYER WING{RESET}")
@@ -5403,9 +5450,16 @@ class CommissionerGame:
                 p = entry["obj"]
                 pos_tag = f"{MUTED}{p.position}{RESET}"
                 rings   = f"  {'◆' * p.championships}" if p.championships else ""
+                league_seasons = p.seasons_played - p.pre_league_seasons
                 print(f"\n  {BOLD}{GOLD}{p.name}{RESET}  {pos_tag}{rings}")
-                print(f"  {MUTED}{entry['blurb']}{RESET}")
-                print(f"  {MUTED}{p.seasons_played} seasons played  ·  inducted after season {sn}{RESET}")
+                print(f"  {entry['blurb']}")
+                teams_line = _player_team_line(p)
+                age_line = f"Retired age {p.age}"
+                if teams_line:
+                    print(f"  {age_line}  ·  {league_seasons} seasons in league  ·  inducted after season {sn}")
+                    print(f"  {MUTED}Teams: {teams_line}  (* most successful){RESET}")
+                else:
+                    print(f"  {age_line}  ·  {league_seasons} seasons in league  ·  inducted after season {sn}")
             print()
 
         if coaches:
@@ -5416,9 +5470,15 @@ class CommissionerGame:
                 arch = ARCHETYPE_LABELS.get(c.archetype, c.archetype)
                 fp_tag = f"  {MUTED}(former player){RESET}" if c.former_player else ""
                 rings  = f"  {'◆' * c.championships}" if c.championships else ""
+                ret_sn = f"season {c.retirement_season}" if c.retirement_season else f"season {sn - 1}"
                 print(f"\n  {BOLD}{CYAN}{c.name}{RESET}  {MUTED}{arch}{RESET}{fp_tag}{rings}")
-                print(f"  {MUTED}{entry['blurb']}{RESET}")
-                print(f"  {MUTED}{c.seasons_coached} seasons coached  ·  inducted after season {sn}{RESET}")
+                print(f"  {entry['blurb']}")
+                teams_line = _coach_team_line(c)
+                if teams_line:
+                    print(f"  Retired after {ret_sn}  ·  {c.seasons_coached} seasons coached  ·  inducted after season {sn}")
+                    print(f"  {MUTED}Teams: {teams_line}  (* most seasons){RESET}")
+                else:
+                    print(f"  Retired after {ret_sn}  ·  {c.seasons_coached} seasons coached  ·  inducted after season {sn}")
             print()
 
         divider()
@@ -5467,9 +5527,10 @@ class CommissionerGame:
                 if opoy_n: highlights.append(f"{opoy_n}×OPOY")
                 if dpoy_n: highlights.append(f"{dpoy_n}×DPOY")
                 hl_str = "  ".join(highlights) if highlights else "—"
+                league_yrs = p.seasons_played - p.pre_league_seasons
                 color = GOLD if p.championships else ""
                 print(f"  {color}{p.name:<18}{RESET}{pos:<6}"
-                      f"{p.seasons_played:>4}{p.career_games:>5}"
+                      f"{league_yrs:>4}{p.career_games:>5}"
                       f"{p.career_ppg:>6.1f}{p.career_fg_pct*100:>6.1f}"
                       f"{rings_s:>6}  Sn {entry['season']:>4}  {MUTED}{hl_str}{RESET}")
 
@@ -5491,265 +5552,154 @@ class CommissionerGame:
         divider()
         input(f"\n  {MUTED}[Enter] back{RESET}  ")
 
-    def _show_fan_inbox(self, season: Season) -> None:
-        """3–5 fan messages each offseason, event-driven flavor and pressure.
+    def _show_fanbase_pulse(self, season: Season) -> None:
+        """Per-fanbase sentiment board — one row per team, problems at top.
 
-        Messages react to the season's notable events: championships, losing
-        streaks, MVP, rival league, work stoppage, dynasty fatigue, etc.
-        Padded with generic passion letters when the season is quiet.
+        Derives sentiment from win%, losing streak, star contract risk,
+        championship result, rival league pressure, and popularity trend.
         """
-        import random as _rng
         league = self.league
         sn     = season.number
 
-        # ── Sender name pools ─────────────────────────────────────────────────
-        _FIRST = [
-            "Marcus", "Deja", "Tony", "Keisha", "Luis", "Sandra", "Ray",
-            "Tamara", "Jerome", "Brittany", "Carlos", "Monique", "Dave",
-            "Aisha", "Greg", "Yolanda", "Phil", "Nadia", "Hector", "Renee",
-            "Walter", "Simone", "Al", "Destiny", "Frank", "Tanya", "Dennis",
-        ]
+        # Teams that made the playoffs this season
+        playoff_teams: set = set()
+        for rnd in season.playoff_rounds:
+            for series in rnd:
+                playoff_teams.add(series.seed1)
+                playoff_teams.add(series.seed2)
 
-        def _sender(city: str, tag: str) -> str:
-            name = _rng.choice(_FIRST)
-            return f"{BOLD}{name}{RESET}  {MUTED}· {city} · {tag}{RESET}"
+        # Finals participants (last round)
+        finals_teams: set = set()
+        if season.playoff_rounds:
+            for series in season.playoff_rounds[-1]:
+                finals_teams.add(series.seed1)
+                finals_teams.add(series.seed2)
 
-        # ── Collect triggered messages ────────────────────────────────────────
-        # Each entry: (priority, sender_str, body_lines)
-        # priority: lower = more likely to be shown first
-        messages: list[tuple[int, str, list[str]]] = []
+        champ      = season.champion
+        rival      = league.rival_league
+        rival_hot  = rival and rival.active and rival.strength >= 0.55
+        dynasty    = champ and champ.championships >= 3  # same team dominating
 
-        champ       = season.champion
-        mvp         = season.mvp
-        mvp_team    = season.mvp_team
-        coy         = season.coy
-        coy_team    = season.coy_team
-        rival       = league.rival_league
+        rows = []   # (severity, name, emoji, label, color, reason, note)
 
-        # ── 1. Championship city ──────────────────────────────────────────────
-        if champ:
-            city  = champ.franchise_at(sn).city
-            tname = champ.franchise_at(sn).name
-            n_titles = champ.championships
-            if n_titles == 1:
-                body = [
-                    f"Commissioner,",
-                    f"I've been a {tname} fan my whole life. My father took me to my first",
-                    f"game when I was seven. Last night I called him after the final buzzer",
-                    f"and neither of us could say a word. Thank you for building this league.",
-                ]
-            elif n_titles <= 3:
-                body = [
-                    f"Commissioner,",
-                    f"Back-to-back {tname}. Some people are already calling us a dynasty.",
-                    f"I don't care what they call it — I'm just enjoying every second.",
-                    f"Keep the competition coming. We're ready.",
-                ]
+        for t in league.teams:
+            fname  = t.franchise_at(sn).name
+            wins   = season.reg_wins(t)
+            losses = season.reg_losses(t)
+            streak = t._consecutive_losing_seasons
+            star   = t.roster[0] if t.roster else None
+            is_champ     = t is champ
+            in_finals    = t in finals_teams and not is_champ
+            in_playoffs  = t in playoff_teams and t not in finals_teams
+
+            # ── Primary sentiment ─────────────────────────────────────────────
+            # severity: 0=crisis  1=concern  2=neutral  3=positive
+            if is_champ:
+                n = champ.championships
+                if n == 1:
+                    label, emoji, color = "Electric",   "🔥", GOLD
+                    reason = "First championship — city hasn't slept since the buzzer"
+                elif n <= 3:
+                    label, emoji, color = "Electric",   "🔥", GOLD
+                    reason = f"{n} titles — dynasty talk is everywhere"
+                else:
+                    label, emoji, color = "Triumphant", "🏆", GOLD
+                    reason = f"{n} championships and the city still shows up every night"
+                severity = 3
+
+            elif streak >= 6:
+                label, emoji, color = "Checked out", "😶", RED
+                reason = f"{streak} straight losing seasons — casual fans have moved on"
+                severity = 0
+
+            elif streak >= 4:
+                label, emoji, color = "Exhausted", "😞", RED
+                reason = f"{streak} losing seasons in a row, the arena feels half-empty"
+                severity = 0
+
+            elif streak >= 2:
+                label, emoji, color = "Frustrated", "😤", GOLD
+                reason = f"{streak} losing seasons; patience is running thin"
+                severity = 1
+
+            elif streak == 1:
+                label, emoji, color = "Restless", "😒", GOLD
+                reason = f"Another losing season ({wins}–{losses}), fans want to see a plan"
+                severity = 1
+
+            elif star and star.contract_years_remaining <= 1 and star.happiness < 0.5:
+                label, emoji, color = "Anxious", "😰", GOLD
+                reason = (f"{star.name.split()[-1]} is unhappy and hits free agency "
+                          f"after next season")
+                severity = 1
+
+            elif star and star.contract_years_remaining <= 1 and star.happiness < 0.75:
+                label, emoji, color = "On edge", "😬", GOLD
+                reason = (f"{star.name.split()[-1]} has one year left — "
+                          f"extension talks will define the offseason")
+                severity = 1
+
+            elif in_finals:
+                label, emoji, color = "Hungry", "😤", CYAN
+                reason = "Finals run built real belief — they expect another shot"
+                severity = 2
+
+            elif in_playoffs:
+                label, emoji, color = "Optimistic", "🙂", CYAN
+                reason = f"Playoff team ({wins}–{losses}), fanbase is engaged and growing"
+                severity = 3
+
+            elif wins > losses:
+                label, emoji, color = "Satisfied", "🙂", ""
+                reason = f"Winning record ({wins}–{losses}), expectations quietly met"
+                severity = 3
+
+            elif wins == losses:
+                label, emoji, color = "Indifferent", "😐", MUTED
+                reason = f"Dead-even season ({wins}–{losses}), nothing to love or hate"
+                severity = 2
+
             else:
-                body = [
-                    f"Commissioner,",
-                    f"{n_titles} titles. I know the rest of the league is sick of us.",
-                    f"Honestly? So am I a little. But I'm not going to apologize for it.",
-                    f"This team is something special. Don't let anyone break it up.",
-                ]
-            messages.append((1, _sender(city, "die-hard fan"), body))
+                label, emoji, color = "Underwhelmed", "😑", MUTED
+                reason = f"Below .500 ({wins}–{losses}), but no alarm bells yet"
+                severity = 2
 
-        # ── 2. Dynasty fatigue (other cities) ────────────────────────────────
-        if champ and champ.championships >= 3:
-            tname = champ.franchise_at(sn).name
-            city  = champ.franchise_at(sn).city
-            other_cities = [t.franchise_at(sn).city
-                            for t in league.teams if t is not champ]
-            if other_cities:
-                sender_city = _rng.choice(other_cities)
-                body = [
-                    f"Commissioner,",
-                    f"With all due respect — can we talk about the {tname}?",
-                    f"{champ.championships} championships. I stopped watching the Finals two",
-                    f"years ago because I already knew who was going to win.",
-                    f"The league needs balance. This is getting embarrassing.",
-                ]
-                messages.append((2, _sender(sender_city, "frustrated fan"), body))
+            # ── Secondary signal (appended as a note) ────────────────────────
+            note = ""
+            if not is_champ and dynasty:
+                dname = champ.franchise_at(sn).nickname
+                if severity <= 1:
+                    note = f"dynasty fatigue on top of local issues"
+                elif severity == 2:
+                    note = f"losing interest as {dname} run it back again"
+            if rival_hot and severity <= 2 and streak >= 1:
+                note = note or f"{rival.name} drawing curious fans away"
 
-        # ── 3. Long losing streak ─────────────────────────────────────────────
-        suffering = [(t, t._consecutive_losing_seasons) for t in league.teams
-                     if t._consecutive_losing_seasons >= 3]
-        suffering.sort(key=lambda x: -x[1])
-        if suffering:
-            worst_t, streak = suffering[0]
-            city  = worst_t.franchise_at(sn).city
-            tname = worst_t.franchise_at(sn).name
-            if streak >= 5:
-                body = [
-                    f"Commissioner,",
-                    f"{streak} straight losing seasons. {streak}. I've tried to stay positive",
-                    f"but at this point I'm watching games out of habit, not hope.",
-                    f"Does anyone in that office even know {city} exists?",
-                    f"We deserve better than this.",
-                ]
-            else:
-                body = [
-                    f"Commissioner,",
-                    f"Third losing season in a row for the {tname}. The arena is half-empty",
-                    f"most nights and I don't blame anyone for not showing up.",
-                    f"Something has to change. Are you paying attention to us?",
-                ]
-            messages.append((2, _sender(city, "long-suffering fan"), body))
+            rows.append((severity, fname, emoji, label, color, reason, note))
 
-        # ── 4. MVP message ────────────────────────────────────────────────────
-        if mvp and mvp_team:
-            city  = mvp_team.franchise_at(sn).city
-            pname = mvp.name
-            body  = [
-                f"Commissioner,",
-                f"I just want to say — {pname} is doing something we haven't seen in years.",
-                f"Every game I clear my schedule and sit down to watch. My kids know his",
-                f"number by heart. This is why people fall in love with basketball.",
-                f"Please take care of this league. We have something real here.",
-            ]
-            messages.append((3, _sender(city, "new fan"), body))
-
-        # ── 5. COY reaction ───────────────────────────────────────────────────
-        if coy and coy_team:
-            city   = coy_team.franchise_at(sn).city
-            cname  = coy.name
-            tname  = coy_team.franchise_at(sn).name
-            body   = [
-                f"Commissioner,",
-                f"Happy for {cname} winning COY but let's be honest — half the league",
-                f"could have won it this year. The {tname} turnaround was real,",
-                f"but I've seen coaches do more with less and get fired instead of awarded.",
-                f"Just keeping it real.",
-            ]
-            messages.append((4, _sender(city, "skeptical fan"), body))
-
-        # ── 6. Rival league ───────────────────────────────────────────────────
-        if rival and rival.active:
-            rl_name  = rival.name
-            strength = rival.strength
-            if strength >= 0.60:
-                body = [
-                    f"Commissioner,",
-                    f"My coworker has been going on about the {rl_name} all season.",
-                    f"At first I thought it was a joke. Now he's got tickets and everything.",
-                    f"I haven't switched yet — but I'm not going to lie, I'm curious.",
-                    f"You need to do something before more of us start drifting.",
-                ]
-            else:
-                body = [
-                    f"Commissioner,",
-                    f"I've heard people talking about the {rl_name}. Sounds like a gimmick",
-                    f"to me — no history, no rivalries. I'm not worried. But heads up,",
-                    f"some of the casual fans I know are at least checking it out.",
-                ]
-            messages.append((2, _sender(_rng.choice(
-                [t.franchise_at(sn).city for t in league.teams]
-            ), "casual fan"), body))
-
-        # ── 7. Work stoppage hangover ─────────────────────────────────────────
-        if league.work_stoppage_this_season:
-            body = [
-                f"Commissioner,",
-                f"I don't care whose fault the lockout was. I missed games.",
-                f"My daughter had tickets for her birthday and we couldn't go.",
-                f"I expect the people running this league to figure things out",
-                f"before it comes to that. Do better.",
-            ]
-            messages.append((1, _sender(
-                _rng.choice([t.franchise_at(sn).city for t in league.teams]),
-                "parent"
-            ), body))
-
-        # ── 8. Season 1 special ───────────────────────────────────────────────
-        if sn == 1:
-            body = [
-                f"Commissioner,",
-                f"I wasn't sure about this league at first. New teams, new names — I didn't",
-                f"know who to root for. But I went to a game last month and sat next to a",
-                f"family who drove four hours to see their team play for the first time.",
-                f"That sold me. I'm in. Don't blow it.",
-            ]
-            messages.append((1, _sender(
-                _rng.choice([t.franchise_at(sn).city for t in league.teams]),
-                "new fan"
-            ), body))
-
-        # ── 9. Generic padding pool ───────────────────────────────────────────
-        _GENERIC = [
-            (
-                "concerned fan",
-                [
-                    "Commissioner,",
-                    "The quality of play this year felt different — in a good way.",
-                    "More close games, more drama in the fourth quarter.",
-                    "Whatever you're doing to develop talent, keep it up.",
-                    "This is the best the league has felt in years.",
-                ],
-            ),
-            (
-                "die-hard fan",
-                [
-                    "Commissioner,",
-                    "I've had season tickets since year one. My seats, my crew,",
-                    "my rituals before every game. This league is part of my life.",
-                    "Just want you to know someone out here cares about every decision",
-                    "you make. We're watching.",
-                ],
-            ),
-            (
-                "pundit",
-                [
-                    "Commissioner,",
-                    "The competitive balance this season was actually encouraging.",
-                    "Six or seven teams felt like genuine contenders going into the playoffs.",
-                    "That's a sign of a healthy league. Credit where it's due.",
-                ],
-            ),
-            (
-                "skeptic",
-                [
-                    "Commissioner,",
-                    "Ratings are fine, arenas are filling up. I get it.",
-                    "But the product on the floor still has issues.",
-                    "Too many lopsided games, not enough meaningful late-season stakes.",
-                    "Just my two cents. You probably get a thousand of these.",
-                ],
-            ),
-            (
-                "parent",
-                [
-                    "Commissioner,",
-                    "Took my kids to their first live game this season.",
-                    "The look on their faces when the lights came up — I'll never forget it.",
-                    "Keep the game accessible. Ticket prices are already pushing families out.",
-                    "Think about the next generation.",
-                ],
-            ),
-        ]
-        _rng.shuffle(_GENERIC)
-        for tag, body in _GENERIC:
-            messages.append((9, _sender(
-                _rng.choice([t.franchise_at(sn).city for t in league.teams]), tag
-            ), body))
-
-        # ── Sort and trim to 3–5 messages ─────────────────────────────────────
-        messages.sort(key=lambda x: x[0])
-        n_show = min(5, max(3, len([m for m in messages if m[0] < 9])))
-        selected = messages[:n_show]
+        # Sort: crisis first, positive last; alpha within each tier
+        rows.sort(key=lambda r: (r[0], r[1]))
 
         # ── Display ───────────────────────────────────────────────────────────
         clear()
-        header("COMMISSIONER'S INBOX", f"After Season {sn}  ·  {len(selected)} messages")
-        print(f"\n  {MUTED}Fan mail from around the league.{RESET}\n")
+        header("FANBASE PULSE", f"After Season {sn}  ·  {len(league.teams)} markets")
+        print()
 
-        for i, (_, sender, body) in enumerate(selected, 1):
-            divider()
-            print(f"\n  {sender}")
-            print()
-            for line in body:
-                print(f"  {line}")
-            print()
+        prev_sev = None
+        for severity, fname, emoji, label, color, reason, note in rows:
+            # Tier break
+            if prev_sev is not None and severity != prev_sev and severity >= 2:
+                print()
+            prev_sev = severity
 
+            name_col = f"{BOLD}{fname}{RESET}"
+            label_col = f"{color}{label}{RESET}"
+            reason_str = reason
+            if note:
+                reason_str += f"  {MUTED}· {note}{RESET}"
+            print(f"  {name_col:<32}  {emoji}  {label_col:<22}  {MUTED}{reason_str}{RESET}")
+
+        print()
         divider()
         input(f"\n  {MUTED}[Enter] open commissioner's desk{RESET}  ")
 

@@ -326,8 +326,9 @@ class Player:
     career_ftm:      int = 0
     career_poss_def: int = 0
     career_pts_alw:  int = 0
-    seasons_retired: int = 0    # 0 = active, 1 = first offseason after retirement, etc.
-    hof_inducted:    bool = False
+    seasons_retired:    int = 0    # 0 = active, 1 = first offseason after retirement, etc.
+    hof_inducted:       bool = False
+    pre_league_seasons: int = 0    # seasons_played at league creation (founding players only); excluded from display
 
     # ── Computed: current ratings ─────────────────────────────────────────────
 
@@ -571,6 +572,7 @@ def generate_player(
         durability             = random.uniform(0.50, 1.00),
         seasons_played         = seasons_already,
         seasons_with_team      = seasons_already,  # founding players have tenure
+        pre_league_seasons     = seasons_already,  # offset for display purposes
     )
 
 

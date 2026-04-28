@@ -114,11 +114,13 @@ class Coach:
     retiring:            bool  = False  # True during final offseason
     retired:             bool  = False  # True after leaving the bench for good
     seasons_retired:     int   = 0      # 0 = active; 1+ = seasons since retirement
+    retirement_season:   int   = 0      # season number when retired (set in offseason_phase1)
     hof_inducted:        bool  = False
     former_player:       bool  = False
     former_player_id:    str | None = None  # player_id of the playing career
     former_team_name:    str | None = None  # last team name as a player
     prev_net_rating:     float | None = None  # for COY delta computation
+    career_team_seasons: dict = field(default_factory=dict)  # {team_name: seasons_coached}
 
     # ── Pronouns ─────────────────────────────────────────────────────────────
 

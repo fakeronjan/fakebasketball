@@ -770,15 +770,17 @@ class League:
             if coach.seasons_in_pool >= 3:
                 _pool_retirees.append(coach)
         for coach in _pool_retirees:
-            coach.retired = True
+            coach.retired           = True
+            coach.retirement_season = season.number
             self._coaching_pool.remove(coach)   # still in _all_coaches for HoF scanning
 
         # 1c. Process coach career retirements (career_length reached)
         for team in self.teams:
             if team.coach is not None and team.coach.retiring:
                 coach = team.coach
-                coach.retiring = False
-                coach.retired  = True
+                coach.retiring          = False
+                coach.retired           = True
+                coach.retirement_season = season.number
                 team.coach     = None
                 self._pending_coach_hires.append((team, f"{coach.name} (retired)"))
 
@@ -914,13 +916,17 @@ class League:
             if ps and ps.games > 0:
                 player.absorb_season_stats(ps)
 
-        # Coaches: update career W/L from this season's team records
+        # Coaches: update career W/L and team history from this season's team records
         for team in self.teams:
             if team.coach is not None:
                 w = season.reg_wins(team)
                 l = season.reg_losses(team)
                 team.coach.career_wins   += w
                 team.coach.career_losses += l
+                tn = team.name
+                team.coach.career_team_seasons[tn] = (
+                    team.coach.career_team_seasons.get(tn, 0) + 1
+                )
 
     def _check_hof_inductions(self, season_number: int) -> list[dict]:
         """Score eligible players and coaches; induct those above threshold.
