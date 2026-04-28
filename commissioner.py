@@ -4219,6 +4219,10 @@ class CommissionerGame:
             self._treasury    = max(0.0, self._treasury - cost)
             league.legitimacy = max(0.0, league.legitimacy - legit_hit)
             print(f"  Treasury: {RED}−${cost:.0f}M{RESET}   Legitimacy: {RED}−{legit_hit:.0%}{RESET}")
+            absorbed = league._absorb_rival_teams(sn, random.randint(2, 4))
+            if absorbed:
+                print(f"\n  {MUTED}{len(absorbed)} franchise{'s' if len(absorbed) != 1 else ''} joining next season: "
+                      f"{', '.join(absorbed)}{RESET}")
             press_enter()
             return
 
@@ -7829,6 +7833,29 @@ class CommissionerGame:
             print(f"\n  {GREEN}{new_owner.name}{RESET} now owns {fname}.")
             press_enter()
 
+    def _pick_team_nickname(self, franchise):
+        """If the franchise has nickname options, let the commissioner choose one.
+
+        Returns the chosen nickname string, or None to leave the default unchanged.
+        Called interactively just before a new team is added.
+        """
+        options = getattr(franchise, 'nickname_options', [])
+        if not options:
+            return None
+        # Include the franchise's current default as the first option
+        all_opts = [franchise.nickname] + [n for n in options if n != franchise.nickname]
+        clear_line = f"\n  {BOLD}{franchise.city}{RESET} — choose a team nickname:"
+        print(clear_line)
+        for i, n in enumerate(all_opts, 1):
+            tag = f"  {MUTED}(current default){RESET}" if i == 1 else ""
+            print(f"  [{i}] {n}{tag}")
+        while True:
+            raw = prompt(f"Nickname choice [1–{len(all_opts)}, Enter = keep default]:")
+            if raw == "":
+                return all_opts[0]
+            if raw.isdigit() and 1 <= int(raw) <= len(all_opts):
+                return all_opts[int(raw) - 1]
+
     def _handle_expansion_format_prompt(self, season: Season, n_added: int = 0):
         """Offer a format review after an expansion wave fires, showing before/after impact."""
         league  = self.league
@@ -8256,13 +8283,16 @@ class CommissionerGame:
 
         if chosen:
             joined = sn + 1
+            final_names = []
             for franchise in chosen:
-                league._add_expansion_team(franchise, joined)
+                nickname = self._pick_team_nickname(franchise)
+                league._add_expansion_team(franchise, joined, chosen_nickname=nickname)
                 league.expansion_log.append((sn, franchise.name, franchise.secondary))
+                final_names.append(league.teams[-1].franchise.name)
             league.league_popularity = min(1.0, league.league_popularity + cfg.league_pop_expansion_boost)
             league._last_expansion_season = sn
             league._expansion_eligible_seasons = 0
-            names = ", ".join(f.name for f in chosen)
+            names = ", ".join(final_names)
             print(f"\n  {GREEN}Expansion approved!{RESET} {names} will join Season {joined}.")
             print(f"  League grows to {BOLD}{len(league.teams)}{RESET} teams.")
             press_enter()
@@ -8625,13 +8655,17 @@ class CommissionerGame:
 
         if choice == 0:
             joined = sn + 1
+            final_names = []
             for franchise in top:
-                league._add_merger_team(franchise, joined)
+                nickname = self._pick_team_nickname(franchise)
+                league._add_merger_team(franchise, joined, chosen_nickname=nickname)
                 league.merger_log.append((sn, franchise.name, franchise.secondary))
+                final_names.append(league.teams[-1].franchise.name)
             league.league_popularity = min(1.0, league.league_popularity + cfg.merger_league_pop_boost)
             league._last_merger_season = sn
             league._merger_eligible_seasons = 0
-            print(f"\n  {GREEN}Merger accepted.{RESET} {suggested} franchises join Season {joined}.")
+            names = ", ".join(final_names)
+            print(f"\n  {GREEN}Merger accepted.{RESET} {names} join Season {joined}.")
             print(f"  League grows to {BOLD}{len(league.teams)}{RESET} teams.")
         else:
             print(f"\n  {MUTED}Merger rejected.{RESET}")

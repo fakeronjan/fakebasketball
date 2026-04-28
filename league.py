@@ -2299,7 +2299,8 @@ class League:
         eligible.sort(key=lambda f: f.effective_metro, reverse=True)
         return eligible
 
-    def _add_expansion_team(self, franchise: Franchise, joined_season: int) -> Team:
+    def _add_expansion_team(self, franchise: Franchise, joined_season: int,
+                            chosen_nickname: str | None = None) -> Team:
         """Create a new expansion team and add it to the league."""
         original_franchise = franchise   # keep reference for reserve_pool removal
         is_secondary = franchise.secondary
@@ -2310,7 +2311,9 @@ class League:
             del self.market_grudges[franchise.city]
             del self._grudge_metro[franchise.city]
 
-        if franchise.nickname_options:
+        if chosen_nickname:
+            franchise = dataclasses.replace(franchise, nickname=chosen_nickname, nickname_options=[])
+        elif franchise.nickname_options:
             franchise = dataclasses.replace(franchise, nickname=random.choice(franchise.nickname_options), nickname_options=[])
 
         raw = [random.random() for _ in range(4)]
@@ -2514,14 +2517,16 @@ class League:
         elif action == "merger":
             cost = random.uniform(cfg.rival_brokered_merger_cost_min, cfg.rival_brokered_merger_cost_max)
             legit = cfg.rival_brokered_merger_legit_cost
-            # Resolve: rival dissolves, commissioner absorbs some teams
-            n_absorb = min(len(rival.teams), random.randint(2, 4))
-            absorbed = [t.name for t in rival.teams[:n_absorb]]
+            rival_name = rival.name
+            n_target = min(len(rival.teams), random.randint(2, 4))
             self._resolve_rival(season_num, resolution="brokered_merger")
+            # Actually add teams from the reserve pool
+            absorbed = self._absorb_rival_teams(season_num, n_target)
+            absorbed_str = ", ".join(absorbed) if absorbed else "no available markets"
             summary = (
-                f"Merger terms agreed. ${cost:.0f}M paid to dissolve the {rival.name}. "
-                f"{n_absorb} franchise{'s' if n_absorb != 1 else ''} absorbed into the league: "
-                + ", ".join(absorbed) + "."
+                f"Merger terms agreed. ${cost:.0f}M paid to dissolve the {rival_name}. "
+                f"{len(absorbed)} franchise{'s' if len(absorbed) != 1 else ''} joining next season: "
+                + absorbed_str + "."
             )
             return cost, legit, summary
 
@@ -2541,6 +2546,25 @@ class League:
             self._resolve_rival(season_num, resolution="forced_merger")
             return "forced_merger"
         return None
+
+    def _absorb_rival_teams(self, season_num: int, n_target: int) -> list[str]:
+        """Add up to n_target teams from the reserve pool after a rival merger.
+
+        Returns the list of franchise names actually added (may be fewer than
+        n_target if the reserve pool or max_teams cap limits availability).
+        """
+        candidates = self._merger_candidates()
+        n_add = min(n_target, len(candidates), self.cfg.max_teams - len(self.teams))
+        joined = season_num + 1
+        names = []
+        for f in candidates[:n_add]:
+            self._add_merger_team(f, joined)
+            self.merger_log.append((season_num, f.name, f.secondary))
+            names.append(f.name)
+        if names:
+            self._last_merger_season = season_num
+            self.league_popularity = min(1.0, self.league_popularity + self.cfg.merger_league_pop_boost)
+        return names
 
     def _resolve_rival(self, season_num: int, resolution: str) -> None:
         """Mark rival as inactive and move to history."""
@@ -3006,14 +3030,17 @@ class League:
             seen_cities.add(f.city)
         return eligible
 
-    def _add_merger_team(self, franchise: Franchise, joined_season: int) -> Team:
+    def _add_merger_team(self, franchise: Franchise, joined_season: int,
+                         chosen_nickname: str | None = None) -> Team:
         """Create a merger team: varied quality, rival-league fan base, no 80/20 split."""
         original_franchise = franchise   # keep reference for reserve_pool removal
         # Entering this city also clears any lingering grudge
         if franchise.city in self.market_grudges:
             del self.market_grudges[franchise.city]
             del self._grudge_metro[franchise.city]
-        if franchise.nickname_options:
+        if chosen_nickname:
+            franchise = dataclasses.replace(franchise, nickname=chosen_nickname, nickname_options=[])
+        elif franchise.nickname_options:
             franchise = dataclasses.replace(franchise, nickname=random.choice(franchise.nickname_options), nickname_options=[])
         cfg = self.cfg
         ortg = random.uniform(cfg.merger_ortg_min, cfg.merger_ortg_max)
