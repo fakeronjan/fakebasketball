@@ -4679,12 +4679,13 @@ class CommissionerGame:
             print(f"\n  {MUTED}Your recommendation carries significant weight but the owner")
             print(f"  makes the final call. A strong fit mismatch can override you.{RESET}")
             print()
-            options = ["Let owner decide (auto-select best fit)"] + \
-                      [f"Recommend {c.name}  [{_ARCH_SHORT.get(c.archetype, c.archetype)}]"
-                       for c in pool]
-            idx = choose(options, title="Commissioner action", default=0)
+            options = [f"Recommend {c.name}  [{_ARCH_SHORT.get(c.archetype, c.archetype)}]"
+                       for c in pool] + \
+                      ["No recommendation  (owner picks best fit)"]
+            last = len(options) - 1
+            idx = choose(options, title="Commissioner action", default=last)
 
-            recommended = pool[idx - 1] if idx > 0 else None
+            recommended = pool[idx] if idx < last else None
 
             # ── Resolve hire ──────────────────────────────────────────────────
             new_coach = league.resolve_coaching_hire(team, recommended)
