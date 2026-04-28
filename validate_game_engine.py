@@ -296,7 +296,7 @@ for label, (c0, c1, c2) in ROSTER_SHAPES.items():
     start  = make_player(BIG,   ortg_contrib=c2, drtg_contrib= 0.0, preferred_zone=ZONE_PAINT)
 
     ta = make_team(400, ORTG, DRTG, [star, costar, start])
-    tb = make_team(401, ORTG, DRTG, balanced_roster(12.0, 8.0, 4.0))  # neutral opponent
+    tb = make_team(401, ORTG, DRTG, balanced_roster(12.0, 8.0, 4.0, -3.0, -1.5, 0.0))  # neutral opponent
 
     r  = run_matchup(ta, tb)
     s0, s1, s2, bench = slot_pcts(r, "A")
@@ -414,7 +414,7 @@ print(f"  NBA refs: ~57% home win rate across all eras")
 print(f"  High-profile teams (LAL, GSW) historically ~62-65% home win rate")
 print(f"{'═'*70}\n")
 
-base_roster = balanced_roster(8.0, 5.0, 2.0)
+base_roster = balanced_roster(8.0, 5.0, 2.0, -3.0, -1.5, 0.0)
 
 POP_LEVELS = [
     ("Low-pop  (0.20)", 0.20),
@@ -426,8 +426,8 @@ print(f"  {'Home team popularity':<24} {'Home Win%':>10} {'Home PPG':>9} {'Away 
 print(f"  {'-'*24} {'-'*10} {'-'*9} {'-'*9}")
 
 for label, pop in POP_LEVELS:
-    home_team = make_team(900, 110.0, 110.0, balanced_roster(8.0, 5.0, 2.0), popularity=pop)
-    away_team = make_team(901, 110.0, 110.0, balanced_roster(8.0, 5.0, 2.0), popularity=0.50)
+    home_team = make_team(900, 110.0, 110.0, balanced_roster(8.0, 5.0, 2.0, -3.0, -1.5, 0.0), popularity=pop)
+    away_team = make_team(901, 110.0, 110.0, balanced_roster(8.0, 5.0, 2.0, -3.0, -1.5, 0.0), popularity=0.50)
 
     h_wins = h_scores = a_scores = 0
     h_score_list, a_score_list = [], []
@@ -460,8 +460,8 @@ print(f"  {'Scenario':<40} {'Close≤5':>8} {'Mid 6-19':>9} {'Blow≥20':>8} {'A
 print(f"  {'-'*40} {'-'*8} {'-'*9} {'-'*8} {'-'*7}")
 
 for label, oa, da, ob, db in DIST_SCENARIOS:
-    ta = make_team(950, oa, da, balanced_roster(6.0, 3.0, 1.0))
-    tb = make_team(951, ob, db, balanced_roster(6.0, 3.0, 1.0))
+    ta = make_team(950, oa, da, balanced_roster(6.0, 3.0, 1.0, -2.0, -1.0, 0.0))
+    tb = make_team(951, ob, db, balanced_roster(6.0, 3.0, 1.0, -2.0, -1.0, 0.0))
     margins = []
     for g in range(N):
         home, away = (ta, tb) if g % 2 == 0 else (tb, ta)
@@ -567,6 +567,125 @@ if all_star_ppg:
           f"Median: {statistics.median(all_star_ppg):.1f}  "
           f"Max: {max(all_star_ppg):.1f}  "
           f"Min: {min(all_star_ppg):.1f}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Section 8: Coach Head-to-Head and Quality Spread
+# ─────────────────────────────────────────────────────────────────────────────
+
+print(f"\n{'═'*70}")
+print("  SECTION 8 — COACH EFFECTS: HEAD-TO-HEAD & QUALITY SPREAD")
+print(f"  Same roster [18, 6, 3] both sides; coaching staff differs")
+print(f"  NBA refs: elite coach worth ~3-5 extra wins (≈54-56% vs avg coach)")
+print(f"{'═'*70}\n")
+
+BASE_ORTG8 = 113.0
+BASE_DRTG8 = 109.0
+
+def _star_roster():
+    """Fresh [18, 6, 3] player objects each call (avoids PID collisions)."""
+    return [
+        make_player(GUARD, ortg_contrib=18.0, drtg_contrib=-2.0, preferred_zone=ZONE_3PT),
+        make_player(WING,  ortg_contrib= 6.0, drtg_contrib=-1.0, preferred_zone=ZONE_MID),
+        make_player(BIG,   ortg_contrib= 3.0, drtg_contrib= 0.0, preferred_zone=ZONE_PAINT),
+    ]
+
+def _make_coach_rated(archetype: str, rating: float = 0.5, flex: float = 0.5):
+    from coach import Coach
+    return Coach(
+        coach_id=str(_new_pid()),
+        name=f"{archetype[:3]}-r{rating:.1f}",
+        gender="male",
+        archetype=archetype,
+        flexibility=flex,
+        horizon=0.5,
+        rating=rating,
+    )
+
+def _team_with_coach(tid: int, coach) -> Team:
+    t = make_team(tid, BASE_ORTG8, BASE_DRTG8, _star_roster(), archetype=ARCH_OFFENSIVE)
+    t.coach = coach
+    return t
+
+# ── Part A: Archetype vs Archetype win% matrix ────────────────────────────────
+
+ARCH_ORDER8 = [ARCH_OFFENSIVE, ARCH_WHISPERER, ARCH_DEFENSIVE, ARCH_MOTIVATOR, ARCH_CHEMISTRY]
+ARCH_SH8    = {ARCH_OFFENSIVE: "OFF", ARCH_WHISPERER: "WHI", ARCH_DEFENSIVE: "DEF",
+               ARCH_MOTIVATOR: "MOT", ARCH_CHEMISTRY: "CHE"}
+
+print("  Part A — Archetype vs Archetype (rating=0.5, flex=0.5 both sides)")
+print("  Row wins this % when facing column archetype (home advantage cancelled)")
+print()
+hdr = f"  {'':8}"
+for b in ARCH_ORDER8:
+    hdr += f"  {ARCH_SH8[b]:>6}"
+print(hdr)
+print(f"  {'─'*48}")
+
+N8 = 1_000   # per cell — tight enough for ±3% precision
+
+for a_arch in ARCH_ORDER8:
+    row_str = f"  {ARCH_SH8[a_arch]:<8}"
+    for b_arch in ARCH_ORDER8:
+        if a_arch == b_arch:
+            row_str += f"  {'  —  ':>6}"
+            continue
+        ca = _make_coach_rated(a_arch)
+        cb = _make_coach_rated(b_arch)
+        ta = _team_with_coach(9000, ca)
+        tb = _team_with_coach(9001, cb)
+        r  = run_matchup(ta, tb, n=N8)
+        row_str += f"  {r['win_rate_a']:>5.1%}"
+    print(row_str)
+
+print()
+print("  Expected: DEF beats OFF; WHI beats DEF (star usage overwhelms D scheme)")
+print("  Any >60% win rate would suggest over-tuned archetype effects")
+
+# ── Part B: Coach quality spread ──────────────────────────────────────────────
+
+print()
+print("  Part B — Coach quality spread (Offensive Innovator, rating varies)")
+print("  NBA refs: elite coach ~3-5 extra wins vs avg ≈ 54-56% win rate")
+print()
+print(f"  {'Matchup':<36} {'Win%':>6} {'Hi PPG':>7} {'Lo PPG':>7}")
+print(f"  {'─'*36} {'─'*6} {'─'*7} {'─'*7}")
+
+for hi_r, lo_r, label in [
+    (0.8, 0.5, "Elite (0.8) vs Average (0.5)"),
+    (0.5, 0.2, "Average (0.5) vs Poor (0.2)"),
+    (0.8, 0.2, "Elite (0.8) vs Poor (0.2)"),
+]:
+    c_hi = _make_coach_rated(ARCH_OFFENSIVE, rating=hi_r)
+    c_lo = _make_coach_rated(ARCH_OFFENSIVE, rating=lo_r)
+    ta = _team_with_coach(9010, c_hi)
+    tb = _team_with_coach(9011, c_lo)
+    r  = run_matchup(ta, tb, n=N8)
+    print(f"  {label:<36} {r['win_rate_a']:>6.1%} {r['a_ppg']:>7.1f} {r['b_ppg']:>7.1f}")
+
+# ── Part C: Effective modifier values at typical coach params ─────────────────
+
+print()
+print("  Part C — Actual modifier values by archetype (rating=0.5, flex=0.5)")
+print(f"  {'Archetype':<22} {'ortg_mod':>9} {'drtg_mod':>9} {'chem_scl':>9} {'star_hap':>9} {'fa_draw':>8}")
+print(f"  {'─'*22} {'─'*9} {'─'*9} {'─'*9} {'─'*9} {'─'*8}")
+
+for arch in ARCH_ORDER8:
+    c = _make_coach_rated(arch, rating=0.5, flex=0.5)
+    m = c.compute_modifiers()
+    print(f"  {ARCHETYPE_LABELS[arch]:<22} {m['ortg_mod']:>+9.2f} {m['drtg_mod']:>+9.2f}"
+          f" {m['chem_scale']:>9.3f} {m['star_hap']:>+9.3f} {m['fa_draw']:>+8.3f}")
+
+print()
+print("  Same at peak coach (rating=0.8, flex=0.3 — rigid and proven):")
+print(f"  {'Archetype':<22} {'ortg_mod':>9} {'drtg_mod':>9} {'star_hap':>9} {'fa_draw':>8}")
+print(f"  {'─'*22} {'─'*9} {'─'*9} {'─'*9} {'─'*8}")
+
+for arch in ARCH_ORDER8:
+    c = _make_coach_rated(arch, rating=0.8, flex=0.3)
+    m = c.compute_modifiers()
+    print(f"  {ARCHETYPE_LABELS[arch]:<22} {m['ortg_mod']:>+9.2f} {m['drtg_mod']:>+9.2f}"
+          f" {m['star_hap']:>+9.3f} {m['fa_draw']:>+8.3f}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -258,9 +258,9 @@ _ZONE_DISTS: dict[str, tuple] = {
     ZONE_FT:    (0.25, 0.35, 0.25, 0.15),  # was (0.50,...) — 50% FT rate was unrealistically high
     ZONE_PAINT: (0.10, 0.55, 0.20, 0.15),
     ZONE_MID:   (0.08, 0.20, 0.52, 0.20),
-    ZONE_3PT:   (0.05, 0.10, 0.20, 0.65),
+    ZONE_3PT:   (0.08, 0.18, 0.30, 0.44),  # was (0.05,0.10,0.20,0.65) — 65% 3pt too variance-heavy; 44% more realistic (Curry ~40-50%)
 }
-_ZONE_DEFAULT = (0.10, 0.45, 0.20, 0.25)  # league avg, used for empty slots
+_ZONE_DEFAULT = (0.12, 0.48, 0.20, 0.20)  # was (0.10,0.45,0.20,0.25) — bench 3pt reduced 25→20% to cut variance
 
 
 def zone_dist(zone: str | None) -> tuple:

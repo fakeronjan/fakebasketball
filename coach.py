@@ -61,14 +61,14 @@ ARCHETYPE_MODS: dict[str, dict] = {
     },
     ARCH_DEFENSIVE: {
         "ortg_mod":  -1.0,   # sacrifice some offense
-        "drtg_mod":  -3.5,
+        "drtg_mod":  -3.0,   # was -3.5 — over-powered vs all archetypes; trimmed to balance vs OFF
         "chem_scale": 1.10,
         "star_hap":  -0.02,  # stars chafe under rigid D schemes
         "depth_hap":  0.03,
         "fa_draw":   -0.02,
     },
     ARCH_OFFENSIVE: {
-        "ortg_mod":   3.0,
+        "ortg_mod":   3.5,   # was 3.0 — bumped to match DEF's net impact after DEF trim
         "drtg_mod":   1.0,   # defense suffers
         "chem_scale": 1.00,
         "star_hap":   0.04,
@@ -163,7 +163,7 @@ class Coach:
         """
         base = ARCHETYPE_MODS[self.archetype]
         flex_scale   = 1.35 - 0.70 * self.flexibility             # 1.35 rigid → 0.65 flexible
-        rating_scale = 0.50 + self.rating * self.coaching_mult     # career arc applied to rating portion
+        rating_scale = 0.30 + self.rating * self.coaching_mult     # was 0.50 — lower floor doubles quality spread (poor coach now noticeably weaker)
         scale = flex_scale * rating_scale
 
         # COY reputation bonus: each win adds +0.02 fa_draw, capped at 3 wins
