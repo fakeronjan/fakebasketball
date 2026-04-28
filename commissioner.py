@@ -5384,6 +5384,65 @@ class CommissionerGame:
 
         return flags
 
+    # ── Hall of Fame helpers ──────────────────────────────────────────────────
+
+    def _player_hof_teams(self, p) -> str:
+        """Ordered unique team list for a player, * on most successful (rings → seasons → pts)."""
+        team_order: list[str] = []
+        seen: set[str] = set()
+        champ_counts:  dict[str, int] = {}
+        season_counts: dict[str, int] = {}
+        point_counts:  dict[str, int] = {}
+        for s in self.league.seasons:
+            tn = s.player_teams.get(p.player_id)
+            if tn:
+                if tn not in seen:
+                    seen.add(tn)
+                    team_order.append(tn)
+                season_counts[tn] = season_counts.get(tn, 0) + 1
+                ps = s.player_stats.get(p.player_id)
+                if ps:
+                    point_counts[tn] = point_counts.get(tn, 0) + ps.points
+                if s.champion:
+                    champ_nick = s.champion.franchise_at(s.number).nickname[:16]
+                    if champ_nick == tn:
+                        champ_counts[tn] = champ_counts.get(tn, 0) + 1
+        if not team_order:
+            return ""
+        best = max(
+            team_order,
+            key=lambda t: (champ_counts.get(t, 0),
+                           season_counts.get(t, 0),
+                           point_counts.get(t, 0)),
+        )
+        return "  ".join(f"{t}*" if t == best else t for t in team_order)
+
+    def _coach_hof_teams(self, c) -> str:
+        """Ordered team list for a coach, * on team with most seasons."""
+        ts = c.career_team_seasons
+        if not ts:
+            return ""
+        best = max(ts, key=ts.get)
+        return "  ".join(f"{t}*" if t == best else t for t in ts)
+
+    def _player_hof_awards(self, p) -> list[str]:
+        """Compact award badge list for a player (e.g. ['2×MVP', '1×FMVP', 'ROY'])."""
+        all_s = self.league.seasons
+        mvp_n  = sum(1 for s in all_s if s.mvp        and s.mvp.player_id        == p.player_id)
+        fmvp_n = sum(1 for s in all_s if s.finals_mvp and s.finals_mvp.player_id == p.player_id)
+        opoy_n = sum(1 for s in all_s if s.opoy       and s.opoy.player_id       == p.player_id)
+        dpoy_n = sum(1 for s in all_s if s.dpoy       and s.dpoy.player_id       == p.player_id)
+        mip_n  = sum(1 for s in all_s if s.mip        and s.mip.player_id        == p.player_id)
+        roy_n  = sum(1 for s in all_s if s.roy        and s.roy.player_id        == p.player_id)
+        badges: list[str] = []
+        if mvp_n:  badges.append(f"{mvp_n}×MVP")
+        if fmvp_n: badges.append(f"{fmvp_n}×FMVP")
+        if opoy_n: badges.append(f"{opoy_n}×OPOY")
+        if dpoy_n: badges.append(f"{dpoy_n}×DPOY")
+        if mip_n:  badges.append(f"{mip_n}×MIP")
+        if roy_n:  badges.append("ROY")
+        return badges
+
     # ── Fan inbox ─────────────────────────────────────────────────────────────
 
     def _show_hof_ceremony(self, season: Season) -> None:
@@ -5402,52 +5461,6 @@ class CommissionerGame:
         players  = [e for e in inductees if e["type"] == "player"]
         coaches  = [e for e in inductees if e["type"] == "coach"]
 
-        all_seasons = self.league.seasons
-
-        def _player_team_line(p) -> str:
-            """Return ordered unique team list with * on the most meaningful team.
-
-            Priority: most rings → most seasons → most points.
-            """
-            team_order: list[str] = []
-            seen: set[str] = set()
-            champ_counts:  dict[str, int] = {}
-            season_counts: dict[str, int] = {}
-            point_counts:  dict[str, int] = {}
-            for s in all_seasons:
-                tn = s.player_teams.get(p.player_id)
-                if tn:
-                    if tn not in seen:
-                        seen.add(tn)
-                        team_order.append(tn)
-                    season_counts[tn] = season_counts.get(tn, 0) + 1
-                    ps = s.player_stats.get(p.player_id)
-                    if ps:
-                        point_counts[tn] = point_counts.get(tn, 0) + ps.points
-                    if s.champion:
-                        champ_nick = s.champion.franchise_at(s.number).nickname[:16]
-                        if champ_nick == tn:
-                            champ_counts[tn] = champ_counts.get(tn, 0) + 1
-            if not team_order:
-                return ""
-            best = max(
-                team_order,
-                key=lambda t: (champ_counts.get(t, 0),
-                               season_counts.get(t, 0),
-                               point_counts.get(t, 0)),
-            )
-            parts = [f"{t}*" if t == best else t for t in team_order]
-            return "  ".join(parts)
-
-        def _coach_team_line(c) -> str:
-            """Return ordered team list with * on the team with most seasons."""
-            ts = c.career_team_seasons
-            if not ts:
-                return ""
-            best = max(ts, key=ts.get)
-            parts = [f"{t}*" if t == best else t for t in ts]
-            return "  ".join(parts)
-
         if players:
             print(f"  {BOLD}{GOLD}★  PLAYER WING{RESET}")
             divider()
@@ -5458,7 +5471,7 @@ class CommissionerGame:
                 league_seasons = p.seasons_played - p.pre_league_seasons
                 print(f"\n  {BOLD}{GOLD}{p.name}{RESET}  {pos_tag}{rings}")
                 print(f"  {entry['blurb']}")
-                teams_line = _player_team_line(p)
+                teams_line = self._player_hof_teams(p)
                 age_line = f"Retired age {p.age}"
                 if teams_line:
                     print(f"  {age_line}  ·  {league_seasons} seasons in league  ·  inducted after season {sn}")
@@ -5478,7 +5491,7 @@ class CommissionerGame:
                 ret_sn = f"season {c.retirement_season}" if c.retirement_season else f"season {sn - 1}"
                 print(f"\n  {BOLD}{CYAN}{c.name}{RESET}  {MUTED}{arch}{RESET}{fp_tag}{rings}")
                 print(f"  {entry['blurb']}")
-                teams_line = _coach_team_line(c)
+                teams_line = self._coach_hof_teams(c)
                 if teams_line:
                     print(f"  Retired after {ret_sn}  ·  {c.seasons_coached} seasons coached  ·  inducted after season {sn}")
                     print(f"  {MUTED}Teams: {teams_line}  (* most seasons){RESET}")
@@ -5492,7 +5505,7 @@ class CommissionerGame:
         input(f"\n  {MUTED}[Enter] continue{RESET}  ")
 
     def _show_hall_of_fame(self, season: Season) -> None:
-        """Hall of Fame report — player wing and coach wing sorted by induction season."""
+        """Hall of Fame report — rich per-inductee blocks matching the ceremony's celebration."""
         from coach import ARCHETYPE_LABELS
         league = self.league
         hof    = league.hall_of_fame
@@ -5512,50 +5525,86 @@ class CommissionerGame:
 
         # ── Player wing ───────────────────────────────────────────────────────
         if players:
-            print(f"\n  {BOLD}{GOLD}PLAYER WING  ({len(players)}){RESET}\n")
-            # Header
-            print(f"  {'NAME':<18}{'POS':<6}{'YRS':>4}{'GP':>5}{'PPG':>6}{'FG%':>6}{'RINGS':>6}  {'INDUCTED':>8}  HIGHLIGHTS")
-            divider()
+            print(f"\n  {BOLD}{GOLD}★  PLAYER WING  ({len(players)}){RESET}\n")
             for entry in players:
-                p   = entry["obj"]
-                pos = p.position[:5]
-                rings_s = str(p.championships) if p.championships else "—"
-                # Award highlights (compact)
-                highlights = []
-                all_s = league.seasons
-                mvp_n  = sum(1 for s in all_s if s.mvp        and s.mvp.player_id        == p.player_id)
-                fmvp_n = sum(1 for s in all_s if s.finals_mvp and s.finals_mvp.player_id == p.player_id)
-                opoy_n = sum(1 for s in all_s if s.opoy       and s.opoy.player_id       == p.player_id)
-                dpoy_n = sum(1 for s in all_s if s.dpoy       and s.dpoy.player_id       == p.player_id)
-                if mvp_n:  highlights.append(f"{mvp_n}×MVP")
-                if fmvp_n: highlights.append(f"{fmvp_n}×FMVP")
-                if opoy_n: highlights.append(f"{opoy_n}×OPOY")
-                if dpoy_n: highlights.append(f"{dpoy_n}×DPOY")
-                hl_str = "  ".join(highlights) if highlights else "—"
-                league_yrs = p.seasons_played - p.pre_league_seasons
-                color = GOLD if p.championships else ""
-                print(f"  {color}{p.name:<18}{RESET}{pos:<6}"
-                      f"{league_yrs:>4}{p.career_games:>5}"
-                      f"{p.career_ppg:>6.1f}{p.career_fg_pct*100:>6.1f}"
-                      f"{rings_s:>6}  Sn {entry['season']:>4}  {MUTED}{hl_str}{RESET}")
+                p = entry["obj"]
+                rings_str   = f"  {'◆' * p.championships}" if p.championships else ""
+                league_yrs  = p.seasons_played - p.pre_league_seasons
+                awards      = self._player_hof_awards(p)
+                teams_line  = self._player_hof_teams(p)
+
+                # Name line
+                print(f"  {BOLD}{GOLD}{p.name}{RESET}  "
+                      f"{MUTED}{p.position}{RESET}"
+                      f"{rings_str}"
+                      f"  {MUTED}inducted Sn {entry['season']}{RESET}")
+
+                # Blurb — the narrative heart of the entry
+                print(f"  {entry['blurb']}")
+
+                # Stats line
+                stat_parts = [
+                    f"{league_yrs} seasons",
+                    f"{p.career_games} GP",
+                    f"{p.career_ppg:.1f} PPG",
+                    f"{p.career_fg_pct * 100:.1f} FG%",
+                ]
+                if p.championships:
+                    champ_word = "champion" if p.championships == 1 else "champions"
+                    stat_parts.append(f"{p.championships}× {champ_word}")
+                print(f"  {MUTED}{'  ·  '.join(stat_parts)}{RESET}")
+
+                # Awards line (only if any)
+                if awards:
+                    print(f"  {MUTED}Awards: {'  '.join(awards)}{RESET}")
+
+                # Teams line
+                if teams_line:
+                    print(f"  {MUTED}Teams: {teams_line}  (* most successful){RESET}")
+
+                divider()
 
         # ── Coach wing ────────────────────────────────────────────────────────
         if coaches:
-            print(f"\n  {BOLD}{CYAN}COACH WING  ({len(coaches)}){RESET}\n")
-            print(f"  {'NAME':<18}{'ARCHETYPE':<20}{'YRS':>4}{'W':>5}{'L':>5}{'W%':>6}{'RINGS':>6}  {'INDUCTED':>8}")
-            divider()
+            print(f"\n  {BOLD}{CYAN}★  COACH WING  ({len(coaches)}){RESET}\n")
             for entry in coaches:
-                c    = entry["obj"]
-                arch = ARCHETYPE_LABELS.get(c.archetype, c.archetype)[:18]
-                rings_s = str(c.championships) if c.championships else "—"
-                color = GOLD if c.championships else CYAN
-                print(f"  {color}{c.name:<18}{RESET}{arch:<20}"
-                      f"{c.seasons_coached:>4}{c.career_wins:>5}{c.career_losses:>5}"
-                      f"{c.career_win_pct*100:>6.1f}{rings_s:>6}  Sn {entry['season']:>4}")
+                c = entry["obj"]
+                arch       = ARCHETYPE_LABELS.get(c.archetype, c.archetype)
+                rings_str  = f"  {'◆' * c.championships}" if c.championships else ""
+                fp_note    = f"  {MUTED}(former player){RESET}" if c.former_player else ""
+                teams_line = self._coach_hof_teams(c)
+
+                # Name line
+                print(f"\n  {BOLD}{CYAN}{c.name}{RESET}  "
+                      f"{MUTED}{arch}{RESET}"
+                      f"{rings_str}"
+                      f"{fp_note}"
+                      f"  {MUTED}inducted Sn {entry['season']}{RESET}")
+
+                # Blurb
+                print(f"  {entry['blurb']}")
+
+                # Stats line
+                stat_parts = [
+                    f"{c.seasons_coached} seasons",
+                    f"{c.career_wins}–{c.career_losses}",
+                    f"{c.career_win_pct * 100:.1f} W%",
+                ]
+                if c.championships:
+                    champ_word = "champion" if c.championships == 1 else "champions"
+                    stat_parts.append(f"{c.championships}× {champ_word}")
+                if c.coy_wins:
+                    stat_parts.append(f"{c.coy_wins}× COY")
+                print(f"  {MUTED}{'  ·  '.join(stat_parts)}{RESET}")
+
+                # Teams line
+                if teams_line:
+                    print(f"  {MUTED}Teams: {teams_line}  (* most seasons){RESET}")
+
+                divider()
 
         print()
-        divider()
-        input(f"\n  {MUTED}[Enter] back{RESET}  ")
+        input(f"  {MUTED}[Enter] back{RESET}  ")
 
     def _show_fanbase_pulse(self, season: Season) -> None:
         """Per-fanbase sentiment board — one row per team, problems at top.
