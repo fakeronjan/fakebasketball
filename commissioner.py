@@ -5417,6 +5417,14 @@ class CommissionerGame:
         )
         return "  ".join(f"{t}*" if t == best else t for t in team_order)
 
+    def _player_hof_seasons(self, p):
+        """Return (first_season, last_season) the player appeared in league records."""
+        seasons_active = [s.number for s in self.league.seasons
+                          if s.player_teams.get(p.player_id)]
+        if not seasons_active:
+            return None, None
+        return min(seasons_active), max(seasons_active)
+
     def _coach_hof_teams(self, c) -> str:
         """Ordered team list for a coach, * on team with most seasons."""
         ts = c.career_team_seasons
@@ -5528,10 +5536,9 @@ class CommissionerGame:
             print(f"\n  {BOLD}{GOLD}★  PLAYER WING  ({len(players)}){RESET}\n")
             for entry in players:
                 p = entry["obj"]
-                rings_str   = f"  {'◆' * p.championships}" if p.championships else ""
-                league_yrs  = p.seasons_played - p.pre_league_seasons
-                awards      = self._player_hof_awards(p)
-                teams_line  = self._player_hof_teams(p)
+                rings_str        = f"  {'◆' * p.championships}" if p.championships else ""
+                teams_line       = self._player_hof_teams(p)
+                first_sn, last_sn = self._player_hof_seasons(p)
 
                 # Name line
                 print(f"  {BOLD}{GOLD}{p.name}{RESET}  "
@@ -5539,24 +5546,13 @@ class CommissionerGame:
                       f"{rings_str}"
                       f"  {MUTED}inducted Sn {entry['season']}{RESET}")
 
-                # Blurb — the narrative heart of the entry
+                # Blurb (already contains GP · PPG · FG% · awards)
                 print(f"  {entry['blurb']}")
 
-                # Stats line
-                stat_parts = [
-                    f"{league_yrs} seasons",
-                    f"{p.career_games} GP",
-                    f"{p.career_ppg:.1f} PPG",
-                    f"{p.career_fg_pct * 100:.1f} FG%",
-                ]
-                if p.championships:
-                    champ_word = "champion" if p.championships == 1 else "champions"
-                    stat_parts.append(f"{p.championships}× {champ_word}")
-                print(f"  {MUTED}{'  ·  '.join(stat_parts)}{RESET}")
-
-                # Awards line (only if any)
-                if awards:
-                    print(f"  {MUTED}Awards: {'  '.join(awards)}{RESET}")
+                # Career span + retirement age
+                span = (f"S{first_sn}–S{last_sn}" if first_sn else
+                        f"{p.seasons_played - p.pre_league_seasons} seasons")
+                print(f"  {MUTED}{span}  ·  Retired age {p.age}{RESET}")
 
                 # Teams line
                 if teams_line:
@@ -5574,6 +5570,13 @@ class CommissionerGame:
                 fp_note    = f"  {MUTED}(former player){RESET}" if c.former_player else ""
                 teams_line = self._coach_hof_teams(c)
 
+                # Season span: retirement_season and seasons_coached give us the range
+                if c.retirement_season and c.seasons_coached:
+                    first_sn = c.retirement_season - c.seasons_coached + 1
+                    span = f"S{first_sn}–S{c.retirement_season}"
+                else:
+                    span = f"{c.seasons_coached} seasons"
+
                 # Name line
                 print(f"\n  {BOLD}{CYAN}{c.name}{RESET}  "
                       f"{MUTED}{arch}{RESET}"
@@ -5581,21 +5584,11 @@ class CommissionerGame:
                       f"{fp_note}"
                       f"  {MUTED}inducted Sn {entry['season']}{RESET}")
 
-                # Blurb
+                # Blurb (already contains seasons · W% · awards)
                 print(f"  {entry['blurb']}")
 
-                # Stats line
-                stat_parts = [
-                    f"{c.seasons_coached} seasons",
-                    f"{c.career_wins}–{c.career_losses}",
-                    f"{c.career_win_pct * 100:.1f} W%",
-                ]
-                if c.championships:
-                    champ_word = "champion" if c.championships == 1 else "champions"
-                    stat_parts.append(f"{c.championships}× {champ_word}")
-                if c.coy_wins:
-                    stat_parts.append(f"{c.coy_wins}× COY")
-                print(f"  {MUTED}{'  ·  '.join(stat_parts)}{RESET}")
+                # Career span
+                print(f"  {MUTED}{span}{RESET}")
 
                 # Teams line
                 if teams_line:
