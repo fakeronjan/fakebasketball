@@ -2579,7 +2579,7 @@ class CommissionerGame:
                 f"League Health    {MUTED}pillar scores trend — Integrity · Parity · Drama · Entertainment{RESET}",
                 hof_label,
                 rival_label,
-                f"Export to file   {MUTED}write all reports to fakebasketball_s{season.number}.txt{RESET}",
+                f"Export to file   {MUTED}write all reports to <league>_s{season.number}.txt{RESET}",
                 f"{MUTED}Back{RESET}",
             ], default=16)
             if   idx == 0:  self._show_power_structure(season)
@@ -3443,7 +3443,8 @@ class CommissionerGame:
                         w(f"    {i+1:>2}. {tname:<28} {ww:>3}-{ll:>3}  {pct:.1%}")
 
         # ── Write file ────────────────────────────────────────────────────────
-        export_path = f"fakebasketball_s{sn}.txt"
+        slug = _re.sub(r'[^a-zA-Z0-9]+', '_', self.league_name).strip('_').lower()
+        export_path = f"{slug}_s{sn}.txt"
         try:
             with open(export_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(out))
