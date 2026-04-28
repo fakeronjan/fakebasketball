@@ -329,6 +329,7 @@ class Player:
     seasons_retired:    int = 0    # 0 = active, 1 = first offseason after retirement, etc.
     hof_inducted:       bool = False
     pre_league_seasons: int = 0    # seasons_played at league creation (founding players only); excluded from display
+    generational: bool = False     # True for pre-announced generational draft prospects
 
     # ── Computed: current ratings ─────────────────────────────────────────────
 
@@ -574,6 +575,17 @@ def generate_player(
         seasons_with_team      = seasons_already,  # founding players have tenure
         pre_league_seasons     = seasons_already,  # offset for display purposes
     )
+
+
+def generate_generational_prospect() -> Player:
+    """Create a single pre-announced generational draft prospect.
+
+    Always elite tier, draft age (18), with the generational flag set.
+    Called a season in advance so the league can react before the draft.
+    """
+    p = generate_player(tier="elite", founding=False)
+    p.generational = True
+    return p
 
 
 def generate_draft_class(n: int, talent_boost: float = 0.0) -> list[Player]:

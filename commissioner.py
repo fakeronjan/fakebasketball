@@ -444,6 +444,7 @@ class CommissionerGame:
                  contract_years_remaining=2,
                  contract_length=3,
                  happiness=0.70,
+                 generational=False,
             )
 
         # ── All past seasons ──────────────────────────────────────────────────
@@ -478,7 +479,16 @@ class CommissionerGame:
              merger_log=[],
              _consecutive_championships=0,
              _defending_champion_id=None,
+             _generational_draft_season=0,
+             _generational_prospects=[],
+             _last_generational_draft=0,
+             _tanking_teams=set(),
+             _failed_tank_teams=set(),
         )
+        for team in league.teams:
+            _fix(team,
+                 _tanking_for_pick=False,
+            )
 
         # ── CommissionerGame-level ────────────────────────────────────────────
         # (handled by __dict__.update in _load_game — __init__ defaults survive)
@@ -5420,13 +5430,39 @@ class CommissionerGame:
         # Update owner happiness now that P&L is finalized
         # (coach happiness already computed in _run_one_season so COY shows in awards)
         league.update_all_owner_happiness(season)
+
+        # Generational draft: inject pre-named prospects before the draft runs
+        is_gen_draft_season = (league._generational_draft_season == sn)
+        if is_gen_draft_season:
+            league._inject_generational_prospects()
+
         self._handle_player_offseason(season)
+
+        # Generational draft: apply aftermath immediately after draft results are known
+        if is_gen_draft_season:
+            league._apply_failed_tank_aftermath(season)
+            league._last_generational_draft = sn
+            league._generational_draft_season = 0
+            league._tanking_teams.clear()
+
         self._handle_coaching_market(season)
         self._owner_actions = self._generate_all_owner_actions(season)
         if sn >= 5 and sn % 5 == 0:
             self._handle_cba_negotiation(season)
         self._handle_rival_league(season)
         self._show_fanbase_pulse(season)
+        league._failed_tank_teams.clear()   # surfaced in pulse; clear for next season
+
+        # Generational draft: check if we should announce next season's class
+        # (fires after fanbase pulse so fans react to current state first)
+        if league._should_trigger_generational(sn):
+            league._generate_generational_prospects(sn)
+        if league._generational_draft_season == sn + 1:
+            self._show_generational_prospect_preview(season)
+            tanking = league._run_tanking_decisions(season)
+            self._show_tanking_decisions(tanking, season)
+            league._run_auto_fa()   # second FA pass so contenders can sign cut players
+
         if getattr(self.league, '_new_hof_inductees', []):
             self._show_hof_ceremony(season)
         self._commissioner_desk(season)
@@ -6050,18 +6086,34 @@ class CommissionerGame:
             league.draft_pool = []
             return
 
-        # Generational prospect alert — fire before the main draft screen
-        elite_prospects = [p for p in league.draft_pool if p.ceiling_tier == TIER_ELITE]
-        if elite_prospects:
+        # Detect generational prospects in this draft
+        gen_prospects = [p for p in league.draft_pool if getattr(p, 'generational', False)]
+        is_gen_draft  = len(gen_prospects) > 0
+
+        if is_gen_draft:
             clear()
-            header("GENERATIONAL DRAFT CLASS", f"After Season {sn}")
-            print(f"\n  {GOLD}{BOLD}⭐ A GENERATIONAL TALENT IS IN THIS DRAFT CLASS{RESET}\n")
-            for _ep in elite_prospects:
-                print(f"  {GOLD}{BOLD}{_ep.name}{RESET}  "
-                      f"{MUTED}{_ep.position} · Age {_ep.age} · Elite ceiling{RESET}")
-            print(f"\n  {MUTED}Scouts are calling this one of the most anticipated drafts")
-            print(f"  in league history. Every team without a slot open is envious.")
-            print(f"  Lottery influence ($10M) has never mattered more.{RESET}")
+            header("THE GENERATIONAL DRAFT", f"After Season {sn}")
+            if len(gen_prospects) == 1:
+                p = gen_prospects[0]
+                print(f"\n  {GOLD}{BOLD}⭐ {p.name.upper()} ENTERS THE DRAFT{RESET}\n")
+                print(f"  The most anticipated prospect in years has declared.")
+                print(f"  {MUTED}{p.position} · Age {p.age} · Elite ceiling{RESET}")
+            else:
+                p1, p2 = gen_prospects[0], gen_prospects[1]
+                print(f"\n  {GOLD}{BOLD}⭐⭐ HISTORIC TWO-PROSPECT CLASS{RESET}\n")
+                print(f"  {GOLD}{BOLD}{p1.name}{RESET}  {MUTED}({p1.position}){RESET}")
+                print(f"  {GOLD}{BOLD}{p2.name}{RESET}  {MUTED}({p2.position}){RESET}")
+                print(f"\n  {MUTED}Two generational talents in one draft.  The landscape")
+                print(f"  of this league will shift no matter what happens.{RESET}")
+            # Show which teams tanked
+            tanking_ids = getattr(league, '_tanking_teams', set())
+            tank_names = [t.franchise_at(sn).name for t in league.teams
+                          if t.team_id in tanking_ids]
+            if tank_names:
+                print(f"\n  {MUTED}Teams that tanked last season for this pick:")
+                for tn in tank_names:
+                    print(f"    • {tn}")
+                print(f"  {RESET}")
             press_enter()
 
         clear()
@@ -6075,35 +6127,44 @@ class CommissionerGame:
               f"{'ORtg':>5}  {'DRtg':>5}  {'Zone':<6}  Motivation")
         divider()
         for i, p in enumerate(league.draft_pool, 1):
-            tc = tier_colors.get(p.ceiling_tier, "")
-            print(f"  {i:>2}. {tc}{p.name:<22}{RESET} {p.position:<6} {p.age:>3}  "
+            tc  = tier_colors.get(p.ceiling_tier, "")
+            gen = f" {GOLD}★{RESET}" if getattr(p, 'generational', False) else ""
+            print(f"  {i:>2}. {tc}{p.name:<22}{RESET}{gen} {p.position:<6} {p.age:>3}  "
                   f"{tc}{p.ceiling_tier:<7}{RESET}  "
                   f"{p.ortg_contrib:>+5.1f}  {p.drtg_contrib:>+5.1f}  "
                   f"{p.preferred_zone:<6}  {p.motivation}")
 
-        # Show draft order
+        # Show draft order (flag tanking teams)
+        tanking_ids = getattr(league, '_tanking_teams', set())
         print(f"\n  Draft order (worst record first):\n")
         for i, t in enumerate(picking_teams, 1):
             empty_slots = [t.slot_label(j) for j, s in enumerate(t.roster) if s is None]
+            tank_flag = f"  {RED}[TANKED]{RESET}" if t.team_id in tanking_ids else ""
             print(f"  {i:>2}. {t.franchise_at(sn).name:<28}  "
-                  f"{MUTED}open: {', '.join(empty_slots)}{RESET}")
+                  f"{MUTED}open: {', '.join(empty_slots)}{RESET}{tank_flag}")
 
-        # Lottery influence option
+        # Lottery influence — supports up to 2 rig actions in a gen draft
         print()
-        if self._treasury >= 10.0:
-            raw = prompt("Influence lottery? Enter team # to bump up (Enter to skip):")
-            if raw.isdigit():
-                val = int(raw) - 1
-                if 0 <= val < len(picking_teams) and val > 0:
-                    cost = 10.0
-                    self._treasury -= cost
-                    league.legitimacy = max(0.0, league.legitimacy - 0.02)
-                    # Move team to front of draft order
-                    bumped = picking_teams.pop(val)
-                    picking_teams.insert(0, bumped)
-                    print(f"  {GREEN}✓ {bumped.franchise_at(sn).name} moved to pick #1.  "
-                          f"(-${cost:.0f}M, legitimacy -2%){RESET}")
-        else:
+        rig_slots = 2 if (is_gen_draft and len(gen_prospects) >= 2) else 1
+        rigs_used = 0
+        while rigs_used < rig_slots and self._treasury >= 10.0:
+            pick_label = f"pick #{rigs_used + 1}" if rig_slots > 1 else "top pick"
+            raw = prompt(f"Influence lottery? Enter team # to move to {pick_label} (Enter to skip):")
+            if not raw.isdigit():
+                break
+            val = int(raw) - 1
+            if 0 <= val < len(picking_teams) and val > rigs_used:
+                cost = 10.0
+                self._treasury -= cost
+                league.legitimacy = max(0.0, league.legitimacy - 0.02)
+                bumped = picking_teams.pop(val)
+                picking_teams.insert(rigs_used, bumped)
+                print(f"  {GREEN}✓ {bumped.franchise_at(sn).name} moved to pick #{rigs_used + 1}.  "
+                      f"(-${cost:.0f}M, legitimacy -2%){RESET}")
+                rigs_used += 1
+            else:
+                break
+        if self._treasury < 10.0 and rigs_used == 0:
             print(f"  {MUTED}(Need $10M to influence lottery){RESET}")
 
         press_enter("Press Enter to run the draft...")
@@ -6460,6 +6521,75 @@ class CommissionerGame:
         print()
         input(f"  {MUTED}[Enter] back{RESET}  ")
 
+    def _show_generational_prospect_preview(self, season: Season) -> None:
+        """Announce next season's generational draft class and show ecosystem reaction.
+
+        Fires after _show_fanbase_pulse so the commissioner sees how the current
+        state of the league will be shaken up before the big draft arrives.
+        """
+        league = self.league
+        sn     = season.number
+        prospects = league._generational_prospects
+        n_prospects = len(prospects)
+
+        clear()
+        header("GENERATIONAL DRAFT CLASS ANNOUNCED", f"After Season {sn}")
+
+        if n_prospects == 1:
+            p = prospects[0]
+            print(f"\n  {GOLD}{BOLD}⭐ A GENERATIONAL TALENT IS COMING{RESET}\n")
+            print(f"  Scouts have identified {GOLD}{BOLD}{p.name}{RESET} as a once-in-a-decade")
+            print(f"  prospect. {p.pronoun_cap} will enter the draft after next season.")
+            print(f"\n  {MUTED}Position: {p.position}  ·  Ceiling: Elite{RESET}")
+        else:
+            p1, p2 = prospects[0], prospects[1]
+            print(f"\n  {GOLD}{BOLD}⭐⭐ A HISTORIC TWO-PROSPECT CLASS IS COMING{RESET}\n")
+            print(f"  In a rare coincidence, two generational talents —")
+            print(f"  {GOLD}{BOLD}{p1.name}{RESET} and {GOLD}{BOLD}{p2.name}{RESET} —")
+            print(f"  are both projected to enter the draft after next season.")
+            print(f"\n  {MUTED}{p1.position}  ·  {p2.position}  ·  Both Elite ceiling{RESET}")
+
+        print(f"\n  {BOLD}Ecosystem reaction:{RESET}")
+        print(f"  {MUTED}Fans:{RESET}    Every fanbase is calculating whether their team")
+        print(f"           can get to the top of next year's draft order.")
+        print(f"  {MUTED}Owners:{RESET}  Some are quietly telling GMs to stop trying to win.")
+        print(f"  {MUTED}Stars:{RESET}   Veterans on weaker teams may see their co-stars")
+        print(f"           packaged and sent to the FA pool before next season.")
+        print(f"  {MUTED}Coaches:{RESET} Hot-seat coaches on poor teams are watching their")
+        print(f"           owners weigh a tank job against a firing.")
+
+        press_enter()
+
+    def _show_tanking_decisions(self, tanking: dict, season: Season) -> None:
+        """Show which teams have decided to tank for the generational pick.
+
+        tanking: dict mapping Team → list[Player] of players cut by that team.
+        """
+        if not tanking:
+            return
+        league = self.league
+        sn     = season.number
+
+        clear()
+        header("TANKING SEASON DECLARED", f"After Season {sn}")
+        print(f"\n  {RED}{BOLD}{len(tanking)} team(s) are deliberately weakening{RESET}")
+        print(f"  their rosters to chase next season's generational pick.\n")
+
+        for team, cuts in tanking.items():
+            owner = team.owner
+            pers_label = "Renegade" if getattr(owner, 'personality', '') == 'renegade' else "Steady"
+            fr = team.franchise_at(sn)
+            print(f"  {RED}{fr.name}{RESET}  {MUTED}({pers_label} owner){RESET}")
+            if cuts:
+                cut_str = ", ".join(p.name for p in cuts)
+                print(f"    {MUTED}Released: {cut_str}{RESET}")
+
+        all_cuts = [p for cuts in tanking.values() for p in cuts]
+        if all_cuts:
+            print(f"\n  {MUTED}{len(all_cuts)} player(s) have entered the free agent pool.")
+            print(f"  Contenders can snap them up before next season begins.{RESET}")
+        press_enter()
+
     def _show_fanbase_pulse(self, season: Season) -> None:
         """Per-fanbase sentiment board — one row per team, problems at top.
 
@@ -6582,6 +6712,12 @@ class CommissionerGame:
                     note = f"losing interest as {dname} run it back again"
             if rival_hot and severity <= 2 and streak >= 1:
                 note = note or f"{rival.name} drawing curious fans away"
+
+            # Failed tank: team sacrificed the season and missed the generational pick
+            failed_tank_ids = getattr(league, '_failed_tank_teams', set())
+            if t.team_id in failed_tank_ids:
+                note = "TANKED AND MISSED — fans are furious, engagement crater incoming"
+                severity = min(severity, 0)   # force crisis tier
 
             rows.append((severity, fname, emoji, label, color, reason, note))
 

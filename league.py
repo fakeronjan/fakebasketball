@@ -13,9 +13,11 @@ from config import Config
 from franchises import ALL_FRANCHISES, Franchise
 from owner import (Owner, generate_owner, generate_heir, generate_buyers,
                    MOT_MONEY, MOT_WINNING as OWNER_MOT_WINNING, MOT_LOCAL_HERO,
-                   THREAT_QUIET, THREAT_LEAN, THREAT_DEMAND)
+                   THREAT_QUIET, THREAT_LEAN, THREAT_DEMAND,
+                   PERS_RENEGADE, LOY_LOYAL, LOY_LOW)
 from player import (Player, generate_player, generate_draft_class,
-                    POSITIONS, MOT_LOYALTY, MOT_WINNING, MOT_MARKET)
+                    generate_generational_prospect,
+                    POSITIONS, TIER_ELITE, MOT_LOYALTY, MOT_WINNING, MOT_MARKET)
 from rival import (RivalLeague, generate_rival_league, generate_defection_league,
                    generate_walkout_league, simulate_rival_season, maybe_fire_intel_event)
 from season import Season
@@ -128,6 +130,12 @@ class League:
         self.retired_players: list[Player] = []   # players who have retired
         self.hall_of_fame: list[dict] = []        # {"type", "obj", "season", "blurb"}
         self._new_hof_inductees: list[dict] = []  # cleared each offseason
+        # Generational draft system
+        self._generational_draft_season: int = 0      # season N when gen draft occurs; 0 = none pending
+        self._generational_prospects: list = []        # pre-generated Player objects held in reserve
+        self._last_generational_draft: int = 0         # season number of the most recent gen draft
+        self._tanking_teams: set = set()               # team_ids currently tanking for the gen pick
+        self._failed_tank_teams: set = set()           # team_ids that tanked and missed the pick
         # Generate founding players and compute initial team ratings from roster
         self._generate_all_founding_players()
 
@@ -1047,6 +1055,133 @@ class League:
         """
         self._talent_boost_seasons_left += seasons
         self._talent_boost_delta = max(self._talent_boost_delta, delta)
+
+    # ── Generational draft system ─────────────────────────────────────────────
+
+    def _should_trigger_generational(self, sn: int) -> bool:
+        """Return True if a generational draft should be announced this season.
+
+        Minimum gap of 5 seasons since the last one.  Probability ramps from
+        ~17% at gap=5 to 100% at gap=10 so it always fires within a decade.
+        """
+        if self._generational_draft_season != 0:
+            return False  # already one pending
+        gap = sn - self._last_generational_draft
+        if gap < 5:
+            return False
+        prob = min(1.0, (gap - 4) / 6.0)
+        return random.random() < prob
+
+    def _generate_generational_prospects(self, sn: int) -> None:
+        """Create 1 or 2 generational prospects and schedule them for next season.
+
+        1/3 chance of a Bird/Magic two-prospect class.  Prospects are named now
+        so the league can react before the draft.
+        """
+        n = 2 if random.random() < 1 / 3 else 1
+        self._generational_prospects = [generate_generational_prospect() for _ in range(n)]
+        self._generational_draft_season = sn + 1
+
+    def _inject_generational_prospects(self) -> None:
+        """Move pre-generated generational prospects into the draft pool.
+
+        Called at the start of the generational draft season's offseason,
+        before _handle_draft runs.
+        """
+        for p in self._generational_prospects:
+            self.draft_pool.insert(0, p)   # front of pool so they appear first
+        self._generational_prospects = []
+
+    def _run_tanking_decisions(self, season: Season) -> dict:
+        """Decide which teams will tank for the upcoming generational draft.
+
+        Returns dict mapping Team → list[Player] of players that were cut.
+        Tanking teams cut their co-star (and maybe starter) to worsen their
+        record next season, moving them up the draft order.
+
+        Eligibility — ineligible if:
+          • team has an elite-ceiling star on the roster
+          • team is the defending champion
+        Probability — driven by owner personality/loyalty:
+          • Renegade owner:   65%
+          • Low-loyalty owner: 50%
+          • Default (steady + loyal): 30%
+          • Loyal owner:      18%
+        """
+        tanking: dict = {}
+        for team in self.teams:
+            # Eligibility
+            has_elite = any(p is not None and p.ceiling_tier == TIER_ELITE
+                            for p in team.roster)
+            if has_elite:
+                continue
+            if self._defending_champion_id == team.team_id:
+                continue
+
+            owner = team.owner
+            if owner is None:
+                continue
+            pers = getattr(owner, 'personality', '')
+            loy  = getattr(owner, 'loyalty', '')
+
+            if pers == PERS_RENEGADE:
+                prob = 0.65
+            elif loy == LOY_LOW:
+                prob = 0.50
+            elif loy == LOY_LOYAL:
+                prob = 0.18
+            else:
+                prob = 0.30
+
+            if random.random() < prob:
+                tanking[team] = []
+
+        # Execute cuts for each tanking team
+        for team, cuts in tanking.items():
+            team._tanking_for_pick = True
+            self._tanking_teams.add(team.team_id)
+            # Always cut the co-star (slot 1) if occupied
+            if team.roster[1] is not None:
+                p = team.roster[1]
+                team.roster[1] = None
+                p.team_id = None
+                self.free_agent_pool.append(p)
+                cuts.append(p)
+            # 50% chance to also cut the starter (slot 2)
+            if team.roster[2] is not None and random.random() < 0.5:
+                p = team.roster[2]
+                team.roster[2] = None
+                p.team_id = None
+                self.free_agent_pool.append(p)
+                cuts.append(p)
+
+        return tanking
+
+    def _apply_failed_tank_aftermath(self, season: Season) -> None:
+        """Mark teams that tanked but didn't land a generational pick.
+
+        Popularity crash and owner-happiness crater are applied here;
+        the commissioner UI (_show_generational_prospect_preview aftermath
+        and fan inbox) surfaces the narrative to the player.
+        """
+        sn = season.number
+        for team in self.teams:
+            if not getattr(team, '_tanking_for_pick', False):
+                continue
+            # Did they get a generational prospect?
+            got_pick = any(
+                p is not None and getattr(p, 'generational', False)
+                for p in team.roster
+            )
+            team._tanking_for_pick = False
+            if not got_pick:
+                self._failed_tank_teams.add(team.team_id)
+                # Popularity crash: −15 to −20 ppts
+                crash = random.uniform(0.15, 0.20)
+                team.market_engagement = max(0.0, team.market_engagement - crash)
+                # Owner happiness crater
+                if team.owner:
+                    team.owner.happiness = max(0.0, team.owner.happiness - 0.30)
 
     # ── Player movement helpers ───────────────────────────────────────────────
 
