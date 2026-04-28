@@ -22,6 +22,39 @@ from season import Season
 from team import Team
 
 
+# ── Hall of Fame blurb helpers ────────────────────────────────────────────────
+
+def _player_hof_blurb(player: "Player", mvp_n: int, fmvp_n: int,
+                       opoy_n: int, dpoy_n: int) -> str:
+    """One-sentence career summary for the induction screen."""
+    parts = []
+    if mvp_n:
+        parts.append(f"{mvp_n}× MVP")
+    if fmvp_n:
+        parts.append(f"{fmvp_n}× Finals MVP")
+    if player.championships:
+        parts.append(f"{player.championships}× champion")
+    if opoy_n:
+        parts.append(f"{opoy_n}× OPOY")
+    if dpoy_n:
+        parts.append(f"{dpoy_n}× DPOY")
+    awards_str = ", ".join(parts) if parts else "career excellence"
+    return (f"{player.career_games}G  {player.career_ppg:.1f} PPG  "
+            f"{player.career_fg_pct*100:.1f}% FG  ·  {awards_str}")
+
+
+def _coach_hof_blurb(coach: "Coach", coy_n: int) -> str:
+    """One-sentence career summary for the induction screen."""
+    parts = []
+    if coach.championships:
+        parts.append(f"{coach.championships}× champion")
+    if coy_n:
+        parts.append(f"{coy_n}× COY")
+    awards_str = ", ".join(parts) if parts else "career excellence"
+    return (f"{coach.seasons_coached} seasons  "
+            f"{coach.career_win_pct*100:.1f}% W  ·  {awards_str}")
+
+
 class League:
     def __init__(self, cfg: Config, selected_franchises: Optional[list] = None):
         self.cfg = cfg
@@ -59,6 +92,7 @@ class League:
         # Coach system
         self._coaching_pool: list[Coach] = []  # unassigned coaches available for hiring
         self._pending_coach_hires: list[tuple] = []  # (team, fired_coach_name) waiting for offseason resolution
+        self._all_coaches: list[Coach] = []       # every coach ever created (active, pool, or fired)
         self._assign_coaches()
         # CBA state — reset each negotiation round (every 5 seasons from season 5)
         self.cba_player_happiness_mod: float = 0.0     # flat bonus/penalty for all players
@@ -90,6 +124,10 @@ class League:
         self._consecutive_championships: int = 0   # how many back-to-back titles the defender has won
         # Four-pillar health scores — keyed by season number
         self.pillar_history: dict[int, dict] = {}
+        # Career tracking & Hall of Fame
+        self.retired_players: list[Player] = []   # players who have retired
+        self.hall_of_fame: list[dict] = []        # {"type", "obj", "season", "blurb"}
+        self._new_hof_inductees: list[dict] = []  # cleared each offseason
         # Generate founding players and compute initial team ratings from roster
         self._generate_all_founding_players()
 
@@ -207,6 +245,9 @@ class League:
             team.coach = coach
         # Seed pool: ~1 available coach per team, also balanced
         self._coaching_pool = generate_coaches_balanced(max(4, len(self.teams)))
+        # Register all coaches in the all-time registry
+        self._all_coaches.extend(founding)
+        self._all_coaches.extend(self._coaching_pool)
 
     def _coaching_pool_hire(self, team: "Team") -> None:
         """Assign the best-fit available coach to a team (from the pool).
@@ -215,7 +256,9 @@ class League:
         relatable in locker-room context).  Replenishes the pool if depleted.
         """
         if not self._coaching_pool:
-            self._coaching_pool = generate_coaching_pool(4)
+            new_coaches = generate_coaching_pool(4)
+            self._all_coaches.extend(new_coaches)
+            self._coaching_pool = new_coaches
         owner_mot = team.owner.motivation if team.owner else None
         patience  = team.owner.tenure_left if team.owner else 5
 
@@ -239,7 +282,9 @@ class League:
         the gap is large.  Pool is replenished if empty.  Returns the hired coach.
         """
         if not self._coaching_pool:
-            self._coaching_pool = generate_coaching_pool(4)
+            new_coaches = generate_coaching_pool(4)
+            self._all_coaches.extend(new_coaches)
+            self._coaching_pool = new_coaches
         owner_mot = team.owner.motivation if team.owner else None
         patience  = team.owner.tenure_left if team.owner else 5
 
@@ -655,9 +700,14 @@ class League:
             finalist._protected_until,
             season.number + self.cfg.finals_protection,
         )
-        # Championship coach gets 2 seasons of hot-seat immunity
+        # Championship coach gets 2 seasons of hot-seat immunity + championship credit
         if champ.coach is not None:
             champ.coach.immunity_seasons = max(champ.coach.immunity_seasons, 2)
+            champ.coach.championships += 1
+        # Championship credits for all rostered players on the winning team
+        for player in champ.roster:
+            if player is not None:
+                player.championships += 1
 
     def offseason_phase1(self, season: Season) -> tuple[list[Player], list[Player]]:
         """Advance player careers and process retirements/contract expirations.
@@ -731,6 +781,8 @@ class League:
                         team.roster[i] = None
             if player in self.free_agent_pool:
                 self.free_agent_pool.remove(player)
+            # Archive to retired player registry
+            self.retired_players.append(player)
             # Former-player coaching pipeline: 25% of retirees transition to coaching
             if random.random() < 0.25:
                 coach = coach_from_retired_player(
@@ -740,6 +792,7 @@ class League:
                     last_team_name = last_team_name or "Unknown",
                 )
                 self._coaching_pool.append(coach)
+                self._all_coaches.append(coach)
 
         # 4. Compute happiness, popularity, and development boost for rostered players
         for team in self.teams:
@@ -803,7 +856,126 @@ class League:
         if self._talent_boost_seasons_left > 0:
             self._talent_boost_seasons_left -= 1
 
+        # 9. Accumulate career stats and update coach records
+        self._accumulate_career_stats(season)
+
+        # 10. Advance seasons_retired counter for already-retired players
+        for rp in self.retired_players:
+            if rp.retired:
+                rp.seasons_retired += 1
+
+        # 11. Check Hall of Fame inductions (1-season wait for players)
+        self._new_hof_inductees = self._check_hof_inductions(season.number)
+
         return retiring, new_fas
+
+    # ── Career stats & Hall of Fame ───────────────────────────────────────────
+
+    def _accumulate_career_stats(self, season: "Season") -> None:
+        """Roll this season's player stats into career totals; update coach W/L."""
+        # Players: all rostered + FA pool + freshly retired (still in retiring list)
+        all_players = (
+            [p for t in self.teams for p in t.roster if p is not None]
+            + self.free_agent_pool
+            + self.retired_players
+        )
+        for player in all_players:
+            ps = season.player_stats.get(player.player_id)
+            if ps and ps.games > 0:
+                player.absorb_season_stats(ps)
+
+        # Coaches: update career W/L from this season's team records
+        for team in self.teams:
+            if team.coach is not None:
+                w = season.reg_wins(team)
+                l = season.reg_losses(team)
+                team.coach.career_wins   += w
+                team.coach.career_losses += l
+
+    def _check_hof_inductions(self, season_number: int) -> list[dict]:
+        """Score eligible players and coaches; induct those above threshold.
+
+        Player eligibility: retired and seasons_retired >= 1 (1-season wait).
+        Coach eligibility:  seasons_coached >= 5 (coaches never formally retire).
+
+        Returns the list of new inductees this offseason (for the ceremony screen).
+        """
+        all_seasons = self.seasons   # list of Season objects
+        new_inductees: list[dict] = []
+
+        # ── Player scoring ────────────────────────────────────────────────────
+        def _count_award(pid: int, getter) -> int:
+            return sum(1 for s in all_seasons
+                       if getter(s) is not None and getter(s).player_id == pid)
+
+        for player in self.retired_players:
+            if player.hof_inducted or player.seasons_retired < 1:
+                continue
+            if player.career_games < 150:   # filter out washouts / injury-shortened careers
+                continue
+            pid = player.player_id
+            mvp_n       = _count_award(pid, lambda s: s.mvp)
+            opoy_n      = _count_award(pid, lambda s: s.opoy)
+            dpoy_n      = _count_award(pid, lambda s: s.dpoy)
+            fmvp_n      = _count_award(pid, lambda s: s.finals_mvp)
+            mip_n       = _count_award(pid, lambda s: s.mip)
+            roy_n       = _count_award(pid, lambda s: s.roy)
+            # PPG weight is low (1.0) because stars in the 3-slot model naturally
+            # score 20–28 PPG by design; awards and rings are the real differentiators
+            score = (
+                player.career_ppg    * 1.0
+                + player.career_games / 40.0
+                + player.championships * 12.0
+                + mvp_n  * 25.0
+                + fmvp_n * 10.0
+                + opoy_n *  6.0
+                + dpoy_n *  6.0
+                + mip_n  *  3.0
+                + roy_n  *  4.0
+            )
+            if score >= 70.0:
+                player.hof_inducted = True
+                blurb = _player_hof_blurb(player, mvp_n, fmvp_n, opoy_n, dpoy_n)
+                entry = {"type": "player", "obj": player,
+                         "season": season_number, "blurb": blurb, "score": round(score, 1)}
+                self.hall_of_fame.append(entry)
+                new_inductees.append(entry)
+
+        # ── Coach scoring ─────────────────────────────────────────────────────
+        def _count_coy(cid: str) -> int:
+            return sum(1 for s in all_seasons
+                       if s.coy is not None and s.coy.coach_id == cid)
+
+        for coach in self._all_coaches:
+            if coach.hof_inducted or coach.seasons_coached < 8:
+                continue
+            if coach.career_wins + coach.career_losses == 0:
+                continue
+            # Minimum win% floor — losing-record coaches need a championship or COY
+            # to overcome the baseline talent requirement
+            if coach.career_win_pct < 0.45 and coach.championships == 0:
+                coy_check = sum(1 for s in all_seasons
+                                if s.coy is not None and s.coy.coach_id == coach.coach_id)
+                if coy_check < 2:
+                    continue
+            coy_n = _count_coy(coach.coach_id)
+            # Win% weight is intentionally modest — a .600 coach gets 18 pts, barely
+            # enough with longevity alone.  Championships and COY drive inductions.
+            score = (
+                coach.seasons_coached  *  2.5
+                + coach.championships  * 22.0
+                + coy_n                * 18.0
+                + coach.career_win_pct * 30.0
+            )
+            if score >= 65.0:
+                coach.hof_inducted = True
+                blurb = _coach_hof_blurb(coach, coy_n)
+                entry = {"type": "coach", "obj": coach,
+                         "season": season_number, "blurb": blurb, "score": round(score, 1)}
+                self.hall_of_fame.append(entry)
+                new_inductees.append(entry)
+
+        return new_inductees
 
     def offseason_phase2(self) -> None:
         """Auto-fill remaining empty slots via draft and FA, then recompute ratings.

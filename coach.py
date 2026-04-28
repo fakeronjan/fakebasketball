@@ -102,6 +102,10 @@ class Coach:
     coy_wins:            int   = 0      # career Coach of the Year awards
     hot_seat:            bool  = False
     immunity_seasons:    int   = 0      # seasons remaining where hot seat cannot be set (COY or champ win)
+    championships:       int   = 0      # career championship wins
+    career_wins:         int   = 0      # career regular-season wins
+    career_losses:       int   = 0      # career regular-season losses
+    hof_inducted:        bool  = False
     former_player:       bool  = False
     former_player_id:    str | None = None  # player_id of the playing career
     former_team_name:    str | None = None  # last team name as a player
@@ -120,6 +124,11 @@ class Coach:
     @property
     def pronoun_cap(self) -> str:
         return "She" if self.gender == "female" else "He"
+
+    @property
+    def career_win_pct(self) -> float:
+        total = self.career_wins + self.career_losses
+        return self.career_wins / total if total else 0.0
 
     # ── Modifier computation ──────────────────────────────────────────────────
 

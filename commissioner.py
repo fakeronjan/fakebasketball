@@ -2557,6 +2557,11 @@ class CommissionerGame:
                 else f"Rival League     {MUTED}standings, champions & history{RESET}" if has_rival
                 else f"{MUTED}Rival League     no rival league yet{RESET}"
             )
+            hof_label = (
+                f"Hall of Fame     {GOLD}★ {len(self.league.hall_of_fame)} inducted{RESET}"
+                if self.league.hall_of_fame
+                else f"Hall of Fame     {MUTED}no inductees yet{RESET}"
+            )
             idx = choose([
                 f"Power Structure  {MUTED}star · coach · owner · risk — one row per team{RESET}",
                 f"League History   {MUTED}season-by-season champions, scorer, era & parity{RESET}",
@@ -2571,9 +2576,10 @@ class CommissionerGame:
                 f"Rivalries        {MUTED}head-to-head matchup history{RESET}",
                 f"Playoff Analysis {MUTED}seed advantage, series length & home court trends{RESET}",
                 f"League Health    {MUTED}pillar scores trend — Integrity · Parity · Drama · Entertainment{RESET}",
+                hof_label,
                 rival_label,
                 f"{MUTED}Back{RESET}",
-            ], default=14)
+            ], default=15)
             if   idx == 0:  self._show_power_structure(season)
             elif idx == 1:  self._show_league_history(season)
             elif idx == 2:  self._show_team_history(season)
@@ -2587,7 +2593,8 @@ class CommissionerGame:
             elif idx == 10: self._show_rivalries(season)
             elif idx == 11: self._show_playoff_analysis(season)
             elif idx == 12: self._show_league_health_report(season)
-            elif idx == 13: self._show_rival_league_report(season)
+            elif idx == 13: self._show_hall_of_fame(season)
+            elif idx == 14: self._show_rival_league_report(season)
             else: break
 
     # ── Report: Team Power Structure ─────────────────────────────────────────
@@ -4554,6 +4561,8 @@ class CommissionerGame:
             self._handle_cba_negotiation(season)
         self._handle_rival_league(season)
         self._show_fan_inbox(season)
+        if getattr(self.league, '_new_hof_inductees', []):
+            self._show_hof_ceremony(season)
         self._commissioner_desk(season)
         self._handle_players_meeting(season)
         self._handle_coach_meeting(season)
@@ -5364,6 +5373,117 @@ class CommissionerGame:
         return flags
 
     # ── Fan inbox ─────────────────────────────────────────────────────────────
+
+    def _show_hof_ceremony(self, season: Season) -> None:
+        """Hall of Fame induction ceremony — shown once per offseason when players/coaches are inducted."""
+        inductees = getattr(self.league, '_new_hof_inductees', [])
+        if not inductees:
+            return
+        from coach import ARCHETYPE_LABELS
+        sn = season.number
+        clear()
+        n = len(inductees)
+        header("HALL OF FAME  INDUCTION CEREMONY",
+               f"Season {sn}  ·  {n} new inductee{'s' if n != 1 else ''}")
+        print(f"\n  {MUTED}The league pauses to honour those who shaped its history.{RESET}\n")
+
+        players  = [e for e in inductees if e["type"] == "player"]
+        coaches  = [e for e in inductees if e["type"] == "coach"]
+
+        if players:
+            print(f"  {BOLD}{GOLD}★  PLAYER WING{RESET}")
+            divider()
+            for entry in players:
+                p = entry["obj"]
+                pos_tag = f"{MUTED}{p.position}{RESET}"
+                rings   = f"  {'◆' * p.championships}" if p.championships else ""
+                print(f"\n  {BOLD}{GOLD}{p.name}{RESET}  {pos_tag}{rings}")
+                print(f"  {MUTED}{entry['blurb']}{RESET}")
+                print(f"  {MUTED}{p.seasons_played} seasons played  ·  inducted after season {sn}{RESET}")
+            print()
+
+        if coaches:
+            print(f"  {BOLD}{CYAN}★  COACH WING{RESET}")
+            divider()
+            for entry in coaches:
+                c = entry["obj"]
+                arch = ARCHETYPE_LABELS.get(c.archetype, c.archetype)
+                fp_tag = f"  {MUTED}(former player){RESET}" if c.former_player else ""
+                rings  = f"  {'◆' * c.championships}" if c.championships else ""
+                print(f"\n  {BOLD}{CYAN}{c.name}{RESET}  {MUTED}{arch}{RESET}{fp_tag}{rings}")
+                print(f"  {MUTED}{entry['blurb']}{RESET}")
+                print(f"  {MUTED}{c.seasons_coached} seasons coached  ·  inducted after season {sn}{RESET}")
+            print()
+
+        divider()
+        n_total = len(self.league.hall_of_fame)
+        print(f"\n  {MUTED}Hall of Fame all-time inductees: {n_total}{RESET}")
+        input(f"\n  {MUTED}[Enter] continue{RESET}  ")
+
+    def _show_hall_of_fame(self, season: Season) -> None:
+        """Hall of Fame report — player wing and coach wing sorted by induction season."""
+        from coach import ARCHETYPE_LABELS
+        league = self.league
+        hof    = league.hall_of_fame
+
+        clear()
+        header("HALL OF FAME", f"Through Season {season.number}  ·  {len(hof)} inductees")
+
+        if not hof:
+            print(f"\n  {MUTED}No inductees yet. Players become eligible one season after retirement.{RESET}\n")
+            input(f"  {MUTED}[Enter] back{RESET}  ")
+            return
+
+        players = sorted([e for e in hof if e["type"] == "player"],
+                         key=lambda e: e["season"])
+        coaches = sorted([e for e in hof if e["type"] == "coach"],
+                         key=lambda e: e["season"])
+
+        # ── Player wing ───────────────────────────────────────────────────────
+        if players:
+            print(f"\n  {BOLD}{GOLD}PLAYER WING  ({len(players)}){RESET}\n")
+            # Header
+            print(f"  {'NAME':<18}{'POS':<6}{'YRS':>4}{'GP':>5}{'PPG':>6}{'FG%':>6}{'RINGS':>6}  {'INDUCTED':>8}  HIGHLIGHTS")
+            divider()
+            for entry in players:
+                p   = entry["obj"]
+                pos = p.position[:5]
+                rings_s = str(p.championships) if p.championships else "—"
+                # Award highlights (compact)
+                highlights = []
+                all_s = league.seasons
+                mvp_n  = sum(1 for s in all_s if s.mvp        and s.mvp.player_id        == p.player_id)
+                fmvp_n = sum(1 for s in all_s if s.finals_mvp and s.finals_mvp.player_id == p.player_id)
+                opoy_n = sum(1 for s in all_s if s.opoy       and s.opoy.player_id       == p.player_id)
+                dpoy_n = sum(1 for s in all_s if s.dpoy       and s.dpoy.player_id       == p.player_id)
+                if mvp_n:  highlights.append(f"{mvp_n}×MVP")
+                if fmvp_n: highlights.append(f"{fmvp_n}×FMVP")
+                if opoy_n: highlights.append(f"{opoy_n}×OPOY")
+                if dpoy_n: highlights.append(f"{dpoy_n}×DPOY")
+                hl_str = "  ".join(highlights) if highlights else "—"
+                color = GOLD if p.championships else ""
+                print(f"  {color}{p.name:<18}{RESET}{pos:<6}"
+                      f"{p.seasons_played:>4}{p.career_games:>5}"
+                      f"{p.career_ppg:>6.1f}{p.career_fg_pct*100:>6.1f}"
+                      f"{rings_s:>6}  Sn {entry['season']:>4}  {MUTED}{hl_str}{RESET}")
+
+        # ── Coach wing ────────────────────────────────────────────────────────
+        if coaches:
+            print(f"\n  {BOLD}{CYAN}COACH WING  ({len(coaches)}){RESET}\n")
+            print(f"  {'NAME':<18}{'ARCHETYPE':<20}{'YRS':>4}{'W':>5}{'L':>5}{'W%':>6}{'RINGS':>6}  {'INDUCTED':>8}")
+            divider()
+            for entry in coaches:
+                c    = entry["obj"]
+                arch = ARCHETYPE_LABELS.get(c.archetype, c.archetype)[:18]
+                rings_s = str(c.championships) if c.championships else "—"
+                color = GOLD if c.championships else CYAN
+                print(f"  {color}{c.name:<18}{RESET}{arch:<20}"
+                      f"{c.seasons_coached:>4}{c.career_wins:>5}{c.career_losses:>5}"
+                      f"{c.career_win_pct*100:>6.1f}{rings_s:>6}  Sn {entry['season']:>4}")
+
+        print()
+        divider()
+        input(f"\n  {MUTED}[Enter] back{RESET}  ")
 
     def _show_fan_inbox(self, season: Season) -> None:
         """3–5 fan messages each offseason, event-driven flavor and pressure.

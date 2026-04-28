@@ -314,6 +314,21 @@ class Player:
     crossed_picket: bool = False   # True if player signed a scab/replacement contract (Type C)
     dev_boost: float = 0.0        # development accelerator from high-horizon coach; reset each season
 
+    # ── Career totals (accumulated end of each season) ────────────────────────
+    championships:   int = 0
+    career_games:    int = 0
+    career_points:   int = 0
+    career_fga:      int = 0
+    career_fgm:      int = 0
+    career_fga_3:    int = 0
+    career_fgm_3:    int = 0
+    career_fta:      int = 0
+    career_ftm:      int = 0
+    career_poss_def: int = 0
+    career_pts_alw:  int = 0
+    seasons_retired: int = 0    # 0 = active, 1 = first offseason after retirement, etc.
+    hof_inducted:    bool = False
+
     # ── Computed: current ratings ─────────────────────────────────────────────
 
     @property
@@ -383,6 +398,43 @@ class Player:
         if self.happiness >= 0.50: return 1.0
         if self.happiness >= 0.25: return 0.93   # Restless: −7%
         return 0.85                               # Miserable: −15%
+
+    # ── Career derived stats ──────────────────────────────────────────────────
+
+    @property
+    def career_ppg(self) -> float:
+        return self.career_points / self.career_games if self.career_games else 0.0
+
+    @property
+    def career_fg_pct(self) -> float:
+        return self.career_fgm / self.career_fga if self.career_fga else 0.0
+
+    @property
+    def career_3pt_pct(self) -> float:
+        return self.career_fgm_3 / self.career_fga_3 if self.career_fga_3 else 0.0
+
+    @property
+    def career_ft_pct(self) -> float:
+        return self.career_ftm / self.career_fta if self.career_fta else 0.0
+
+    @property
+    def career_def_rtg(self) -> float:
+        """Career points allowed per 100 possessions defended."""
+        return (self.career_pts_alw / self.career_poss_def * 100
+                if self.career_poss_def else 0.0)
+
+    def absorb_season_stats(self, ps: "PlayerSeasonStats") -> None:
+        """Roll one season's stats into career totals."""
+        self.career_games    += ps.games
+        self.career_points   += ps.points
+        self.career_fga      += ps.fga
+        self.career_fgm      += ps.fgm
+        self.career_fga_3    += ps.fga_3
+        self.career_fgm_3    += ps.fgm_3
+        self.career_fta      += ps.fta
+        self.career_ftm      += ps.ftm
+        self.career_poss_def += ps.poss_defended
+        self.career_pts_alw  += ps.pts_allowed
 
     def advance_season(self) -> bool:
         """Increment age and career counter. Returns True if player retires."""
