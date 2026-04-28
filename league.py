@@ -271,6 +271,7 @@ class League:
         best = max(self._coaching_pool, key=score)
         self._coaching_pool.remove(best)
         best.tenure = 0
+        best.seasons_in_pool = 0
         team.coach = best
 
     def resolve_coaching_hire(self, team: "Team",
@@ -299,6 +300,7 @@ class League:
         best = max(self._coaching_pool, key=score)
         self._coaching_pool.remove(best)
         best.tenure = 0
+        best.seasons_in_pool = 0
         team.coach  = best
         return best
 
@@ -756,6 +758,15 @@ class League:
         # 1. Record continuity before any roster changes
         for team in self.teams:
             team.update_pair_seasons()
+
+        # 1b. Age coaching pool — coaches who go 3 offseasons without a team retire
+        _pool_retirees = []
+        for coach in self._coaching_pool:
+            coach.seasons_in_pool += 1
+            if coach.seasons_in_pool >= 3:
+                _pool_retirees.append(coach)
+        for coach in _pool_retirees:
+            self._coaching_pool.remove(coach)   # still in _all_coaches for HoF scanning
 
         # 2. Advance all rostered and pool players one season
         all_players = ([p for t in self.teams for p in t.roster if p is not None]

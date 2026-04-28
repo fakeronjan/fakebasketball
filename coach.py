@@ -105,6 +105,7 @@ class Coach:
     championships:       int   = 0      # career championship wins
     career_wins:         int   = 0      # career regular-season wins
     career_losses:       int   = 0      # career regular-season losses
+    seasons_in_pool:     int   = 0      # consecutive offseasons without a team; resets on hire
     hof_inducted:        bool  = False
     former_player:       bool  = False
     former_player_id:    str | None = None  # player_id of the playing career
