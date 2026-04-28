@@ -1040,7 +1040,7 @@ class CommissionerGame:
             f"{O}       |      ) {P}COMMISSIONER{O}  (      |{R}",
             f"{O}        \\    )        |        (    /{R}",
             f"{O}         \\  )         |         (  /{R}",
-            f"{O}          `-----------.-----------`{R}",
+            f"{O}          `-----------|-----------`{R}",
             f"              {MUTED}a fakeronjan game{R}",
         ]
         print()
