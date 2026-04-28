@@ -2589,9 +2589,8 @@ class CommissionerGame:
                 f"League Health    {MUTED}pillar scores trend — Integrity · Parity · Drama · Entertainment{RESET}",
                 hof_label,
                 rival_label,
-                f"Export to file   {MUTED}write all reports to <league>_s{season.number}.txt{RESET}",
                 f"{MUTED}Back{RESET}",
-            ], default=16)
+            ], default=15)
             if   idx == 0:  self._show_power_structure(season)
             elif idx == 1:  self._show_league_history(season)
             elif idx == 2:  self._show_team_history(season)
@@ -2607,7 +2606,6 @@ class CommissionerGame:
             elif idx == 12: self._show_league_health_report(season)
             elif idx == 13: self._show_hall_of_fame(season)
             elif idx == 14: self._show_rival_league_report(season)
-            elif idx == 15: self._export_all_reports(season)
             else: break
 
     # ── Export: all reports to plain-text file ───────────────────────────────
