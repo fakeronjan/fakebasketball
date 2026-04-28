@@ -37,8 +37,13 @@ class Config:
     playoff_teams_override: int = 0
     series_length: int = 7
     # ── Team rating bounds ────────────────────────────────────────────────────
-    ortg_baseline: float = 110.0     # league average ORtg (pts per 100 poss)
+    ortg_baseline: float = 110.0     # league average ORtg (pts per 100 poss) — used by compute_ratings_from_roster
     drtg_baseline: float = 110.0     # league average DRtg (pts per 100 poss allowed)
+    # player_adj_scale: divisor for ortg_contrib/drtg_contrib in _compute_make_pct.
+    # Smaller = sharper discrimination between quality tiers.
+    # Calibrated at 85 so Elite vs Cellar ≈ 85% win rate, Elite vs Avg ≈ 73%.
+    # Kept separate from ortg_baseline so rating display and compute_ratings_from_roster are unaffected.
+    player_adj_scale: float = 85.0
     pace_baseline: float = 95.0      # league average pace (poss per team per game)
     ortg_min: float = 100.0
     ortg_max: float = 120.0

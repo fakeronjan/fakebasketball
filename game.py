@@ -325,7 +325,7 @@ def _sim_possession(
     shooter, _  = _pick_shooter(offense, cfg, out_off, defense, out_def, league_meta)
     zone        = _pick_zone(shooter)
     defender    = _pick_defender(defense, shooter, out_def)
-    ortg_scale  = cfg.ortg_baseline
+    ortg_scale  = cfg.player_adj_scale   # separate from ortg_baseline — only affects make% discrimination
 
     shooter_id  = shooter.player_id  if shooter  else None
     defender_id = defender.player_id if defender else None
