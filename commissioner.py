@@ -4648,8 +4648,10 @@ class CommissionerGame:
             owner_h    = owner.happiness if owner else 0.50
             h_c = GREEN if owner_h >= 0.60 else (GOLD if owner_h >= 0.40 else RED)
 
-            print(f"\n  {RED}{BOLD}{tname}{RESET} — coaching seat open")
-            print(f"  {MUTED}Fired:{RESET}  {fired_name}")
+            is_retirement = fired_name.endswith("(retired)")
+            vacancy_label = f"{GOLD}Retired{RESET}" if is_retirement else f"{RED}Fired{RESET}"
+            print(f"\n  {BOLD}{tname}{RESET} — coaching seat open")
+            print(f"  {MUTED}Outgoing:{RESET}  {fired_name}  [{vacancy_label}]")
             print(f"  {MUTED}Owner:{RESET}  {owner_name}  ·  {owner_mot}")
             print(f"  {MUTED}Owner mood:{RESET}  {h_c}{owner_h:.0%}{RESET}  "
                   f"{MUTED}(shapes who they'll accept){RESET}")
@@ -4700,8 +4702,9 @@ class CommissionerGame:
             arch_c   = _arch_color(new_coach.archetype)
             fp_note  = f"  {MUTED}former player{RESET}" if new_coach.former_player else ""
 
+            out_label = "Retired" if fired_name.endswith("(retired)") else "Fired"
             print(f"  {BOLD}{tname}{RESET}")
-            print(f"  {MUTED}Out:{RESET} {fired_name}")
+            print(f"  {MUTED}{out_label}:{RESET} {fired_name.replace(' (retired)', '')}")
             print(f"  {GREEN}In: {RESET} {BOLD}{new_coach.name}{RESET}  "
                   f"{arch_c}{arch_lbl}{RESET}  {_stars(new_coach.rating)}{fp_note}")
 
@@ -4952,11 +4955,14 @@ class CommissionerGame:
                       f"  {MUTED}({mot_c}{p.motivation}{RESET}{MUTED}){RESET}")
 
         # d) Coaching changes
+        _retired_coach_names = {c.name for c in league._all_coaches if c.retired}
         if coach_changes:
             _section("COACHING CHANGES")
             for t, old_name, new_coach in coach_changes:
                 tname   = t.franchise_at(sn).name
-                old_s   = f"{MUTED}{old_name or '—'}{RESET}"
+                is_ret  = old_name in _retired_coach_names
+                reason  = f"{GOLD}retired{RESET}" if is_ret else f"{RED}fired{RESET}"
+                old_s   = f"{MUTED}{old_name or '—'}{RESET}  {MUTED}[{RESET}{reason}{MUTED}]{RESET}" if old_name else f"{MUTED}—{RESET}"
                 if new_coach:
                     arch  = _ARCH_LBLS.get(new_coach.archetype, new_coach.archetype)
                     new_s = f"{CYAN}{new_coach.name}{RESET}  {MUTED}({arch}){RESET}"

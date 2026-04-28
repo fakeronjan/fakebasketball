@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 from player import (
     _used_names,           # shared global — coaches and players never share a name
+    _career_mult,          # shared career arc formula
     _FIRST_MALE as _P_FIRST_MALE,
     _FIRST_FEMALE as _P_FIRST_FEMALE,
     _FIRST_SWING as _P_FIRST_SWING,
@@ -106,6 +107,13 @@ class Coach:
     career_wins:         int   = 0      # career regular-season wins
     career_losses:       int   = 0      # career regular-season losses
     seasons_in_pool:     int   = 0      # consecutive offseasons without a team; resets on hire
+    # ── Career arc (mirrors player model) ────────────────────────────────────
+    career_length:       int   = 12     # total seasons before retirement (8–20)
+    peak_season:         int   = 5      # seasons_coached when peak effectiveness is reached
+    start_mult:          float = 0.70   # effectiveness fraction at career start
+    retiring:            bool  = False  # True during final offseason
+    retired:             bool  = False  # True after leaving the bench for good
+    seasons_retired:     int   = 0      # 0 = active; 1+ = seasons since retirement
     hof_inducted:        bool  = False
     former_player:       bool  = False
     former_player_id:    str | None = None  # player_id of the playing career
@@ -131,6 +139,17 @@ class Coach:
         total = self.career_wins + self.career_losses
         return self.career_wins / total if total else 0.0
 
+    @property
+    def coaching_mult(self) -> float:
+        """0.45–1.0 career-stage multiplier: rises to peak, then fades.
+
+        Uses the same _career_mult formula as players. Coaches start at
+        start_mult (~0.65), peak at peak_season, then decline.
+        The 0.45 floor from _career_mult applies here too.
+        """
+        return _career_mult(self.seasons_coached, self.peak_season,
+                            self.career_length, self.start_mult)
+
     # ── Modifier computation ──────────────────────────────────────────────────
 
     def compute_modifiers(self) -> dict[str, float]:
@@ -141,8 +160,8 @@ class Coach:
           - flexibility (0–1): rigid (0) amplifies archetype; flexible (1) dampens it
         """
         base = ARCHETYPE_MODS[self.archetype]
-        flex_scale   = 1.35 - 0.70 * self.flexibility   # 1.35 rigid → 0.65 flexible
-        rating_scale = 0.50 + self.rating                # 0.50 poor  → 1.50 great
+        flex_scale   = 1.35 - 0.70 * self.flexibility             # 1.35 rigid → 0.65 flexible
+        rating_scale = 0.50 + self.rating * self.coaching_mult     # career arc applied to rating portion
         scale = flex_scale * rating_scale
 
         # COY reputation bonus: each win adds +0.02 fa_draw, capped at 3 wins
@@ -272,20 +291,41 @@ def _next_coach_id() -> str:
     return f"coach_{_coach_id_counter:04d}"
 
 
+def _random_career_arc(start_mult_lo: float = 0.55,
+                        start_mult_hi: float = 0.78) -> tuple[int, int, float]:
+    """Return (career_length, peak_season, start_mult) for a new coach.
+
+    Career length: 8–20 seasons (same range as players).
+    Peak: arrives in the middle third of the career — coaches develop slower
+    than players and stay competitive longer once they hit their prime.
+    """
+    career_length = random.randint(8, 20)
+    # Peak arrives between 1/3 and 2/3 through the career
+    lo = max(1, career_length // 3)
+    hi = max(lo, career_length * 2 // 3)
+    peak_season = random.randint(lo, hi)
+    start_mult  = random.uniform(start_mult_lo, start_mult_hi)
+    return career_length, peak_season, start_mult
+
+
 def generate_coach() -> Coach:
     """Generate a lifer coach who never had a notable playing career."""
     name, gender = _make_coach_name()
     archetype    = random.choice(ARCHETYPES)
+    cl, ps, sm   = _random_career_arc()
     return Coach(
-        coach_id     = _next_coach_id(),
-        name         = name,
-        gender       = gender,
-        archetype    = archetype,
-        flexibility  = random.betavariate(2, 2),     # peaks near 0.5, rarely extreme
-        horizon      = random.betavariate(2, 2),
-        rating       = random.betavariate(2, 3),     # skews toward 0.40 (most coaches mediocre)
-        happiness    = random.uniform(0.60, 0.85),
-        former_player= False,
+        coach_id      = _next_coach_id(),
+        name          = name,
+        gender        = gender,
+        archetype     = archetype,
+        flexibility   = random.betavariate(2, 2),     # peaks near 0.5, rarely extreme
+        horizon       = random.betavariate(2, 2),
+        rating        = random.betavariate(2, 3),     # skews toward 0.40 (most coaches mediocre)
+        happiness     = random.uniform(0.60, 0.85),
+        career_length = cl,
+        peak_season   = ps,
+        start_mult    = sm,
+        former_player = False,
     )
 
 
@@ -301,6 +341,8 @@ def coach_from_retired_player(player_id: str, name: str, gender: str,
         ARCHETYPES,
         weights=[25, 35, 10, 15, 15],  # whisperer > chemistry > motivator > offensive > defensive
     )[0]
+    # Former players start with more credibility — higher start_mult
+    cl, ps, sm = _random_career_arc(start_mult_lo=0.65, start_mult_hi=0.85)
     return Coach(
         coach_id      = _next_coach_id(),
         name          = name,
@@ -310,6 +352,9 @@ def coach_from_retired_player(player_id: str, name: str, gender: str,
         horizon       = random.betavariate(1.5, 2.5), # former players skew win-now early
         rating        = random.betavariate(2, 2.5),   # slightly higher floor than lifers
         happiness     = random.uniform(0.65, 0.90),
+        career_length = cl,
+        peak_season   = ps,
+        start_mult    = sm,
         former_player = True,
         former_player_id  = player_id,
         former_team_name  = last_team_name,
@@ -342,15 +387,19 @@ def generate_coaches_balanced(n: int) -> list[Coach]:
     coaches: list[Coach] = []
     for arch in arch_list:
         name, gender = _make_coach_name()
+        cl, ps, sm   = _random_career_arc()
         coaches.append(Coach(
-            coach_id     = _next_coach_id(),
-            name         = name,
-            gender       = gender,
-            archetype    = arch,
-            flexibility  = random.betavariate(2, 2),
-            horizon      = random.betavariate(2, 2),
-            rating       = random.betavariate(2, 3),
-            happiness    = random.uniform(0.60, 0.85),
-            former_player= False,
+            coach_id      = _next_coach_id(),
+            name          = name,
+            gender        = gender,
+            archetype     = arch,
+            flexibility   = random.betavariate(2, 2),
+            horizon       = random.betavariate(2, 2),
+            rating        = random.betavariate(2, 3),
+            happiness     = random.uniform(0.60, 0.85),
+            career_length = cl,
+            peak_season   = ps,
+            start_mult    = sm,
+            former_player = False,
         ))
     return coaches

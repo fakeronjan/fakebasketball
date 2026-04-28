@@ -560,6 +560,10 @@ class League:
             coach.tenure          += 1
             coach.seasons_coached += 1
 
+            # Retire when career length is reached (flagged; processed in offseason_phase1)
+            if coach.seasons_coached >= coach.career_length:
+                coach.retiring = True
+
             # Store current rating for next season's COY computation
             coach.prev_net_rating = current_nr
 
@@ -766,7 +770,22 @@ class League:
             if coach.seasons_in_pool >= 3:
                 _pool_retirees.append(coach)
         for coach in _pool_retirees:
+            coach.retired = True
             self._coaching_pool.remove(coach)   # still in _all_coaches for HoF scanning
+
+        # 1c. Process coach career retirements (career_length reached)
+        for team in self.teams:
+            if team.coach is not None and team.coach.retiring:
+                coach = team.coach
+                coach.retiring = False
+                coach.retired  = True
+                team.coach     = None
+                self._pending_coach_hires.append((team, f"{coach.name} (retired)"))
+
+        # 1d. Increment seasons_retired for all retired coaches
+        for coach in self._all_coaches:
+            if coach.retired:
+                coach.seasons_retired += 1
 
         # 2. Advance all rostered and pool players one season
         all_players = ([p for t in self.teams for p in t.roster if p is not None]
@@ -958,9 +977,9 @@ class League:
                        if s.coy is not None and s.coy.coach_id == cid)
 
         for coach in self._all_coaches:
-            if coach.hof_inducted or coach.seasons_coached < 8:
+            if coach.hof_inducted or not coach.retired or coach.seasons_retired < 1:
                 continue
-            if coach.career_wins + coach.career_losses == 0:
+            if coach.seasons_coached < 8 or coach.career_wins + coach.career_losses == 0:
                 continue
             # Minimum win% floor — losing-record coaches need a championship or COY
             # to overcome the baseline talent requirement
@@ -992,7 +1011,15 @@ class League:
         """Auto-fill remaining empty slots via draft and FA, then recompute ratings.
 
         Called after the interactive draft/FA screens have had their turn.
+        Any pending coach hires not resolved by the commissioner are auto-filled here.
         """
+        # Auto-resolve any coaching vacancies not yet handled interactively.
+        # Do NOT clear _pending_coach_hires here — _handle_coaching_market (interactive)
+        # and _offseason_adjustments (headless) each clear it in their own context.
+        for team, _ in self._pending_coach_hires:
+            if team.coach is None:
+                self._coaching_pool_hire(team)
+
         self._run_auto_draft()
         self._run_auto_fa()
         max_fa = len(self.teams) * self.cfg.fa_pool_per_team
@@ -1004,6 +1031,7 @@ class League:
         """Full auto offseason — used by the headless simulator (main.py)."""
         self.offseason_phase1(season)
         self.offseason_phase2()
+        self._pending_coach_hires.clear()   # headless: no interactive market to clear it
 
     def start_talent_investment(self, delta: float, seasons: int) -> None:
         """Boost draft class quality for the given number of seasons.
@@ -2313,6 +2341,8 @@ class League:
         self.reserve_pool.remove(original_franchise)
         self._generate_founding_players(new_team)
         new_team.owner = generate_owner(small_market=new_team.franchise.effective_metro < 3.0)
+        # Assign a coach from the pool (or generate one if pool is empty)
+        self._coaching_pool_hire(new_team)
         return new_team
 
     def _check_expansions(self, season: Season) -> None:
