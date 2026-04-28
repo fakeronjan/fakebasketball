@@ -4553,6 +4553,7 @@ class CommissionerGame:
         if sn >= 5 and sn % 5 == 0:
             self._handle_cba_negotiation(season)
         self._handle_rival_league(season)
+        self._show_fan_inbox(season)
         self._commissioner_desk(season)
         self._handle_players_meeting(season)
         self._handle_coach_meeting(season)
@@ -5361,6 +5362,270 @@ class CommissionerGame:
                 )
 
         return flags
+
+    # ── Fan inbox ─────────────────────────────────────────────────────────────
+
+    def _show_fan_inbox(self, season: Season) -> None:
+        """3–5 fan messages each offseason, event-driven flavor and pressure.
+
+        Messages react to the season's notable events: championships, losing
+        streaks, MVP, rival league, work stoppage, dynasty fatigue, etc.
+        Padded with generic passion letters when the season is quiet.
+        """
+        import random as _rng
+        league = self.league
+        sn     = season.number
+
+        # ── Sender name pools ─────────────────────────────────────────────────
+        _FIRST = [
+            "Marcus", "Deja", "Tony", "Keisha", "Luis", "Sandra", "Ray",
+            "Tamara", "Jerome", "Brittany", "Carlos", "Monique", "Dave",
+            "Aisha", "Greg", "Yolanda", "Phil", "Nadia", "Hector", "Renee",
+            "Walter", "Simone", "Al", "Destiny", "Frank", "Tanya", "Dennis",
+        ]
+
+        def _sender(city: str, tag: str) -> str:
+            name = _rng.choice(_FIRST)
+            return f"{BOLD}{name}{RESET}  {MUTED}· {city} · {tag}{RESET}"
+
+        # ── Collect triggered messages ────────────────────────────────────────
+        # Each entry: (priority, sender_str, body_lines)
+        # priority: lower = more likely to be shown first
+        messages: list[tuple[int, str, list[str]]] = []
+
+        champ       = season.champion
+        mvp         = season.mvp
+        mvp_team    = season.mvp_team
+        coy         = season.coy
+        coy_team    = season.coy_team
+        rival       = league.rival_league
+
+        # ── 1. Championship city ──────────────────────────────────────────────
+        if champ:
+            city  = champ.franchise_at(sn).city
+            tname = champ.franchise_at(sn).name
+            n_titles = champ.championships
+            if n_titles == 1:
+                body = [
+                    f"Commissioner,",
+                    f"I've been a {tname} fan my whole life. My father took me to my first",
+                    f"game when I was seven. Last night I called him after the final buzzer",
+                    f"and neither of us could say a word. Thank you for building this league.",
+                ]
+            elif n_titles <= 3:
+                body = [
+                    f"Commissioner,",
+                    f"Back-to-back {tname}. Some people are already calling us a dynasty.",
+                    f"I don't care what they call it — I'm just enjoying every second.",
+                    f"Keep the competition coming. We're ready.",
+                ]
+            else:
+                body = [
+                    f"Commissioner,",
+                    f"{n_titles} titles. I know the rest of the league is sick of us.",
+                    f"Honestly? So am I a little. But I'm not going to apologize for it.",
+                    f"This team is something special. Don't let anyone break it up.",
+                ]
+            messages.append((1, _sender(city, "die-hard fan"), body))
+
+        # ── 2. Dynasty fatigue (other cities) ────────────────────────────────
+        if champ and champ.championships >= 3:
+            tname = champ.franchise_at(sn).name
+            city  = champ.franchise_at(sn).city
+            other_cities = [t.franchise_at(sn).city
+                            for t in league.teams if t is not champ]
+            if other_cities:
+                sender_city = _rng.choice(other_cities)
+                body = [
+                    f"Commissioner,",
+                    f"With all due respect — can we talk about the {tname}?",
+                    f"{champ.championships} championships. I stopped watching the Finals two",
+                    f"years ago because I already knew who was going to win.",
+                    f"The league needs balance. This is getting embarrassing.",
+                ]
+                messages.append((2, _sender(sender_city, "frustrated fan"), body))
+
+        # ── 3. Long losing streak ─────────────────────────────────────────────
+        suffering = [(t, t._consecutive_losing_seasons) for t in league.teams
+                     if t._consecutive_losing_seasons >= 3]
+        suffering.sort(key=lambda x: -x[1])
+        if suffering:
+            worst_t, streak = suffering[0]
+            city  = worst_t.franchise_at(sn).city
+            tname = worst_t.franchise_at(sn).name
+            if streak >= 5:
+                body = [
+                    f"Commissioner,",
+                    f"{streak} straight losing seasons. {streak}. I've tried to stay positive",
+                    f"but at this point I'm watching games out of habit, not hope.",
+                    f"Does anyone in that office even know {city} exists?",
+                    f"We deserve better than this.",
+                ]
+            else:
+                body = [
+                    f"Commissioner,",
+                    f"Third losing season in a row for the {tname}. The arena is half-empty",
+                    f"most nights and I don't blame anyone for not showing up.",
+                    f"Something has to change. Are you paying attention to us?",
+                ]
+            messages.append((2, _sender(city, "long-suffering fan"), body))
+
+        # ── 4. MVP message ────────────────────────────────────────────────────
+        if mvp and mvp_team:
+            city  = mvp_team.franchise_at(sn).city
+            pname = mvp.name
+            body  = [
+                f"Commissioner,",
+                f"I just want to say — {pname} is doing something we haven't seen in years.",
+                f"Every game I clear my schedule and sit down to watch. My kids know his",
+                f"number by heart. This is why people fall in love with basketball.",
+                f"Please take care of this league. We have something real here.",
+            ]
+            messages.append((3, _sender(city, "new fan"), body))
+
+        # ── 5. COY reaction ───────────────────────────────────────────────────
+        if coy and coy_team:
+            city   = coy_team.franchise_at(sn).city
+            cname  = coy.name
+            tname  = coy_team.franchise_at(sn).name
+            body   = [
+                f"Commissioner,",
+                f"Happy for {cname} winning COY but let's be honest — half the league",
+                f"could have won it this year. The {tname} turnaround was real,",
+                f"but I've seen coaches do more with less and get fired instead of awarded.",
+                f"Just keeping it real.",
+            ]
+            messages.append((4, _sender(city, "skeptical fan"), body))
+
+        # ── 6. Rival league ───────────────────────────────────────────────────
+        if rival and rival.active:
+            rl_name  = rival.name
+            strength = rival.strength
+            if strength >= 0.60:
+                body = [
+                    f"Commissioner,",
+                    f"My coworker has been going on about the {rl_name} all season.",
+                    f"At first I thought it was a joke. Now he's got tickets and everything.",
+                    f"I haven't switched yet — but I'm not going to lie, I'm curious.",
+                    f"You need to do something before more of us start drifting.",
+                ]
+            else:
+                body = [
+                    f"Commissioner,",
+                    f"I've heard people talking about the {rl_name}. Sounds like a gimmick",
+                    f"to me — no history, no rivalries. I'm not worried. But heads up,",
+                    f"some of the casual fans I know are at least checking it out.",
+                ]
+            messages.append((2, _sender(_rng.choice(
+                [t.franchise_at(sn).city for t in league.teams]
+            ), "casual fan"), body))
+
+        # ── 7. Work stoppage hangover ─────────────────────────────────────────
+        if league.work_stoppage_this_season:
+            body = [
+                f"Commissioner,",
+                f"I don't care whose fault the lockout was. I missed games.",
+                f"My daughter had tickets for her birthday and we couldn't go.",
+                f"I expect the people running this league to figure things out",
+                f"before it comes to that. Do better.",
+            ]
+            messages.append((1, _sender(
+                _rng.choice([t.franchise_at(sn).city for t in league.teams]),
+                "parent"
+            ), body))
+
+        # ── 8. Season 1 special ───────────────────────────────────────────────
+        if sn == 1:
+            body = [
+                f"Commissioner,",
+                f"I wasn't sure about this league at first. New teams, new names — I didn't",
+                f"know who to root for. But I went to a game last month and sat next to a",
+                f"family who drove four hours to see their team play for the first time.",
+                f"That sold me. I'm in. Don't blow it.",
+            ]
+            messages.append((1, _sender(
+                _rng.choice([t.franchise_at(sn).city for t in league.teams]),
+                "new fan"
+            ), body))
+
+        # ── 9. Generic padding pool ───────────────────────────────────────────
+        _GENERIC = [
+            (
+                "concerned fan",
+                [
+                    "Commissioner,",
+                    "The quality of play this year felt different — in a good way.",
+                    "More close games, more drama in the fourth quarter.",
+                    "Whatever you're doing to develop talent, keep it up.",
+                    "This is the best the league has felt in years.",
+                ],
+            ),
+            (
+                "die-hard fan",
+                [
+                    "Commissioner,",
+                    "I've had season tickets since year one. My seats, my crew,",
+                    "my rituals before every game. This league is part of my life.",
+                    "Just want you to know someone out here cares about every decision",
+                    "you make. We're watching.",
+                ],
+            ),
+            (
+                "pundit",
+                [
+                    "Commissioner,",
+                    "The competitive balance this season was actually encouraging.",
+                    "Six or seven teams felt like genuine contenders going into the playoffs.",
+                    "That's a sign of a healthy league. Credit where it's due.",
+                ],
+            ),
+            (
+                "skeptic",
+                [
+                    "Commissioner,",
+                    "Ratings are fine, arenas are filling up. I get it.",
+                    "But the product on the floor still has issues.",
+                    "Too many lopsided games, not enough meaningful late-season stakes.",
+                    "Just my two cents. You probably get a thousand of these.",
+                ],
+            ),
+            (
+                "parent",
+                [
+                    "Commissioner,",
+                    "Took my kids to their first live game this season.",
+                    "The look on their faces when the lights came up — I'll never forget it.",
+                    "Keep the game accessible. Ticket prices are already pushing families out.",
+                    "Think about the next generation.",
+                ],
+            ),
+        ]
+        _rng.shuffle(_GENERIC)
+        for tag, body in _GENERIC:
+            messages.append((9, _sender(
+                _rng.choice([t.franchise_at(sn).city for t in league.teams]), tag
+            ), body))
+
+        # ── Sort and trim to 3–5 messages ─────────────────────────────────────
+        messages.sort(key=lambda x: x[0])
+        n_show = min(5, max(3, len([m for m in messages if m[0] < 9])))
+        selected = messages[:n_show]
+
+        # ── Display ───────────────────────────────────────────────────────────
+        clear()
+        header("COMMISSIONER'S INBOX", f"After Season {sn}  ·  {len(selected)} messages")
+        print(f"\n  {MUTED}Fan mail from around the league.{RESET}\n")
+
+        for i, (_, sender, body) in enumerate(selected, 1):
+            divider()
+            print(f"\n  {sender}")
+            print()
+            for line in body:
+                print(f"  {line}")
+            print()
+
+        divider()
+        input(f"\n  {MUTED}[Enter] open commissioner's desk{RESET}  ")
 
     def _commissioner_desk(self, season: Season):
         """Always shown — proactive tools the commissioner can use each season."""
