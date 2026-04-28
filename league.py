@@ -516,10 +516,14 @@ class League:
             # Store current rating for next season's COY computation
             coach.prev_net_rating = current_nr
 
-            # Hot seat — driven by owner unhappiness, not coach happiness
+            # Hot seat — driven by owner unhappiness, not coach happiness.
+            # COY winners and championship coaches are immune for 2 seasons.
             owner_h   = team.owner.happiness if team.owner else 0.70
             missed_po = team.team_id not in playoff_teams
-            if owner_h < 0.20 or (owner_h < 0.30 and missed_po):
+            if coach.immunity_seasons > 0:
+                coach.immunity_seasons -= 1
+                coach.hot_seat = False   # immune coaches cannot be put on the seat
+            elif owner_h < 0.20 or (owner_h < 0.30 and missed_po):
                 coach.hot_seat = True
             elif owner_h >= 0.50:
                 coach.hot_seat = False   # recover if owner settles
@@ -542,8 +546,9 @@ class League:
             season.coy        = best_coach
             season.coy_team   = best_team
             season.coy_delta  = round(best_delta, 2)
-            best_coach.coy_wins += 1          # builds long-term FA draw reputation
-            best_coach.hot_seat  = False      # COY win clears the hot seat
+            best_coach.coy_wins        += 1   # builds long-term FA draw reputation
+            best_coach.hot_seat         = False
+            best_coach.immunity_seasons = max(best_coach.immunity_seasons, 2)  # 2-season immunity
         elif not coy_candidates:
             # Season 1: no prior baseline — award to the coach with the best net rating
             nr_candidates = [(t.net_rating(), t.coach, t)
@@ -554,8 +559,9 @@ class League:
                 season.coy_team       = best_team
                 season.coy_delta      = round(best_nr, 2)
                 season.coy_first_season = True
-                best_coach.coy_wins  += 1
-                best_coach.hot_seat   = False
+                best_coach.coy_wins        += 1
+                best_coach.hot_seat         = False
+                best_coach.immunity_seasons = max(best_coach.immunity_seasons, 2)
 
     # ── Losing-streak tracker ─────────────────────────────────────────────────
 
@@ -649,6 +655,9 @@ class League:
             finalist._protected_until,
             season.number + self.cfg.finals_protection,
         )
+        # Championship coach gets 2 seasons of hot-seat immunity
+        if champ.coach is not None:
+            champ.coach.immunity_seasons = max(champ.coach.immunity_seasons, 2)
 
     def offseason_phase1(self, season: Season) -> tuple[list[Player], list[Player]]:
         """Advance player careers and process retirements/contract expirations.

@@ -101,6 +101,7 @@ class Coach:
     seasons_coached:     int   = 0      # career total
     coy_wins:            int   = 0      # career Coach of the Year awards
     hot_seat:            bool  = False
+    immunity_seasons:    int   = 0      # seasons remaining where hot seat cannot be set (COY or champ win)
     former_player:       bool  = False
     former_player_id:    str | None = None  # player_id of the playing career
     former_team_name:    str | None = None  # last team name as a player
