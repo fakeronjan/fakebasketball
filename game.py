@@ -265,15 +265,21 @@ def _compute_make_pct(
     ortg_scale:   float = 110.0,
     meta_3pt_base_scale:   float = 0.0,
     meta_paint_base_scale: float = 0.0,
+    coach_ortg_mod: float = 0.0,   # offensive coach system bonus (added to shooter's ortg_contrib)
+    coach_drtg_mod: float = 0.0,   # defensive coach system bonus (added to defender's drtg_contrib)
 ) -> float:
-    """Zone make-% adjusted for player quality, chemistry, era, and any bonus.
+    """Zone make-% adjusted for player quality, chemistry, era, coach system, and any bonus.
 
     Derivation mirrors team.compute_ratings_from_roster:
-      off_adj = ortg_contrib × happiness_mult × chemistry × (1+meta) / ortg_baseline
-      def_adj = drtg_contrib × chemistry × (1−meta) / drtg_baseline
+      off_adj = (ortg_contrib + coach_ortg_mod) × happiness_mult × chemistry × (1+meta) / ortg_scale
+      def_adj = (drtg_contrib + coach_drtg_mod) × chemistry × (1−meta) / ortg_scale
               (negative for good defenders → reduces make%)
     FT shots are uncontested — def_adj is always 0 for ZONE_FT.
     prob_bonus is added after the multiplicative adjustments (home advantage, seed bonus).
+
+    coach_ortg_mod / coach_drtg_mod: from coach.compute_modifiers(), in same pts/100 units
+    as ortg_contrib. An Offensive Innovator adds ~+3 to every shooter's effective contrib;
+    a Defensive Mastermind adds ~−3.5 to every defender's effective contrib.
 
     Era-driven base shift: in a 3pt era (positive meta) 3pt base% rises and paint base%
     falls; the reverse in a paint era. FT and mid remain stable.
@@ -288,7 +294,7 @@ def _compute_make_pct(
     if shooter:
         # Fatigue saps offensive effectiveness: max ~12% penalty at fatigue=1.0
         fatigue_off = 1.0 - shooter.fatigue * 0.12
-        off_adj = (shooter.ortg_contrib * shooter.happiness_mult
+        off_adj = ((shooter.ortg_contrib + coach_ortg_mod) * shooter.happiness_mult
                    * fatigue_off * off_chemistry * (1.0 + league_meta) / ortg_scale)
 
     def_adj = 0.0
@@ -296,7 +302,7 @@ def _compute_make_pct(
         # Fatigue weakens defense: tired defenders give up slightly more (penalty is smaller
         # than offensive — defense is more about positioning than explosiveness)
         fatigue_def = 1.0 - defender.fatigue * 0.07
-        def_adj = (defender.drtg_contrib
+        def_adj = ((defender.drtg_contrib + coach_drtg_mod)
                    * fatigue_def * def_chemistry * (1.0 - league_meta) / ortg_scale)
 
     return max(0.05, min(0.95, base * (1.0 + off_adj + def_adj) + prob_bonus))
@@ -330,6 +336,20 @@ def _sim_possession(
     shooter_id  = shooter.player_id  if shooter  else None
     defender_id = defender.player_id if defender else None
 
+    # Coach system modifiers: flow ortg_mod/drtg_mod into possession make%.
+    # These are in the same pts/100 units as player ortg_contrib/drtg_contrib.
+    # Only applies to named-player possessions (bench is handled via _bench_quality).
+    off_coach_mod = 0.0
+    def_coach_mod = 0.0
+    if shooter is not None:
+        off_coach = getattr(offense, 'coach', None)
+        if off_coach is not None:
+            off_coach_mod = off_coach.compute_modifiers()['ortg_mod']
+    if defender is not None:
+        def_coach = getattr(defense, 'coach', None)
+        if def_coach is not None:
+            def_coach_mod = def_coach.compute_modifiers()['drtg_mod']
+
     # For bench possessions, fold team-level depth quality into the probability bonus.
     effective_bonus = prob_bonus + (_bench_quality(offense) if shooter is None else 0.0)
 
@@ -339,7 +359,8 @@ def _sim_possession(
     if zone == ZONE_FT:
         pct = _compute_make_pct(shooter, None, ZONE_FT,
                                 off_chemistry, def_chemistry,
-                                league_meta, effective_bonus, ortg_scale, s3, sp)
+                                league_meta, effective_bonus, ortg_scale, s3, sp,
+                                off_coach_mod, 0.0)   # FT: no defender, no def_coach_mod
         ft1 = random.random() < pct
         ft2 = random.random() < pct
         ftm = int(ft1) + int(ft2)
@@ -350,7 +371,8 @@ def _sim_possession(
 
     pct  = _compute_make_pct(shooter, defender, zone,
                              off_chemistry, def_chemistry,
-                             league_meta, effective_bonus, ortg_scale, s3, sp)
+                             league_meta, effective_bonus, ortg_scale, s3, sp,
+                             off_coach_mod, def_coach_mod)
     made = random.random() < pct
     pts  = _ZONE_PTS[zone] if made else 0
     return PossessionResult(
