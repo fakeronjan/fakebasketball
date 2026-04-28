@@ -4533,6 +4533,7 @@ class CommissionerGame:
         # (coach happiness already computed in _run_one_season so COY shows in awards)
         league.update_all_owner_happiness(season)
         self._handle_player_offseason(season)
+        self._handle_coaching_market(season)
         self._owner_actions = self._generate_all_owner_actions(season)
         if sn >= 5 and sn % 5 == 0:
             self._handle_cba_negotiation(season)
@@ -4549,6 +4550,146 @@ class CommissionerGame:
             season, pre_coaches, pre_owners, pre_rosters,
             pre_expansion_len, pre_merger_len, pre_relocation_len,
         )
+
+    # ── Coaching market ───────────────────────────────────────────────────────
+
+    def _handle_coaching_market(self, season: Season) -> None:
+        """Interactive coaching market for open seats created by end-of-season firings.
+
+        For each vacancy the commissioner can recommend a candidate from the
+        available pool.  The recommendation strongly biases (+0.40 score) but
+        doesn't guarantee the hire — owner fit can still override a poor match.
+        If there are no open seats the screen is skipped entirely.
+        """
+        from coach import ARCHETYPE_LABELS
+        league = self.league
+        sn     = season.number
+        vacancies = list(league._pending_coach_hires)
+        league._pending_coach_hires.clear()
+
+        if not vacancies:
+            return
+
+        _ARCH_SHORT = {
+            "chemistry":      "Culture Coach",
+            "star_whisperer": "Star Whisperer",
+            "defensive":      "Defensive Mastermind",
+            "offensive":      "Offensive Innovator",
+            "motivator":      "Motivator",
+        }
+        _OWN_MOT = {
+            "winning":    "Championship-hungry",
+            "money":      "Business-minded",
+            "local_hero": "Community-focused",
+        }
+
+        def _stars(rating: float) -> str:
+            filled = round(rating * 5)
+            return GOLD + "★" * filled + MUTED + "☆" * (5 - filled) + RESET
+
+        def _arch_color(arch: str) -> str:
+            return {
+                "defensive":      CYAN,
+                "offensive":      GOLD,
+                "star_whisperer": GREEN,
+                "chemistry":      GREEN,
+                "motivator":      MUTED,
+            }.get(arch, RESET)
+
+        def _fit_label(coach, team) -> str:
+            owner = team.owner
+            if owner is None:
+                return ""
+            fit = coach.owner_fit(owner.motivation, owner.tenure_left)
+            if fit >= 0.70:   return f"{GREEN}Strong fit{RESET}"
+            if fit >= 0.55:   return f"{GOLD}Neutral fit{RESET}"
+            return f"{RED}Poor fit{RESET}"
+
+        hires_made: list[tuple] = []   # (team, fired_name, new_coach, followed_rec)
+
+        for vacancy_idx, (team, fired_name) in enumerate(vacancies):
+            clear()
+            tname = team.franchise_at(sn).name
+            n_vac = len(vacancies)
+            header(
+                "COACHING MARKET",
+                f"Season {sn} Offseason  ·  Vacancy {vacancy_idx + 1} of {n_vac}",
+            )
+
+            # ── Vacancy context ───────────────────────────────────────────────
+            owner = team.owner
+            owner_name = owner.name if owner else "Unknown"
+            owner_mot  = _OWN_MOT.get(getattr(owner, 'motivation', ''), "Unknown")
+            owner_h    = owner.happiness if owner else 0.50
+            h_c = GREEN if owner_h >= 0.60 else (GOLD if owner_h >= 0.40 else RED)
+
+            print(f"\n  {RED}{BOLD}{tname}{RESET} — coaching seat open")
+            print(f"  {MUTED}Fired:{RESET}  {fired_name}")
+            print(f"  {MUTED}Owner:{RESET}  {owner_name}  ·  {owner_mot}")
+            print(f"  {MUTED}Owner mood:{RESET}  {h_c}{owner_h:.0%}{RESET}  "
+                  f"{MUTED}(shapes who they'll accept){RESET}")
+
+            # ── Available pool ────────────────────────────────────────────────
+            if not league._coaching_pool:
+                from coach import generate_coaching_pool
+                league._coaching_pool = generate_coaching_pool(4)
+
+            pool = league._coaching_pool
+            print(f"\n  {BOLD}Available coaches  ({len(pool)} in pool){RESET}")
+            divider()
+            print(f"  {'#':>2}  {'Name':<22} {'Archetype':<22} {'Rating':<18} {'Fit':<16} {'Bio'}")
+            print(f"  {'─'*2}  {'─'*22} {'─'*22} {'─'*18} {'─'*16} {'─'*12}")
+            for i, c in enumerate(pool, 1):
+                arch_lbl = _ARCH_SHORT.get(c.archetype, c.archetype)
+                arch_c   = _arch_color(c.archetype)
+                bio      = f"Former player ({c.former_team_name})" if c.former_player else "Lifer coach"
+                fit_lbl  = _fit_label(c, team)
+                print(f"  {i:>2}  {c.name:<22} {arch_c}{arch_lbl:<22}{RESET} "
+                      f"{_stars(c.rating):<18} {fit_lbl:<16} {MUTED}{bio}{RESET}")
+
+            # ── Commissioner choice ───────────────────────────────────────────
+            print(f"\n  {MUTED}Your recommendation carries significant weight but the owner")
+            print(f"  makes the final call. A strong fit mismatch can override you.{RESET}")
+            print()
+            options = ["Let owner decide (auto-select best fit)"] + \
+                      [f"Recommend {c.name}  [{_ARCH_SHORT.get(c.archetype, c.archetype)}]"
+                       for c in pool]
+            idx = choose(options, title="Commissioner action", default=0)
+
+            recommended = pool[idx - 1] if idx > 0 else None
+
+            # ── Resolve hire ──────────────────────────────────────────────────
+            new_coach = league.resolve_coaching_hire(team, recommended)
+            followed  = (recommended is None or new_coach is recommended)
+
+            hires_made.append((team, fired_name, new_coach, followed, recommended))
+
+        # ── Hiring results ────────────────────────────────────────────────────
+        clear()
+        header("COACHING MARKET", f"Season {sn} Offseason  ·  Hiring Results")
+        print()
+
+        for team, fired_name, new_coach, followed, recommended in hires_made:
+            tname    = team.franchise_at(sn).name
+            arch_lbl = _ARCH_SHORT.get(new_coach.archetype, new_coach.archetype)
+            arch_c   = _arch_color(new_coach.archetype)
+            fp_note  = f"  {MUTED}former player{RESET}" if new_coach.former_player else ""
+
+            print(f"  {BOLD}{tname}{RESET}")
+            print(f"  {MUTED}Out:{RESET} {fired_name}")
+            print(f"  {GREEN}In: {RESET} {BOLD}{new_coach.name}{RESET}  "
+                  f"{arch_c}{arch_lbl}{RESET}  {_stars(new_coach.rating)}{fp_note}")
+
+            if recommended is not None and not followed:
+                print(f"  {GOLD}Owner overrode your recommendation "
+                      f"({recommended.name}) — fit mismatch too wide.{RESET}")
+            elif recommended is not None and followed:
+                print(f"  {MUTED}Owner accepted your recommendation.{RESET}")
+            else:
+                print(f"  {MUTED}Owner selected based on fit.{RESET}")
+            print()
+
+        input(f"  {MUTED}[Enter] continue{RESET}  ")
 
     # ── Player offseason ──────────────────────────────────────────────────────
 

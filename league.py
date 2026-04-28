@@ -58,6 +58,7 @@ class League:
         self._assign_owners()
         # Coach system
         self._coaching_pool: list[Coach] = []  # unassigned coaches available for hiring
+        self._pending_coach_hires: list[tuple] = []  # (team, fired_coach_name) waiting for offseason resolution
         self._assign_coaches()
         # CBA state — reset each negotiation round (every 5 seasons from season 5)
         self.cba_player_happiness_mod: float = 0.0     # flat bonus/penalty for all players
@@ -228,6 +229,33 @@ class League:
         self._coaching_pool.remove(best)
         best.tenure = 0
         team.coach = best
+
+    def resolve_coaching_hire(self, team: "Team",
+                              recommended: "Coach | None" = None) -> "Coach":
+        """Hire a coach for an open seat, resolving the pending vacancy.
+
+        If `recommended` is provided (commissioner's pick), it gets a large scoring
+        bonus (+0.40) — enough to usually win, but owner fit can still override if
+        the gap is large.  Pool is replenished if empty.  Returns the hired coach.
+        """
+        if not self._coaching_pool:
+            self._coaching_pool = generate_coaching_pool(4)
+        owner_mot = team.owner.motivation if team.owner else None
+        patience  = team.owner.tenure_left if team.owner else 5
+
+        def score(c: Coach) -> float:
+            s = c.owner_fit(owner_mot, patience) if owner_mot else 0.50
+            if c.former_player:
+                s += 0.05
+            if recommended is not None and c is recommended:
+                s += 0.40   # commissioner recommendation strongly favours this candidate
+            return s
+
+        best = max(self._coaching_pool, key=score)
+        self._coaching_pool.remove(best)
+        best.tenure = 0
+        team.coach  = best
+        return best
 
     # ── Revenue distribution ──────────────────────────────────────────────────
 
@@ -496,14 +524,17 @@ class League:
             elif owner_h >= 0.50:
                 coach.hot_seat = False   # recover if owner settles
 
-            # Auto-fire: owner demanding and coach already on hot seat (min 2 seasons)
+            # Auto-fire: owner demanding and coach already on hot seat (min 2 seasons).
+            # Queue the hire for the commissioner's coaching market — resolved in offseason.
             owner_demanding = (team.owner is not None
                                and team.owner.threat_level == THREAT_DEMAND)
             if coach.hot_seat and owner_demanding and coach.tenure >= 2:
+                fired_name     = coach.name
                 coach.hot_seat = False
                 coach.tenure   = 0
                 self._coaching_pool.append(coach)
-                self._coaching_pool_hire(team)
+                team.coach = None   # seat is open; hire resolved in offseason
+                self._pending_coach_hires.append((team, fired_name))
 
         # Coach of the Year — best net rating delta (szn 2+) or best net rating (szn 1)
         if coy_candidates:
