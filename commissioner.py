@@ -1454,7 +1454,7 @@ class CommissionerGame:
             tc  = GOLD if p.ceiling_tier == TIER_ELITE else (CYAN if p.ceiling_tier == TIER_HIGH else "")
             ps  = season.player_stats.get(p.player_id)
             if ps and ps.games > 0:
-                stat_str = (f"{ps.ppg:>5.1f} PPG  {ps.fg_pct:.0%} FG  {ps.fg3_pct:.0%} 3P")
+                stat_str = (f"{ps.ppg:>5.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG")
             else:
                 stat_str = (f"ORtg {p.ortg_contrib:>+.1f}  DRtg {p.drtg_contrib:>+.1f}     ")
             gm     = ps.games_missed if ps else 0
@@ -1642,8 +1642,9 @@ class CommissionerGame:
                         ps = season.player_stats.get(player.player_id)
                         if ps and ps.games > 0:
                             stat_str = (f"  {ps.ppg:>5.1f} PPG"
-                                        f"  {ps.fg_pct:.1%} FG"
-                                        f"  {ps.fg3_pct:.1%} 3P")
+                                        f"  {ps.rpg:.1f} RPG"
+                                        f"  {ps.spg:.1f} SPG"
+                                        f"  {ps.bpg:.1f} BPG")
                         else:
                             stat_str = (f"  ORtg {player.ortg_contrib:>+5.1f}"
                                         f"  DRtg {player.drtg_contrib:>+5.1f}")
@@ -1829,7 +1830,7 @@ class CommissionerGame:
             if season.finals_mvp:
                 fmvp = season.finals_mvp
                 fs   = season.player_stats.get(fmvp.player_id)
-                stat_str = (f"{fs.ppg:.1f} PPG  {fs.rpg:.1f} RPG  {fs.spg:.1f} SPG"
+                stat_str = (f"{fs.ppg:.1f} PPG  {fs.rpg:.1f} RPG  {fs.spg:.1f} SPG  {fs.bpg:.1f} BPG"
                             if fs else f"ORtg {fmvp.ortg_contrib:>+.1f}")
                 tc = GOLD if fmvp.peak_overall >= 14 else CYAN
                 print(f"     {GOLD}Finals MVP:{RESET}  "
@@ -2022,7 +2023,7 @@ class CommissionerGame:
 
                 if lbl == "DPOY":
                     if ps and ps.games > 0:
-                        stat_str = (f"{ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG")
+                        stat_str = f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG"
                     else:
                         stat_str = f"DRtg attr {p.drtg_contrib:>+.1f}"
                 elif lbl == "MIP":
@@ -2035,8 +2036,8 @@ class CommissionerGame:
                         stat_str = f"{season.mip_delta:>+.2f} score vs prior season"
                 elif lbl == "ROY":
                     if ps and ps.games > 0:
-                        stat_str = (f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  "
-                                    f"{ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  (rookie season)")
+                        stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
+                                    f"{ps.spg:.1f} SPG  {ps.bpg:.1f} BPG  (rookie season)")
                     else:
                         stat_str = f"ORtg {p.ortg_contrib:>+.1f}  (rookie season)"
                 elif lbl == "Finals MVP":
@@ -2048,12 +2049,13 @@ class CommissionerGame:
                     seed = standings.index(t) + 1 if t in standings else "?"
                     if ps and ps.games > 0:
                         stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
-                                    f"{ps.spg:.1f} SPG  ({seed}) seed")
+                                    f"{ps.spg:.1f} SPG  {ps.bpg:.1f} BPG  ({seed}) seed")
                     else:
                         stat_str = f"ORtg {p.ortg_contrib:>+.1f}  ({seed}) seed"
                 else:  # OPOY
                     if ps and ps.games > 0:
-                        stat_str = f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  {ps.fg3_pct:.1%} 3P"
+                        stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
+                                    f"{ps.spg:.1f} SPG  {ps.bpg:.1f} BPG")
                     else:
                         stat_str = f"ORtg {p.ortg_contrib:>+.1f}"
 
@@ -2107,7 +2109,7 @@ class CommissionerGame:
             for rank, (p, t) in enumerate(mvp_pool[1:3], 2):
                 ps = season.player_stats.get(p.player_id)
                 seed = standings.index(t) + 1 if t in standings else "?"
-                stat = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  ({seed}) seed"
+                stat = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG  ({seed}) seed"
                         if ps else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
                 lines.append(f"  {'MVP' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
@@ -2117,7 +2119,8 @@ class CommissionerGame:
             opoy_pool = sorted(pool, key=lambda pt: _ppg(pt[0]), reverse=True)
             for rank, (p, t) in enumerate(opoy_pool[1:3], 2):
                 ps = season.player_stats.get(p.player_id)
-                stat = f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  {ps.fg3_pct:.1%} 3P" if ps else ""
+                stat = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG"
+                        if ps else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
                 lines.append(f"  {'OPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
                               f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
@@ -2129,7 +2132,7 @@ class CommissionerGame:
             )
             for rank, (p, t) in enumerate(dpoy_pool[1:3], 2):
                 ps = season.player_stats.get(p.player_id)
-                stat = (f"{ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG"
+                stat = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG"
                         if (ps and ps.games > 0) else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
                 lines.append(f"  {'DPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
@@ -5735,7 +5738,8 @@ class CommissionerGame:
                 mot_c = GREEN if p.motivation == MOT_WINNING else (GOLD if p.motivation == MOT_MARKET else CYAN)
                 ps = season.player_stats.get(p.player_id)
                 if ps and ps.games > 0:
-                    stat_str = f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG"
+                    stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
+                                f"{ps.spg:.1f} SPG  {ps.bpg:.1f} BPG")
                 else:
                     stat_str = f"ORtg {p.ortg_contrib:+.1f}  DRtg {p.drtg_contrib:+.1f}"
                 print(f"  {p.name:<22} {MUTED}{p.position} · Age {p.age}{RESET}  "
@@ -5879,7 +5883,8 @@ class CommissionerGame:
             for p in sorted(retiring_notable, key=lambda x: -x.peak_overall):
                 tc     = GOLD if p.ceiling_tier == TIER_ELITE else CYAN
                 ps     = season.player_stats.get(p.player_id)
-                ppg_s  = f"  {MUTED}{ps.ppg:.1f} PPG this season{RESET}" if (ps and ps.games > 0) else ""
+                ppg_s  = (f"  {MUTED}{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG{RESET}"
+                          if (ps and ps.games > 0) else "")
                 age_s  = f"Age {p.age}"
                 print(f"  {tc}{'★' if p.ceiling_tier==TIER_ELITE else '·'}  {p.name:<22}{RESET}"
                       f"  {p.position}  {age_s}{ppg_s}")
