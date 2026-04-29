@@ -1200,12 +1200,12 @@ class League:
             team._tanking_for_pick = False
             if not got_pick:
                 self._failed_tank_teams.add(team.team_id)
-                # Engagement crash: fans stopped showing up (−12 to −18 ppts)
-                eng_crash = random.uniform(0.12, 0.18)
-                team.market_engagement = max(0.0, team.market_engagement - eng_crash)
-                # Popularity crash: fans like you less (−8 to −12 ppts)
-                pop_crash = random.uniform(0.08, 0.12)
+                # Popularity crash: fans actively sour on the team (−15 to −20 ppts)
+                pop_crash = random.uniform(0.15, 0.20)
                 team.popularity = max(0.0, team.popularity - pop_crash)
+                # Engagement dip: some fans stop showing up, but smaller blow (−8 to −12 ppts)
+                eng_crash = random.uniform(0.08, 0.12)
+                team.market_engagement = max(0.0, team.market_engagement - eng_crash)
                 # Owner happiness crater
                 if team.owner:
                     team.owner.happiness = max(0.0, team.owner.happiness - 0.30)
