@@ -460,7 +460,9 @@ class CommissionerGame:
                  _market_engagement={},
                  _league_popularity=0.0,
                  finals_mvp_ppg=0.0,
-                 finals_mvp_drtg=0.0,
+                 finals_mvp_rpg=0.0,
+                 finals_mvp_spg=0.0,
+                 finals_mvp_bpg=0.0,
                  mip=None,
                  mip_team=None,
                  mip_delta=0.0,
@@ -1827,7 +1829,7 @@ class CommissionerGame:
             if season.finals_mvp:
                 fmvp = season.finals_mvp
                 fs   = season.player_stats.get(fmvp.player_id)
-                stat_str = (f"{fs.ppg:.1f} PPG  {fs.def_rtg:.1f} DRtg"
+                stat_str = (f"{fs.ppg:.1f} PPG  {fs.rpg:.1f} RPG  {fs.spg:.1f} SPG"
                             if fs else f"ORtg {fmvp.ortg_contrib:>+.1f}")
                 tc = GOLD if fmvp.peak_overall >= 14 else CYAN
                 print(f"     {GOLD}Finals MVP:{RESET}  "
@@ -2019,34 +2021,34 @@ class CommissionerGame:
                 ps    = season.player_stats.get(p.player_id)
 
                 if lbl == "DPOY":
-                    if ps and ps.poss_defended:
-                        stat_str = (f"{ps.def_rtg:.1f} DRtg  {ps.spg:.1f} SPG  "
-                                    f"{ps.bpg:.1f} BPG  {ps.poss_defended} poss defended")
+                    if ps and ps.games > 0:
+                        stat_str = (f"{ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG")
                     else:
-                        stat_str = f"DRtg {p.drtg_contrib:>+.1f}"
+                        stat_str = f"DRtg attr {p.drtg_contrib:>+.1f}"
                 elif lbl == "MIP":
                     ppg_sign = "+" if season.mip_ppg_delta >= 0 else ""
-                    drtg_s = (f"  {season.mip_drtg_delta:.1f} DRtg"
-                              if season.mip_drtg_delta <= -1.0 else "")
                     if ps and ps.games > 0:
                         stat_str = (f"{ps.ppg:.1f} PPG  "
-                                    f"{ppg_sign}{season.mip_ppg_delta:.1f} PPG"
-                                    f"{drtg_s}  "
+                                    f"{ppg_sign}{season.mip_ppg_delta:.1f} PPG  "
                                     f"{season.mip_delta:>+.2f} score vs prior season")
                     else:
                         stat_str = f"{season.mip_delta:>+.2f} score vs prior season"
                 elif lbl == "ROY":
                     if ps and ps.games > 0:
                         stat_str = (f"{ps.ppg:.1f} PPG  {ps.fg_pct:.1%} FG  "
-                                    f"{ps.def_rtg:.1f} DRtg  (rookie season)")
+                                    f"{ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  (rookie season)")
                     else:
                         stat_str = f"ORtg {p.ortg_contrib:>+.1f}  (rookie season)"
                 elif lbl == "Finals MVP":
-                    stat_str = f"{season.finals_mvp_ppg:.1f} PPG  {season.finals_mvp_drtg:.1f} DRtg  (Finals only)"
+                    stat_str = (f"{season.finals_mvp_ppg:.1f} PPG  "
+                                f"{season.finals_mvp_rpg:.1f} RPG  "
+                                f"{season.finals_mvp_spg:.1f} SPG  "
+                                f"{season.finals_mvp_bpg:.1f} BPG  (Finals only)")
                 elif lbl == "MVP":
                     seed = standings.index(t) + 1 if t in standings else "?"
                     if ps and ps.games > 0:
-                        stat_str = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg  ({seed}) seed"
+                        stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
+                                    f"{ps.spg:.1f} SPG  ({seed}) seed")
                     else:
                         stat_str = f"ORtg {p.ortg_contrib:>+.1f}  ({seed}) seed"
                 else:  # OPOY
@@ -2105,7 +2107,8 @@ class CommissionerGame:
             for rank, (p, t) in enumerate(mvp_pool[1:3], 2):
                 ps = season.player_stats.get(p.player_id)
                 seed = standings.index(t) + 1 if t in standings else "?"
-                stat = f"{ps.ppg:.1f} PPG  {ps.def_rtg:.1f} DRtg  ({seed}) seed" if ps else ""
+                stat = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  ({seed}) seed"
+                        if ps else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
                 lines.append(f"  {'MVP' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
                               f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
@@ -2126,8 +2129,8 @@ class CommissionerGame:
             )
             for rank, (p, t) in enumerate(dpoy_pool[1:3], 2):
                 ps = season.player_stats.get(p.player_id)
-                stat = (f"{ps.def_rtg:.1f} DRtg  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG  {ps.poss_defended} poss"
-                        if (ps and ps.poss_defended) else "")
+                stat = (f"{ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG"
+                        if (ps and ps.games > 0) else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
                 lines.append(f"  {'DPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
                               f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
@@ -2780,15 +2783,14 @@ class CommissionerGame:
                 w(f"  {p.name:<22} {tn:<18}  {st.ppg:>5.1f}  {st.fg_pct:>5.1%}  "
                   f"{fg3:>5}  {ft:>5}  {st.games:>3}  {st.games_missed}")
 
-            def_sc = [(p, t, st) for p, t, st in scored if st.poss_defended >= 10]
+            def_sc = [(p, t, st) for p, t, st in scored if st.games >= 5]
             if def_sc:
-                sub("Season Defensive Leaders  (lower Def Rtg = better)")
-                w(f"  {'Player':<22} {'Team':<18}  {'Def Rtg':>7}  {'Poss':>5}  Pts Allowed")
+                sub("Season Defensive Leaders  (STL + BLK)")
+                w(f"  {'Player':<22} {'Team':<18}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  {'TOV':>5}")
                 sep("-")
-                for p, t, st in sorted(def_sc, key=lambda x: x[2].def_rtg)[:10]:
+                for p, t, st in sorted(def_sc, key=lambda x: -(x[2].stl + x[2].blk))[:10]:
                     tn = _s(t.franchise_at(sn).nickname)[:16]
-                    w(f"  {p.name:<22} {tn:<18}  {st.def_rtg:>7.1f}  "
-                      f"{st.poss_defended:>5}  {st.pts_allowed}")
+                    w(f"  {p.name:<22} {tn:<18}  {st.rpg:>5.1f}  {st.spg:>5.1f}  {st.bpg:>5.1f}  {st.topg:>5.1f}")
 
         # All-time best single seasons
         all_rec: list = []
@@ -2811,21 +2813,19 @@ class CommissionerGame:
                 w(f"  {snum:>3}  {pn:<22} {tn:<18}  "
                   f"{st.ppg:>5.1f}  {st.fg_pct:>5.1%}  {fg3:>5}{champ}")
 
-            def_rec = [r for r in all_rec if r[4].poss_defended >= 20]
-            if def_rec:
-                sub("Best Single Seasons All-Time — Defense  (min 20 poss)")
-                w(f"  {'S':>3}  {'Player':<22} {'Team':<18}  "
-                  f"{'Def Rtg':>7}  {'Poss':>5}")
-                sep("-")
-                for snum, pn, tn, _, st in sorted(def_rec, key=lambda x: x[4].def_rtg)[:10]:
-                    w(f"  {snum:>3}  {pn:<22} {tn:<18}  "
-                      f"{st.def_rtg:>7.1f}  {st.poss_defended:>5}")
+            sub("Best Single Seasons All-Time — Rebounds/Steals/Blocks")
+            w(f"  {'S':>3}  {'Player':<22} {'Team':<18}  "
+              f"{'RPG':>5}  {'SPG':>5}  {'BPG':>5}")
+            sep("-")
+            for snum, pn, tn, _, st in sorted(all_rec, key=lambda x: -x[4].rpg)[:10]:
+                w(f"  {snum:>3}  {pn:<22} {tn:<18}  "
+                  f"{st.rpg:>5.1f}  {st.spg:>5.1f}  {st.bpg:>5.1f}")
 
         # Career leaders
         c_pts = defaultdict(int); c_gms = defaultdict(int)
         c_fga = defaultdict(int); c_fgm = defaultdict(int)
         c_fa3 = defaultdict(int); c_fm3 = defaultdict(int)
-        c_pos = defaultdict(int); c_all = defaultdict(int)
+        c_reb = defaultdict(int); c_stl = defaultdict(int); c_blk = defaultdict(int)
         p2n: dict = {};           p2t: dict = {}
         for s in league.seasons:
             for pid, st in s.player_stats.items():
@@ -2833,7 +2833,7 @@ class CommissionerGame:
                 c_pts[pid] += st.points;  c_gms[pid] += st.games
                 c_fga[pid] += st.fga;     c_fgm[pid] += st.fgm
                 c_fa3[pid] += st.fga_3;   c_fm3[pid] += st.fgm_3
-                c_pos[pid] += st.poss_defended; c_all[pid] += st.pts_allowed
+                c_reb[pid] += st.reb;     c_stl[pid] += st.stl;  c_blk[pid] += st.blk
                 if pid in s.player_names: p2n[pid] = s.player_names[pid]
                 if pid in s.player_teams: p2t[pid] = s.player_teams[pid]
         qual = [pid for pid in c_gms if c_gms[pid] >= 10]
@@ -2841,7 +2841,9 @@ class CommissionerGame:
             def _cppg(pid): return c_pts[pid] / c_gms[pid] if c_gms[pid] else 0.0
             def _cfg(pid):  return c_fgm[pid] / c_fga[pid] if c_fga[pid] else 0.0
             def _c3p(pid):  return c_fm3[pid] / c_fa3[pid] if c_fa3[pid] else 0.0
-            def _cdrtg(pid):return c_all[pid] / c_pos[pid] * 100 if c_pos[pid] else 999.0
+            def _crpg(pid): return c_reb[pid] / c_gms[pid] if c_gms[pid] else 0.0
+            def _cspg(pid): return c_stl[pid] / c_gms[pid] if c_gms[pid] else 0.0
+            def _cbpg(pid): return c_blk[pid] / c_gms[pid] if c_gms[pid] else 0.0
 
             sub("Career Scoring Leaders  (min 10 games)")
             w(f"  {'Player':<22} {'Team':<18}  "
@@ -2853,14 +2855,13 @@ class CommissionerGame:
                 w(f"  {n:<22} {t:<18}  "
                   f"{_cppg(pid):>5.1f}  {_cfg(pid):>5.1%}  {fg3s:>5}  {c_gms[pid]:>4}")
 
-            dq = [pid for pid in qual if c_pos[pid] >= 30]
-            if dq:
-                sub("Career Defensive Leaders  (min 30 poss defended)")
-                w(f"  {'Player':<22} {'Team':<18}  {'Def Rtg':>7}  {'Poss':>5}")
-                sep("-")
-                for pid in sorted(dq, key=_cdrtg)[:10]:
-                    n = p2n.get(pid, f"P{pid}"); t = p2t.get(pid, "—")
-                    w(f"  {n:<22} {t:<18}  {_cdrtg(pid):>7.1f}  {c_pos[pid]:>5}")
+            sub("Career Rebounds / Steals / Blocks  (min 10 games)")
+            w(f"  {'Player':<22} {'Team':<18}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  {'GP':>4}")
+            sep("-")
+            for pid in sorted(qual, key=lambda p: -_crpg(p))[:10]:
+                n = p2n.get(pid, f"P{pid}"); t = p2t.get(pid, "—")
+                w(f"  {n:<22} {t:<18}  "
+                  f"{_crpg(pid):>5.1f}  {_cspg(pid):>5.1f}  {_cbpg(pid):>5.1f}  {c_gms[pid]:>4}")
 
         # ── 4. ROSTERS ────────────────────────────────────────────────────────
         section(f"4. ROSTERS  |  Season {sn}")
@@ -2875,7 +2876,7 @@ class CommissionerGame:
               f"Net {net:+.1f}  ORtg {team.ortg:.1f}  DRtg {team.drtg:.1f}")
             w(f"  {'Slot':<8} {'Name':<22} {'Pos':<5} {'Age':>3}  "
               f"{'ORtg':>5}  {'DRtg':>5}  {'Yrs':>3}  {'PPG':>5}  "
-              f"{'FG%':>5}  {'GP':>3}  Miss  Durability")
+              f"{'FG%':>5}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  {'GP':>3}  Miss  Durability")
             sep("-")
             for idx2, player in enumerate(team.roster):
                 slot_lbl = team.slot_label(idx2)
@@ -2883,8 +2884,11 @@ class CommissionerGame:
                     w(f"  {slot_lbl:<8} — empty")
                 else:
                     pst = last_ps.get(player.player_id)
-                    ppg_s = f"{pst.ppg:>5.1f}" if (pst and pst.games > 0) else "   —  "
+                    ppg_s = f"{pst.ppg:>5.1f}"    if (pst and pst.games > 0) else "   —  "
                     fg_s  = f"{pst.fg_pct:>5.1%}" if (pst and pst.fga  > 0) else "   —  "
+                    rpg_s = f"{pst.rpg:>5.1f}"    if (pst and pst.games > 0) else "   —  "
+                    spg_s = f"{pst.spg:>5.1f}"    if (pst and pst.games > 0) else "   —  "
+                    bpg_s = f"{pst.bpg:>5.1f}"    if (pst and pst.games > 0) else "   —  "
                     gms   = f"{pst.games:>3}"      if (pst and pst.games > 0) else "  0"
                     miss  = str(pst.games_missed)  if (pst and pst.games_missed > 0) else "0"
                     dur   = _s(durability_label(player.durability))
@@ -2892,7 +2896,7 @@ class CommissionerGame:
                       f" {player.age:>3}"
                       f"  {player.ortg_contrib:>+5.1f}  {player.drtg_contrib:>+5.1f}"
                       f"  {player.contract_years_remaining:>3}"
-                      f"  {ppg_s}  {fg_s}  {gms}  {miss:<4}  {dur}")
+                      f"  {ppg_s}  {fg_s}  {rpg_s}  {spg_s}  {bpg_s}  {gms}  {miss:<4}  {dur}")
 
         # ── 5. POWER STRUCTURE ────────────────────────────────────────────────
         section("5. POWER STRUCTURE")
@@ -3983,9 +3987,10 @@ class CommissionerGame:
 
                 print(f"  {'Slot':<8} {'Name':<22} {'Pos':<5} {'Age':>3}  "
                       f"{'ORtg':>5}  {'DRtg':>5}  {'Zone':<6}  "
-                      f"{'Yrs':>3}  {'Tr':>2}  {'Mood':<4}  {'PPG':>5}  {'FG%':>5}  {'DRtg':>7}  "
+                      f"{'Yrs':>3}  {'Tr':>2}  {'Mood':<4}  {'PPG':>5}  {'FG%':>5}  "
+                      f"{'RPG':>5}  {'SPG':>5}  {'BPG':>5}  "
                       f"{'Gms':>3}  {'Dur':<6}  {'🔋':>5}  Mot")
-                print(f"  {MUTED}{'─' * 110}{RESET}")
+                print(f"  {MUTED}{'─' * 118}{RESET}")
                 for idx, player in enumerate(team.roster):
                     slot_lbl = team.slot_label(idx)
                     if player is None:
@@ -3996,14 +4001,16 @@ class CommissionerGame:
                         trend_s = player.trend
                         tc = tier_colors.get(player.ceiling_tier, "")
                         ps = last_stats.get(player.player_id)
-                        ppg_str   = f"{ps.ppg:>5.1f}" if (ps and ps.games > 0) else f"{MUTED}  —  {RESET}"
-                        fg_str    = f"{ps.fg_pct:>5.1%}" if (ps and ps.fga > 0) else f"{MUTED}  —  {RESET}"
-                        drtg_str  = f"{ps.def_rtg:>7.1f}" if (ps and ps.poss_defended > 0) else f"{MUTED}    —  {RESET}"
-                        gms_str   = f"{ps.games_missed:>3}" if (ps and ps.games_missed > 0) else f"{MUTED}  0{RESET}"
-                        dur_lbl   = durability_label(player.durability)
-                        dur_c     = GREEN if player.durability >= 0.88 else (CYAN if player.durability >= 0.75 else (MUTED if player.durability >= 0.62 else RED))
-                        _nrg2     = (1 - player.fatigue) * 100
-                        fat_c     = RED if _nrg2 < 60 else (GOLD if _nrg2 < 80 else MUTED)
+                        ppg_str = f"{ps.ppg:>5.1f}" if (ps and ps.games > 0) else f"{MUTED}  —  {RESET}"
+                        fg_str  = f"{ps.fg_pct:>5.1%}" if (ps and ps.fga > 0) else f"{MUTED}  —  {RESET}"
+                        rpg_str = f"{ps.rpg:>5.1f}" if (ps and ps.games > 0) else f"{MUTED}  —  {RESET}"
+                        spg_str = f"{ps.spg:>5.1f}" if (ps and ps.games > 0) else f"{MUTED}  —  {RESET}"
+                        bpg_str = f"{ps.bpg:>5.1f}" if (ps and ps.games > 0) else f"{MUTED}  —  {RESET}"
+                        gms_str = f"{ps.games_missed:>3}" if (ps and ps.games_missed > 0) else f"{MUTED}  0{RESET}"
+                        dur_lbl = durability_label(player.durability)
+                        dur_c   = GREEN if player.durability >= 0.88 else (CYAN if player.durability >= 0.75 else (MUTED if player.durability >= 0.62 else RED))
+                        _nrg2   = (1 - player.fatigue) * 100
+                        fat_c   = RED if _nrg2 < 60 else (GOLD if _nrg2 < 80 else MUTED)
                         print(f"  {MUTED}{slot_lbl:<8}{RESET}"
                               f" {tc}{player.name:<22}{RESET}"
                               f" {player.position:<5} {player.age:>3}"
@@ -4012,7 +4019,8 @@ class CommissionerGame:
                               f"  {player.contract_years_remaining:>3}"
                               f"  {trend_s:>2}"
                               f"  {happiness_emoji(player.happiness):<4}"
-                              f"  {ppg_str}  {fg_str}  {drtg_str}"
+                              f"  {ppg_str}  {fg_str}"
+                              f"  {rpg_str}  {spg_str}  {bpg_str}"
                               f"  {gms_str}  {dur_c}{dur_lbl:<6}{RESET}  {fat_c}🔋{_nrg2:>3.0f}%{RESET}"
                               f"  {mot_c}{player.motivation}{RESET}")
 
@@ -4665,14 +4673,12 @@ class CommissionerGame:
                          ("BPG", lambda s: f"{s.bpg:.1f}", 5),
                          ("TOV", lambda s: f"{s.topg:.1f}", 5)])
 
-                    _show_cat("Defensive Leaders  (lower = better)",
-                        sorted([(p, t, s) for p, t, s in scored if s.poss_defended >= 10],
-                               key=lambda x: x[2].def_rtg),
-                        [("Def Rtg", lambda s: f"{s.def_rtg:.1f}", 7),
-                         ("STL",    lambda s: f"{s.spg:.1f}", 5),
-                         ("BLK",    lambda s: f"{s.bpg:.1f}", 5),
-                         ("Poss",   lambda s: f"{s.poss_defended}", 5),
-                         ("Pts All",lambda s: f"{s.pts_allowed}", 7)])
+                    _show_cat("Defensive Leaders  (STL + BLK)",
+                        sorted(scored, key=lambda x: -(x[2].stl + x[2].blk)),
+                        [("RPG", lambda s: f"{s.rpg:.1f}", 5),
+                         ("SPG", lambda s: f"{s.spg:.1f}", 5),
+                         ("BPG", lambda s: f"{s.bpg:.1f}", 5),
+                         ("TOV", lambda s: f"{s.topg:.1f}", 5)])
 
                     _show_cat("Efficiency Leaders  (min 5 GP, 10 FGA)",
                         sorted([(p, t, s) for p, t, s in scored if s.fga >= 10],
@@ -4721,12 +4727,6 @@ class CommissionerGame:
                         lambda x: -x[4].rpg,
                         lambda s: f"{s.rpg:.1f} RPG  {s.spg:.1f} SPG  {s.bpg:.1f} BPG",
                         "RPG   SPG   BPG")
-
-                    _show_alltime("Best Defensive Seasons  (min 20 poss defended)",
-                        [r for r in all_records if r[4].poss_defended >= 20],
-                        lambda x: x[4].def_rtg,
-                        lambda s: f"{s.def_rtg:.1f} Def Rtg  {s.spg:.1f} SPG  {s.bpg:.1f} BPG  {s.poss_defended} poss",
-                        "Def Rtg  SPG  BPG  Poss")
 
             elif page == 2:
                 # ── Career leaders (aggregated across all seasons) ─────────────
@@ -4824,16 +4824,6 @@ class CommissionerGame:
                               f"{career_rpg(pid):>5.1f}  {career_spg(pid):>5.1f}  "
                               f"{career_bpg(pid):>5.1f}  {gp}")
 
-                    print(f"\n  {BOLD}Career Defensive Rating (min 30 poss){RESET}")
-                    print(f"  {'Player':<22} {'Team':<18}  {'Def Rtg':>7}  {'Poss':>5}")
-                    divider()
-                    def_qualified = [pid for pid, _ in qualified if career_poss[pid] >= 30]
-                    top_defenders = sorted(def_qualified, key=lambda p: career_drtg(p))[:10]
-                    for pid in top_defenders:
-                        name  = pid_to_name.get(pid, f"P{pid}")
-                        tname = pid_to_team.get(pid, "—")
-                        print(f"  {name:<22} {MUTED}{tname:<18}{RESET}  "
-                              f"{career_drtg(pid):>7.1f}  {career_poss[pid]:>5}")
 
             divider()
             nav = []
@@ -5706,7 +5696,7 @@ class CommissionerGame:
                       f"{team_name}{RESET}")
                 # Aggregate career stats from all seasons
                 career_pts = career_games = career_fga = career_fgm = 0
-                career_poss = career_allow = 0
+                career_reb = career_stl = career_blk = 0
                 for s in league.seasons:
                     st = s.player_stats.get(p.player_id)
                     if st:
@@ -5714,14 +5704,17 @@ class CommissionerGame:
                         career_games += st.games
                         career_fga   += st.fga
                         career_fgm   += st.fgm
-                        career_poss  += st.poss_defended
-                        career_allow += st.pts_allowed
+                        career_reb   += st.reb
+                        career_stl   += st.stl
+                        career_blk   += st.blk
                 if career_games > 0:
-                    c_ppg  = career_pts / career_games
-                    c_fg   = career_fgm / career_fga if career_fga else 0.0
-                    c_drtg = career_allow / career_poss * 100 if career_poss else 0.0
-                    stat_line = f"  {c_ppg:.1f} PPG  {c_fg:.1%} FG"
-                    if career_poss > 0: stat_line += f"  {c_drtg:.1f} Def Rtg"
+                    c_ppg = career_pts / career_games
+                    c_fg  = career_fgm / career_fga if career_fga else 0.0
+                    c_rpg = career_reb / career_games
+                    c_spg = career_stl / career_games
+                    c_bpg = career_blk / career_games
+                    stat_line = (f"  {c_ppg:.1f} PPG  {c_fg:.1%} FG  "
+                                 f"{c_rpg:.1f} RPG  {c_spg:.1f} SPG  {c_bpg:.1f} BPG")
                 else:
                     stat_line = ""
                 print(f"     Career: {p.seasons_played} seasons{stat_line}  "

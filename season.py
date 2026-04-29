@@ -239,7 +239,9 @@ class Season:
         self.dpoy_team:  Team   | None = None
         self.finals_mvp:      Player | None = None
         self.finals_mvp_ppg:  float = 0.0   # Finals-only PPG for display
-        self.finals_mvp_drtg: float = 0.0   # Finals-only DRtg for display
+        self.finals_mvp_rpg:  float = 0.0   # Finals-only RPG for display
+        self.finals_mvp_spg:  float = 0.0   # Finals-only SPG for display
+        self.finals_mvp_bpg:  float = 0.0   # Finals-only BPG for display
         self.mip:             Player | None = None
         self.mip_team:        Team   | None = None
         self.mip_delta:       float = 0.0   # composite 60/40 score improvement
@@ -568,10 +570,13 @@ class Season:
         finals_series = self.playoff_rounds[-1][0]
 
         # Aggregate stats from each Finals game for champion's players
-        pts:      dict[int, int] = {}
-        pd:       dict[int, int] = {}   # poss_defended
-        pa:       dict[int, int] = {}   # pts_allowed
-        gp:       dict[int, int] = {}   # games played
+        pts: dict[int, int] = {}
+        pd:  dict[int, int] = {}   # poss_defended (for scoring formula only)
+        pa:  dict[int, int] = {}   # pts_allowed   (for scoring formula only)
+        reb: dict[int, int] = {}
+        stl: dict[int, int] = {}
+        blk: dict[int, int] = {}
+        gp:  dict[int, int] = {}   # games played
 
         for game in finals_series.games:
             logs = game.home_logs if game.home is self.champion else game.away_logs
@@ -581,6 +586,9 @@ class Season:
                 pts[pid] = pts.get(pid, 0) + log.points
                 pd[pid]  = pd.get(pid, 0)  + log.poss_defended
                 pa[pid]  = pa.get(pid, 0)  + log.pts_allowed
+                reb[pid] = reb.get(pid, 0) + log.reb
+                stl[pid] = stl.get(pid, 0) + log.stl
+                blk[pid] = blk.get(pid, 0) + log.blk
                 gp[pid]  = gp.get(pid, 0)  + 1
 
         pid_to_player = {p.player_id: p for p in self.champion.roster if p is not None}
@@ -603,11 +611,10 @@ class Season:
             best_pid = max(candidates, key=_fmvp_score)
             self.finals_mvp = pid_to_player[best_pid]
             games = gp.get(best_pid, 1)
-            self.finals_mvp_ppg  = round(pts.get(best_pid, 0) / games, 1)
-            poss = pd.get(best_pid, 0)
-            self.finals_mvp_drtg = round(
-                pa.get(best_pid, 0) / poss * 100 if poss > 0 else 110.0 + self.finals_mvp.drtg_contrib, 1
-            )
+            self.finals_mvp_ppg = round(pts.get(best_pid, 0) / games, 1)
+            self.finals_mvp_rpg = round(reb.get(best_pid, 0) / games, 1)
+            self.finals_mvp_spg = round(stl.get(best_pid, 0) / games, 1)
+            self.finals_mvp_bpg = round(blk.get(best_pid, 0) / games, 1)
 
     def run(self) -> None:
         self.play_regular_season()
