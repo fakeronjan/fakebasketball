@@ -8517,8 +8517,16 @@ class CommissionerGame:
                     print(f"    {owner.grievance}")
 
             print()
-            raw = prompt("Enter an owner number to meet, or Enter to continue:")
+            n_pending = len(self._owner_actions)
+            if n_pending:
+                prompt_suffix = f"  {RED}({n_pending} item(s) must be addressed){RESET}"
+            else:
+                prompt_suffix = ""
+            raw = prompt(f"Enter an owner number to meet, or Enter to continue:{prompt_suffix}")
             if not raw:
+                if n_pending:
+                    # Cannot proceed until all pending actions are cleared
+                    continue
                 break   # proceed to agenda
             if raw.isdigit():
                 idx = int(raw) - 1
@@ -8526,8 +8534,12 @@ class CommissionerGame:
                     t, o = owners_with_teams[idx]
                     action = self._owner_actions.pop(t.team_id, None)
                     if action:
+                        # Handle the pending item and return to list — outreach is a
+                        # separate click so the user is never silently dropped into a
+                        # second screen after resolving an action.
                         self._handle_owner_action(t, o, action, season)
-                    if o.threat_level != THREAT_DEMAND:
+                    elif o.threat_level != THREAT_DEMAND:
+                        # No pending item — offer optional outreach
                         self._owner_outreach(t, o, season)
             # loop back — redraws the list with updated flags
 
