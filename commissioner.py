@@ -1263,47 +1263,31 @@ class CommissionerGame:
         divider()
         print(f"\n  Top {n_playoff} of {n_teams} teams advance to the playoffs.")
 
-        # ── Scoring leaders — with zone breakdown ─────────────────────────────
+        # ── Stat leaders ──────────────────────────────────────────────────────
         all_players = [(p, t) for t in season.teams for p in t.roster if p is not None]
-        scored = [(p, t, season.player_stats[p.player_id])
-                  for p, t in all_players
-                  if p.player_id in season.player_stats
-                  and p.player_id != _BENCH_ID]
-        if scored:
-            top_scorers = sorted(scored, key=lambda x: x[2].ppg, reverse=True)[:8]
-
-            print(f"\n  {BOLD}SCORING LEADERS{RESET}")
-            # Header: name | team | PPG | Paint (ppg / make%) | Mid | 3PT | FT
-            # Zone columns are 11 chars wide (e.g. "12.4 (100%)" = 11)
-            print(f"  {MUTED}{'Player':<22} {'Team':<18} {'PPG':>5}  "
-                  f"{'Paint':>11}  {'Mid':>11}  {'3PT':>11}  {'FT':>11}{RESET}")
+        pool = [(p, t, season.player_stats[p.player_id])
+                for p, t in all_players
+                if p.player_id in season.player_stats
+                and p.player_id != _BENCH_ID
+                and season.player_stats[p.player_id].games > 0]
+        if pool:
+            print(f"\n  {BOLD}STAT LEADERS{RESET}")
             divider()
 
-            def _zone_cell(pts_per_game: float, pct: float, width: int = 11) -> str:
-                """Number in default color, (%) in muted; manually padded to visual width."""
-                num   = f"{pts_per_game:.1f}"
-                pct_s = f"({pct:.0%})"
-                visual_len = len(num) + 1 + len(pct_s)   # "12.4 (64%)" = 10
-                pad   = " " * max(0, width - visual_len)
-                return f"{pad}{num} {MUTED}{pct_s}{RESET}"
+            def _leader_row(label: str, key_fn, fmt: str, n: int = 5) -> None:
+                ranked = sorted(pool, key=lambda x: key_fn(x[2]), reverse=True)[:n]
+                parts  = []
+                for p, t, s in ranked:
+                    tc   = GOLD if p is season.mvp else (CYAN if p.peak_overall >= 14 else "")
+                    val  = fmt.format(key_fn(s))
+                    parts.append(f"{tc}{p.name}{RESET}  {MUTED}{val}{RESET}")
+                print(f"  {GOLD}{label:<6}{RESET}  " + "   ".join(parts))
 
-            for p, t, s in top_scorers:
-                tname = t.franchise_at(sn).nickname[:16]
-                tc    = GOLD if p is season.mvp else (CYAN if p.peak_overall >= 14 else "")
-                g     = s.games or 1
-
-                paint_ppg = s.fgm_paint * 2 / g
-                mid_ppg   = s.fgm_mid   * 2 / g
-                three_ppg = s.fgm_3     * 3 / g
-                ft_ppg    = s.ftm           / g
-
-                paint_cell = _zone_cell(paint_ppg, s.paint_pct)
-                mid_cell   = _zone_cell(mid_ppg,   s.mid_pct)
-                three_cell = _zone_cell(three_ppg, s.fg3_pct)
-                ft_cell    = _zone_cell(ft_ppg,    s.ft_pct)
-
-                print(f"  {tc}{p.name:<22}{RESET} {MUTED}{tname:<18}{RESET} {s.ppg:>5.1f}  "
-                      f"{paint_cell}  {mid_cell}  {three_cell}  {ft_cell}")
+            _leader_row("PPG",  lambda s: s.ppg,                         "{:.1f}")
+            _leader_row("RPG",  lambda s: s.rpg,                         "{:.1f}")
+            _leader_row("SPG",  lambda s: s.spg,                         "{:.1f}")
+            _leader_row("BPG",  lambda s: s.bpg,                         "{:.1f}")
+            _leader_row("3P/G", lambda s: s.fgm_3 / (s.games or 1),     "{:.1f}")
 
         press_enter("Press Enter to see injury report...")
 
@@ -1808,8 +1792,8 @@ class CommissionerGame:
             else:
                 drama_tag = f"  {MUTED}in {n_games}{RESET}"
 
-            # Upset flag: loser was higher seed
-            upset = loser is sr.seed1
+            # Upset flag: winner's regular-season seed is worse than loser's
+            upset = bool(w_seed and l_seed and w_seed > l_seed)
             upset_tag = f"  {RED}UPSET{RESET}" if upset else ""
 
             print(f"  {wseed_tag}{BOLD}{wname:<24}{RESET} def. "
@@ -1942,7 +1926,7 @@ class CommissionerGame:
                     clinch  = sr.games[-1]
                     w_score = clinch.home_score if clinch.home is winner else clinch.away_score
                     l_score = clinch.away_score if clinch.home is winner else clinch.home_score
-                    upset_tag = f"  {RED}UPSET{RESET}" if loser is sr.seed1 else ""
+                    upset_tag = f"  {RED}UPSET{RESET}" if (w_seed < 99 and l_seed < 99 and w_seed > l_seed) else ""
                     print(f"    {CYAN}({w_seed}){RESET} {wname:<24} def. "
                           f"{CYAN}({l_seed}){RESET} {lname:<24} "
                           f"{GOLD}{w_wins}–{l_wins}{RESET}  "
@@ -7981,11 +7965,11 @@ class CommissionerGame:
   your public endorsement to make it official.{RESET}"
 
   {GREEN}[1] Endorse ($20M owner investment){RESET}  Talent boost next season. Owner {GREEN}+happy{RESET}.
-  {GOLD}[2] Encourage without endorsing ($10M){RESET}  Smaller boost. Modest happiness.
+  {GOLD}[2] Encourage without endorsing ($10M){RESET}  Smaller boost. Modest happiness.  {GOLD}← default{RESET}
   {RED}[3] Decline{RESET}                            Owner {GOLD}frustrated{RESET}.
 """)
             while True:
-                r = prompt("Decision [1/2/3]:").strip()
+                r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
                 if r in ("1","2","3"): break
             if r == "1":
                 league._talent_boost_seasons_left = max(league._talent_boost_seasons_left, 1)
@@ -8012,10 +7996,10 @@ class CommissionerGame:
   Nothing that has to be on paper.{RESET}"
 
   {GREEN}[1] Agree quietly{RESET}  Owner {GREEN}+confidence{RESET}. Legitimacy {RED}−5%{RESET}.
-  {RED}[2] Decline{RESET}        Owner {GOLD}mildly frustrated{RESET}. No cost.
+  {RED}[2] Decline{RESET}        Owner {GOLD}mildly frustrated{RESET}. No cost.  {GOLD}← default{RESET}
 """)
             while True:
-                r = prompt("Decision [1/2]:").strip()
+                r = prompt("Decision [1/2] or Enter for [2]:").strip() or "2"
                 if r in ("1","2"): break
             if r == "1":
                 owner.happiness = min(1.0, owner.happiness + 0.10)
@@ -8038,11 +8022,11 @@ class CommissionerGame:
   "{MUTED}I've got a naming rights offer from {company} — ${deal}M per year.
   Strong money. I need your sign-off to finalize it.{RESET}"
 
-  {GREEN}[1] Approve{RESET}  Owner revenue {GREEN}+${deal}M{RESET}. Arena renamed.
+  {GREEN}[1] Approve{RESET}  Owner revenue {GREEN}+${deal}M{RESET}. Arena renamed.  {GOLD}← default{RESET}
   {RED}[2] Decline{RESET}  Owner {GOLD}frustrated{RESET}.
 """)
             while True:
-                r = prompt("Decision [1/2]:").strip()
+                r = prompt("Decision [1/2] or Enter for [1]:").strip() or "1"
                 if r in ("1","2"): break
             if r == "1":
                 owner.last_net_profit  += deal
@@ -8063,11 +8047,11 @@ class CommissionerGame:
   events, local media, outreach — could change that. I need you to fund it.{RESET}"
 
   {GREEN}[1] Fund it ($8M){RESET}   Popularity {GREEN}+6%{RESET} · Engagement {GREEN}+3%{RESET} · Owner {GREEN}happy{RESET}.
-  {GOLD}[2] Half-fund ($4M){RESET}  Smaller boost.
+  {GOLD}[2] Half-fund ($4M){RESET}  Smaller boost.  {GOLD}← default{RESET}
   {RED}[3] Decline{RESET}          Owner {GOLD}disappointed{RESET}.
 """)
             while True:
-                r = prompt("Decision [1/2/3]:").strip()
+                r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
                 if r in ("1","2","3"): break
             if r == "1":
                 if self._treasury >= 8.0:
@@ -8103,10 +8087,10 @@ class CommissionerGame:
 
   {GREEN}[1] Begin sale process{RESET}         Ownership transition initiated.
   {GOLD}[2] Talk them out of it ($5M){RESET}   Show of confidence. Owner reconsiders.
-  {RED}[3] Acknowledge, delay{RESET}           Noted. Revisit next season.
+  {RED}[3] Acknowledge, delay{RESET}           Noted. Revisit next season.  {GOLD}← default{RESET}
 """)
             while True:
-                r = prompt("Decision [1/2/3]:").strip()
+                r = prompt("Decision [1/2/3] or Enter for [3]:").strip() or "3"
                 if r in ("1","2","3"): break
             if r == "1":
                 owner.tenure_left = 0
@@ -8140,11 +8124,11 @@ class CommissionerGame:
   This is a gambling company. The money is significant. So is the exposure.
 
   {GREEN}[1] Approve publicly{RESET}   Revenue {GREEN}+${deal}M{RESET}. Legitimacy {RED}−10%{RESET}. Players & union notice.
-  {GOLD}[2] Approve quietly{RESET}    Revenue {GOLD}+${deal//2}M{RESET}. Legitimacy {RED}−5%{RESET}. Lower visibility.
+  {GOLD}[2] Approve quietly{RESET}    Revenue {GOLD}+${deal//2}M{RESET}. Legitimacy {RED}−5%{RESET}. Lower visibility.  {GOLD}← default{RESET}
   {RED}[3] Reject{RESET}             Owner {RED}very unhappy{RESET}. League stays clean.
 """)
             while True:
-                r = prompt("Decision [1/2/3]:").strip()
+                r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
                 if r in ("1","2","3"): break
             if r == "1":
                 owner.last_net_profit += deal; owner.cumulative_profit += deal
@@ -8179,10 +8163,10 @@ class CommissionerGame:
   The deal is ready to go. I want your sign-off.{RESET}"
 
   {GREEN}[1] Approve{RESET}  Revenue {GREEN}+${sdeal}M{RESET}. Legitimacy {RED}−{int(shlegit*100)}%{RESET}.
-  {RED}[2] Reject{RESET}   Owner {GOLD}frustrated{RESET}.
+  {RED}[2] Reject{RESET}   Owner {GOLD}frustrated{RESET}.  {GOLD}← default{RESET}
 """)
             while True:
-                r = prompt("Decision [1/2]:").strip()
+                r = prompt("Decision [1/2] or Enter for [2]:").strip() or "2"
                 if r in ("1","2"): break
             if r == "1":
                 owner.last_net_profit += sdeal; owner.cumulative_profit += sdeal
@@ -8204,11 +8188,11 @@ class CommissionerGame:
   close this. It's good for the city and good for the franchise.{RESET}"
 
   {GREEN}[1] Endorse publicly{RESET}   Treasury {GREEN}+$10M{RESET} (subsidy flows to league). Legitimacy {RED}−5%{RESET}.
-  {GOLD}[2] Stay neutral{RESET}        No effect either way.
+  {GOLD}[2] Stay neutral{RESET}        No effect either way.  {GOLD}← default{RESET}
   {RED}[3] Distance yourself{RESET}   Owner {GOLD}frustrated{RESET}. Small legitimacy signal.
 """)
             while True:
-                r = prompt("Decision [1/2/3]:").strip()
+                r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
                 if r in ("1","2","3"): break
             if r == "1":
                 self._treasury += 10.0
@@ -8236,16 +8220,17 @@ class CommissionerGame:
 
   {RED}[1] Suspend & fine heavily{RESET}   Owner suspended 1 season. Legitimacy {GREEN}+8%{RESET}.
                                Owner {RED}furious{RESET}. Strong public message.
-  {GOLD}[2] Fine only{RESET}               Public fine, no suspension.
+  {GOLD}[2] Fine only{RESET}               Public fine, no suspension.  {GOLD}← default{RESET}
                                Legitimacy {GREEN}+3%{RESET}. Owner {RED}unhappy{RESET}.
   {MUTED}[3] Ignore / bury it{RESET}        Legitimacy {RED}−12%{RESET}. League looks complicit.
 """)
             while True:
-                r = prompt("Decision [1/2/3]:").strip()
+                r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
                 if r in ("1","2","3"): break
             if r == "1":
                 owner.happiness = max(0.0, owner.happiness - 0.20)
                 owner._action_cooldown = 3
+                owner.threat_level = THREAT_LEAN  # suspended — skip demand agenda this cycle
                 league.legitimacy = min(1.0, league.legitimacy + 0.08)
                 print(f"  {RED}Suspended.{RESET} {owner.name} faces a 1-season ban.")
             elif r == "2":
@@ -8279,11 +8264,11 @@ class CommissionerGame:
 
   {RED}[1] Public sanction{RESET}     Required apology + remediation program.
                            Legitimacy {GREEN}+5%{RESET}. Players {GREEN}notice the response{RESET}. Owner {RED}unhappy{RESET}.
-  {GOLD}[2] Private reprimand{RESET}   Handle behind closed doors. No immediate effect.
+  {GOLD}[2] Private reprimand{RESET}   Handle behind closed doors. No immediate effect.  {GOLD}← default{RESET}
   {MUTED}[3] Ignore{RESET}             Legitimacy {RED}−8%{RESET}. Player morale {RED}−3%{RESET}. League looks complicit.
 """)
             while True:
-                r = prompt("Decision [1/2/3]:").strip()
+                r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
                 if r in ("1","2","3"): break
             if r == "1":
                 owner.happiness = max(0.0, owner.happiness - 0.12)
@@ -8309,13 +8294,13 @@ class CommissionerGame:
 
   {RED}[1] Force immediate sale{RESET}      Ownership transition now.
                                Legitimacy {GREEN}+10%{RESET}. Sends a clear message.
-  {GOLD}[2] Suspend pending review{RESET}   Owner suspended during investigation.
+  {GOLD}[2] Suspend pending review{RESET}   Owner suspended during investigation.  {GOLD}← default{RESET}
                                Legitimacy {GREEN}+4%{RESET}. Outcome TBD.
   {MUTED}[3] Ignore{RESET}                  Legitimacy {RED}−15%{RESET}.
                                If fraud is later confirmed: catastrophic.
 """)
             while True:
-                r = prompt("Decision [1/2/3]:").strip()
+                r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
                 if r in ("1","2","3"): break
             if r == "1":
                 league.legitimacy = min(1.0, league.legitimacy + 0.10)
@@ -8324,6 +8309,7 @@ class CommissionerGame:
             elif r == "2":
                 league.legitimacy = min(1.0, league.legitimacy + 0.04)
                 owner._action_cooldown = 3
+                owner.threat_level = THREAT_LEAN  # suspended — skip demand agenda this cycle
                 owner.happiness = max(0.0, owner.happiness - 0.15)
                 print(f"  {GOLD}Suspended pending review.{RESET} Investigation begins.")
             else:
@@ -8545,6 +8531,8 @@ class CommissionerGame:
 
         # ── Layer 2: Agenda (DEMAND owners) ──────────────────────────────────
         for team, owner in demanding:
+            if owner.threat_level < THREAT_DEMAND:
+                continue  # downgraded in Layer 1 (e.g. suspended)
             self._handle_owner_demand(team, owner, season)
 
         # ── Layer 3: Ownership transitions ───────────────────────────────────
