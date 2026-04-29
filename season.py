@@ -34,6 +34,12 @@ class PlayerSeasonStats:
     ftm:           int = 0
     poss_defended: int = 0
     pts_allowed:   int = 0
+    reb:           int = 0
+    oreb:          int = 0
+    dreb:          int = 0
+    stl:           int = 0
+    blk:           int = 0
+    tov:           int = 0
 
     def absorb(self, log: PlayerGameLog) -> None:
         """Merge a single game log into season totals."""
@@ -51,6 +57,12 @@ class PlayerSeasonStats:
         self.ftm           += log.ftm
         self.poss_defended += log.poss_defended
         self.pts_allowed   += log.pts_allowed
+        self.reb           += log.reb
+        self.oreb          += log.oreb
+        self.dreb          += log.dreb
+        self.stl           += log.stl
+        self.blk           += log.blk
+        self.tov           += log.tov
 
     # ── Derived stats ─────────────────────────────────────────────────────────
 
@@ -82,6 +94,22 @@ class PlayerSeasonStats:
     @property
     def mid_pct(self) -> float:
         return self.fgm_mid / self.fga_mid if self.fga_mid else 0.0
+
+    @property
+    def rpg(self) -> float:
+        return self.reb / self.games if self.games else 0.0
+
+    @property
+    def spg(self) -> float:
+        return self.stl / self.games if self.games else 0.0
+
+    @property
+    def bpg(self) -> float:
+        return self.blk / self.games if self.games else 0.0
+
+    @property
+    def topg(self) -> float:
+        return self.tov / self.games if self.games else 0.0
 
     def pts_from_zone(self) -> tuple[int, int, int, int]:
         """Points scored from each zone: (paint, mid, three, ft)."""

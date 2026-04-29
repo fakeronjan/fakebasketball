@@ -326,6 +326,10 @@ class Player:
     career_ftm:      int = 0
     career_poss_def: int = 0
     career_pts_alw:  int = 0
+    career_reb:      int = 0
+    career_stl:      int = 0
+    career_blk:      int = 0
+    career_tov:      int = 0
     seasons_retired:    int = 0    # 0 = active, 1 = first offseason after retirement, etc.
     hof_inducted:       bool = False
     pre_league_seasons: int = 0    # seasons_played at league creation (founding players only); excluded from display
@@ -437,6 +441,10 @@ class Player:
         self.career_ftm      += ps.ftm
         self.career_poss_def += ps.poss_defended
         self.career_pts_alw  += ps.pts_allowed
+        self.career_reb      += ps.reb
+        self.career_stl      += ps.stl
+        self.career_blk      += ps.blk
+        self.career_tov      += ps.tov
 
     def advance_season(self) -> bool:
         """Increment age and career counter. Returns True if player retires."""

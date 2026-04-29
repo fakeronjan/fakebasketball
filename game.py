@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from config import Config
 from team import Team
 from player import (ZONE_FT, ZONE_PAINT, ZONE_MID, ZONE_3PT, ZONES,
-                    zone_dist, Player)
+                    GUARD, WING, BIG, zone_dist, Player)
 
 # Home court patterns (True = seed1/home team is home): standard playoff formats
 _HOME_PATTERNS: dict[int, list[bool]] = {
@@ -38,6 +38,23 @@ _ZONE_PTS: dict[str, int] = {
     ZONE_3PT:   3,
 }
 
+# ── Turnover / steal / block / rebound rates ──────────────────────────────────
+# Calibrated to NBA averages (~90 poss/team/game):
+#   TOs  ~12–14/team/game  →  13% of possessions
+#   STL  ~7–8/team/game    →  55% of TOs become steals
+#   BLK  ~4–5/team/game    →  9% of paint FGA blocked
+#   OREB ~10/team/game     →  23% of missed FGA → offensive rebound
+_TO_RATE    = 0.130
+_STEAL_RATE = 0.550
+_BLOCK_RATE = 0.090   # paint shots only
+_OREB_RATE  = 0.230   # on missed field goals (not FTs)
+
+# Position weights for stat attribution — (Guard, Wing, Big)
+_POS_TOV_WT  = {GUARD: 3, WING: 2, BIG: 2}   # guards handle the ball more
+_POS_STL_WT  = {GUARD: 4, WING: 2, BIG: 1}   # guards/wings in passing lanes
+_POS_BLK_WT  = {GUARD: 1, WING: 2, BIG: 5}   # bigs protect the rim
+_POS_REB_WT  = {GUARD: 1, WING: 2, BIG: 4}   # bigs dominate glass
+
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
@@ -51,6 +68,13 @@ class PossessionResult:
     points:      int          # 0, 1, 2, or 3
     fta:         int = 0      # free-throw attempts  (non-zero only for ZONE_FT)
     ftm:         int = 0      # free throws made
+    # New: extended box-score events
+    turnover:       bool     = False  # possession ended in TO before a shot
+    tov_id:         int | None = None  # offensive player who turned it over
+    stl_id:         int | None = None  # defensive player who stole it
+    blk_id:         int | None = None  # defensive player who blocked the shot
+    oreb_player_id: int | None = None  # offensive rebounder (None = defensive board)
+    dreb_player_id: int | None = None  # defensive rebounder (None = offensive board)
 
 
 @dataclass
@@ -69,6 +93,12 @@ class PlayerGameLog:
     ftm:           int = 0
     poss_defended: int = 0   # possessions as primary defender
     pts_allowed:   int = 0   # points yielded while defending
+    reb:           int = 0   # total rebounds
+    oreb:          int = 0   # offensive rebounds
+    dreb:          int = 0   # defensive rebounds
+    stl:           int = 0   # steals
+    blk:           int = 0   # blocks
+    tov:           int = 0   # turnovers committed
 
 
 @dataclass
@@ -254,6 +284,38 @@ def _pick_defender(defense: Team, shooter: Player | None,
     return random.choice(defenders)
 
 
+def _pick_by_position(players: list[Player], weights: dict[str, int]) -> Player | None:
+    """Choose a player weighted by their position. Returns None if list is empty."""
+    if not players:
+        return None
+    wts = [weights.get(p.position, 1) for p in players]
+    return random.choices(players, weights=wts)[0]
+
+
+def _pick_ball_handler(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
+    """Pick the offensive player credited with a turnover (guards more likely)."""
+    active = [p for p in team.roster if p is not None and p.player_id not in out_players]
+    return _pick_by_position(active, _POS_TOV_WT)
+
+
+def _pick_steal_getter(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
+    """Pick the defensive player credited with a steal (guards/wings more likely)."""
+    active = [p for p in team.roster if p is not None and p.player_id not in out_players]
+    return _pick_by_position(active, _POS_STL_WT)
+
+
+def _pick_blocker(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
+    """Pick the defensive player credited with a block (bigs dominate)."""
+    active = [p for p in team.roster if p is not None and p.player_id not in out_players]
+    return _pick_by_position(active, _POS_BLK_WT)
+
+
+def _pick_rebounder(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
+    """Pick the player credited with a rebound (bigs dominate)."""
+    active = [p for p in team.roster if p is not None and p.player_id not in out_players]
+    return _pick_by_position(active, _POS_REB_WT)
+
+
 def _compute_make_pct(
     shooter:      Player | None,
     defender:     Player | None,
@@ -321,24 +383,40 @@ def _sim_possession(
 ) -> PossessionResult:
     """Simulate one offensive possession.
 
-    Flow: pick shooter → pick zone → match defender → roll make% → return result.
+    Flow:
+      1. Turnover check — ~13% of possessions end before a shot.
+         ~55% of TOs are steals; the rest are unforced (bad pass, travel, etc.).
+      2. Shooter / zone / defender selection.
+      3. Block check on paint shots (~9% of paint FGA blocked → forced miss).
+      4. Shot roll.
+      5. Rebound: on a miss, ~23% of FGA misses → offensive rebound flag
+         (caller handles the extra possession); the rest → defensive rebound.
 
     Bench possessions (shooter=None) receive a dynamic quality bonus derived from
-    owner budget, competence, and team popularity — added into prob_bonus so the
-    rest of the make% computation is unchanged.
-    Injured players (out_off, out_def) are excluded from shooter and defender selection.
+    owner budget, competence, and team popularity.
+    Injured players (out_off, out_def) are excluded from all selections.
     """
+    # ── Step 1: Turnover ──────────────────────────────────────────────────────
+    if random.random() < _TO_RATE:
+        tov_player = _pick_ball_handler(offense, out_off)
+        stl_player = _pick_steal_getter(defense, out_def) if random.random() < _STEAL_RATE else None
+        tov_id = tov_player.player_id if tov_player else None
+        stl_id = stl_player.player_id if stl_player else None
+        return PossessionResult(
+            shooter_id=tov_id, defender_id=stl_id,
+            zone=ZONE_PAINT, made=False, points=0,
+            turnover=True, tov_id=tov_id, stl_id=stl_id,
+        )
+
+    # ── Step 2: Normal shot possession ───────────────────────────────────────
     shooter, _  = _pick_shooter(offense, cfg, out_off, defense, out_def, league_meta)
     zone        = _pick_zone(shooter)
     defender    = _pick_defender(defense, shooter, out_def)
-    ortg_scale  = cfg.player_adj_scale   # separate from ortg_baseline — only affects make% discrimination
+    ortg_scale  = cfg.player_adj_scale
 
     shooter_id  = shooter.player_id  if shooter  else None
     defender_id = defender.player_id if defender else None
 
-    # Coach system modifiers: flow ortg_mod/drtg_mod into possession make%.
-    # These are in the same pts/100 units as player ortg_contrib/drtg_contrib.
-    # Only applies to named-player possessions (bench is handled via _bench_quality).
     off_coach_mod = 0.0
     def_coach_mod = 0.0
     if shooter is not None:
@@ -350,17 +428,16 @@ def _sim_possession(
         if def_coach is not None:
             def_coach_mod = def_coach.compute_modifiers()['drtg_mod']
 
-    # For bench possessions, fold team-level depth quality into the probability bonus.
     effective_bonus = prob_bonus + (_bench_quality(offense) if shooter is None else 0.0)
+    s3 = cfg.meta_3pt_base_scale
+    sp = cfg.meta_paint_base_scale
 
-    s3   = cfg.meta_3pt_base_scale
-    sp   = cfg.meta_paint_base_scale
-
+    # ── Step 2a: Free throws (no block / rebound) ─────────────────────────────
     if zone == ZONE_FT:
         pct = _compute_make_pct(shooter, None, ZONE_FT,
                                 off_chemistry, def_chemistry,
                                 league_meta, effective_bonus, ortg_scale, s3, sp,
-                                off_coach_mod, 0.0)   # FT: no defender, no def_coach_mod
+                                off_coach_mod, 0.0)
         ft1 = random.random() < pct
         ft2 = random.random() < pct
         ftm = int(ft1) + int(ft2)
@@ -369,15 +446,42 @@ def _sim_possession(
             zone=zone, made=ftm > 0, points=ftm, fta=2, ftm=ftm,
         )
 
-    pct  = _compute_make_pct(shooter, defender, zone,
-                             off_chemistry, def_chemistry,
-                             league_meta, effective_bonus, ortg_scale, s3, sp,
-                             off_coach_mod, def_coach_mod)
-    made = random.random() < pct
-    pts  = _ZONE_PTS[zone] if made else 0
+    # ── Step 3: Block check (paint shots only) ────────────────────────────────
+    blk_id = None
+    forced_miss = False
+    if zone == ZONE_PAINT and random.random() < _BLOCK_RATE:
+        blocker = _pick_blocker(defense, out_def)
+        blk_id = blocker.player_id if blocker else None
+        forced_miss = True
+
+    # ── Step 4: Shot roll ────────────────────────────────────────────────────
+    if forced_miss:
+        made = False
+    else:
+        pct  = _compute_make_pct(shooter, defender, zone,
+                                 off_chemistry, def_chemistry,
+                                 league_meta, effective_bonus, ortg_scale, s3, sp,
+                                 off_coach_mod, def_coach_mod)
+        made = random.random() < pct
+    pts = _ZONE_PTS[zone] if made else 0
+
+    # ── Step 5: Rebound (on FGA misses only) ─────────────────────────────────
+    oreb_id = None
+    dreb_id = None
+    if not made:
+        if random.random() < _OREB_RATE:
+            rebounder = _pick_rebounder(offense, out_off)
+            oreb_id = rebounder.player_id if rebounder else None
+        else:
+            rebounder = _pick_rebounder(defense, out_def)
+            dreb_id = rebounder.player_id if rebounder else None
+
     return PossessionResult(
         shooter_id=shooter_id, defender_id=defender_id,
         zone=zone, made=made, points=pts,
+        blk_id=blk_id,
+        oreb_player_id=oreb_id,
+        dreb_player_id=dreb_id,
     )
 
 
@@ -389,10 +493,18 @@ _BENCH_ID = 0   # sentinel player_id for the aggregate "rest of team" slot
 def _credit_offense(logs: dict, r: PossessionResult) -> None:
     """Attribute the possession outcome to the shooter's game log.
 
+    Turnovers: credit the ball-handler with a TOV; no shot stats recorded.
     Bench possessions (shooter_id=None) are aggregated under player_id 0
     so the commissioner can display a 'Rest of team' line without
     individual player tracking.
+    Offensive rebounds: credit the rebounder with OREB+REB on the same result.
     """
+    if r.turnover:
+        if r.tov_id is not None:
+            log = logs.setdefault(r.tov_id, PlayerGameLog())
+            log.tov += 1
+        return   # no shot credited on a turnover
+
     pid = r.shooter_id if r.shooter_id is not None else _BENCH_ID
     log = logs.setdefault(pid, PlayerGameLog())
     log.points += r.points
@@ -416,14 +528,38 @@ def _credit_offense(logs: dict, r: PossessionResult) -> None:
             if r.made:
                 log.fgm_paint += 1
 
+    # Offensive rebound on a miss
+    if r.oreb_player_id is not None:
+        oreb_log = logs.setdefault(r.oreb_player_id, PlayerGameLog())
+        oreb_log.oreb += 1
+        oreb_log.reb  += 1
+
 
 def _credit_defense(logs: dict, r: PossessionResult) -> None:
-    """Record the possession against the primary defender's game log."""
-    if r.defender_id is None:
-        return
-    log = logs.setdefault(r.defender_id, PlayerGameLog())
-    log.poss_defended += 1
-    log.pts_allowed   += r.points
+    """Record the possession against the primary defender's game log.
+
+    Turnovers: credit the steal to the defender if applicable; no poss/pts recorded.
+    Blocks and defensive rebounds are credited from PossessionResult fields.
+    """
+    if r.turnover:
+        if r.stl_id is not None:
+            log = logs.setdefault(r.stl_id, PlayerGameLog())
+            log.stl += 1
+        return   # no shot defended on a turnover
+
+    if r.defender_id is not None:
+        log = logs.setdefault(r.defender_id, PlayerGameLog())
+        log.poss_defended += 1
+        log.pts_allowed   += r.points
+
+    if r.blk_id is not None:
+        blk_log = logs.setdefault(r.blk_id, PlayerGameLog())
+        blk_log.blk += 1
+
+    if r.dreb_player_id is not None:
+        dreb_log = logs.setdefault(r.dreb_player_id, PlayerGameLog())
+        dreb_log.dreb += 1
+        dreb_log.reb  += 1
 
 
 def _run_possessions(
@@ -440,7 +576,11 @@ def _run_possessions(
     out_off:       frozenset[int] = frozenset(),
     out_def:       frozenset[int] = frozenset(),
 ) -> int:
-    """Simulate `poss` possessions, updating logs in-place. Returns total points scored."""
+    """Simulate `poss` possessions, updating logs in-place. Returns total points scored.
+
+    Offensive rebounds grant one bonus possession (non-recursive — a second
+    OREB on the bonus possession does not chain further).
+    """
     total = 0
     for _ in range(poss):
         r = _sim_possession(offense, defense, cfg,
@@ -449,6 +589,14 @@ def _run_possessions(
         total += r.points
         _credit_offense(off_logs, r)
         _credit_defense(def_logs, r)
+        # Offensive rebound: grant one bonus possession without consuming the counter
+        if r.oreb_player_id is not None:
+            r2 = _sim_possession(offense, defense, cfg,
+                                 off_chemistry, def_chemistry, league_meta, prob_bonus,
+                                 out_off, out_def)
+            total += r2.points
+            _credit_offense(off_logs, r2)
+            _credit_defense(def_logs, r2)
     return total
 
 

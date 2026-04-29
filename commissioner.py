@@ -445,6 +445,10 @@ class CommissionerGame:
                  contract_length=3,
                  happiness=0.70,
                  generational=False,
+                 career_reb=0,
+                 career_stl=0,
+                 career_blk=0,
+                 career_tov=0,
             )
 
         # ── All past seasons ──────────────────────────────────────────────────
@@ -466,9 +470,10 @@ class CommissionerGame:
                  roy_team=None,
                  roy_ppg=0.0,
             )
-            # Patch PlayerSeasonStats objects for new zone-split fields
+            # Patch PlayerSeasonStats objects for new fields
             for ps in getattr(s, 'player_stats', {}).values():
-                _fix(ps, fga_paint=0, fgm_paint=0, fga_mid=0, fgm_mid=0)
+                _fix(ps, fga_paint=0, fgm_paint=0, fga_mid=0, fgm_mid=0,
+                     reb=0, oreb=0, dreb=0, stl=0, blk=0, tov=0)
 
         # ── League-level ──────────────────────────────────────────────────────
         _fix(league,
@@ -2015,7 +2020,8 @@ class CommissionerGame:
 
                 if lbl == "DPOY":
                     if ps and ps.poss_defended:
-                        stat_str = f"{ps.def_rtg:.1f} DRtg  {ps.poss_defended} poss defended"
+                        stat_str = (f"{ps.def_rtg:.1f} DRtg  {ps.spg:.1f} SPG  "
+                                    f"{ps.bpg:.1f} BPG  {ps.poss_defended} poss defended")
                     else:
                         stat_str = f"DRtg {p.drtg_contrib:>+.1f}"
                 elif lbl == "MIP":
@@ -2120,7 +2126,8 @@ class CommissionerGame:
             )
             for rank, (p, t) in enumerate(dpoy_pool[1:3], 2):
                 ps = season.player_stats.get(p.player_id)
-                stat = f"{ps.def_rtg:.1f} DRtg  {ps.poss_defended} poss" if (ps and ps.poss_defended) else ""
+                stat = (f"{ps.def_rtg:.1f} DRtg  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG  {ps.poss_defended} poss"
+                        if (ps and ps.poss_defended) else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
                 lines.append(f"  {'DPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
                               f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
@@ -4651,12 +4658,21 @@ class CommissionerGame:
                          ("GP",  lambda s: f"{s.games}", 3),
                          ("GM",  lambda s: f"{s.games_missed}" if s.games_missed > 0 else "—", 3)])
 
+                    _show_cat("Rebounds / Steals / Blocks",
+                        sorted(scored, key=lambda x: -x[2].rpg),
+                        [("RPG", lambda s: f"{s.rpg:.1f}", 5),
+                         ("SPG", lambda s: f"{s.spg:.1f}", 5),
+                         ("BPG", lambda s: f"{s.bpg:.1f}", 5),
+                         ("TOV", lambda s: f"{s.topg:.1f}", 5)])
+
                     _show_cat("Defensive Leaders  (lower = better)",
                         sorted([(p, t, s) for p, t, s in scored if s.poss_defended >= 10],
                                key=lambda x: x[2].def_rtg),
                         [("Def Rtg", lambda s: f"{s.def_rtg:.1f}", 7),
-                         ("Poss",    lambda s: f"{s.poss_defended}", 5),
-                         ("Pts All", lambda s: f"{s.pts_allowed}", 7)])
+                         ("STL",    lambda s: f"{s.spg:.1f}", 5),
+                         ("BLK",    lambda s: f"{s.bpg:.1f}", 5),
+                         ("Poss",   lambda s: f"{s.poss_defended}", 5),
+                         ("Pts All",lambda s: f"{s.pts_allowed}", 7)])
 
                     _show_cat("Efficiency Leaders  (min 5 GP, 10 FGA)",
                         sorted([(p, t, s) for p, t, s in scored if s.fga >= 10],
@@ -4700,11 +4716,17 @@ class CommissionerGame:
                         lambda s: f"{s.ppg:.1f} PPG  {s.fg_pct:.1%} FG  {s.fg3_pct:.1%} 3P",
                         "PPG   FG%   3P%")
 
+                    _show_alltime("Best Rebound / Steal / Block Seasons",
+                        all_records,
+                        lambda x: -x[4].rpg,
+                        lambda s: f"{s.rpg:.1f} RPG  {s.spg:.1f} SPG  {s.bpg:.1f} BPG",
+                        "RPG   SPG   BPG")
+
                     _show_alltime("Best Defensive Seasons  (min 20 poss defended)",
                         [r for r in all_records if r[4].poss_defended >= 20],
                         lambda x: x[4].def_rtg,
-                        lambda s: f"{s.def_rtg:.1f} Def Rtg  {s.poss_defended} poss",
-                        "Def Rtg  Poss")
+                        lambda s: f"{s.def_rtg:.1f} Def Rtg  {s.spg:.1f} SPG  {s.bpg:.1f} BPG  {s.poss_defended} poss",
+                        "Def Rtg  SPG  BPG  Poss")
 
             elif page == 2:
                 # ── Career leaders (aggregated across all seasons) ─────────────
@@ -4720,6 +4742,9 @@ class CommissionerGame:
                 career_fgm3:  dict[int, int]   = defaultdict(int)
                 career_poss:  dict[int, int]   = defaultdict(int)
                 career_allow: dict[int, int]   = defaultdict(int)
+                career_reb:   dict[int, int]   = defaultdict(int)
+                career_stl:   dict[int, int]   = defaultdict(int)
+                career_blk:   dict[int, int]   = defaultdict(int)
                 pid_to_name:  dict[int, str]   = {}
                 pid_to_team:  dict[int, str]   = {}
 
@@ -4735,6 +4760,9 @@ class CommissionerGame:
                         career_fgm3[pid]  += st.fgm_3
                         career_poss[pid]  += st.poss_defended
                         career_allow[pid] += st.pts_allowed
+                        career_reb[pid]   += st.reb
+                        career_stl[pid]   += st.stl
+                        career_blk[pid]   += st.blk
                         # Use season-start snapshots — survive retirements/releases
                         # that mutate live rosters after the season ends.
                         if pid in s.player_names:
@@ -4758,6 +4786,18 @@ class CommissionerGame:
                     def career_drtg(pid):
                         return career_allow[pid] / career_poss[pid] * 100 if career_poss[pid] else 999.0
 
+                    def career_rpg(pid):
+                        g = career_games[pid]
+                        return career_reb[pid] / g if g else 0.0
+
+                    def career_spg(pid):
+                        g = career_games[pid]
+                        return career_stl[pid] / g if g else 0.0
+
+                    def career_bpg(pid):
+                        g = career_games[pid]
+                        return career_blk[pid] / g if g else 0.0
+
                     print(f"\n  {BOLD}Career Scoring (min 10 games){RESET}")
                     print(f"  {'Player':<22} {'Team':<18}  {'PPG':>5}  {'FG%':>5}  {'3P%':>5}  GP")
                     divider()
@@ -4771,6 +4811,18 @@ class CommissionerGame:
                         print(f"  {name:<22} {MUTED}{tname:<18}{RESET}  "
                               f"{career_ppg(pid):>5.1f}  {career_fg(pid):>5.1%}  "
                               f"{fg3_str:>5}  {gp}")
+
+                    print(f"\n  {BOLD}Career Rebounds / Steals / Blocks (min 10 games){RESET}")
+                    print(f"  {'Player':<22} {'Team':<18}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  GP")
+                    divider()
+                    top_rebounders = sorted([p for p, _ in qualified], key=lambda p: -career_rpg(p))[:10]
+                    for pid in top_rebounders:
+                        name  = pid_to_name.get(pid, f"P{pid}")
+                        tname = pid_to_team.get(pid, "—")
+                        gp    = career_games[pid]
+                        print(f"  {name:<22} {MUTED}{tname:<18}{RESET}  "
+                              f"{career_rpg(pid):>5.1f}  {career_spg(pid):>5.1f}  "
+                              f"{career_bpg(pid):>5.1f}  {gp}")
 
                     print(f"\n  {BOLD}Career Defensive Rating (min 30 poss){RESET}")
                     print(f"  {'Player':<22} {'Team':<18}  {'Def Rtg':>7}  {'Poss':>5}")
