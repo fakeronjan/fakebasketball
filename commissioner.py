@@ -6618,6 +6618,16 @@ class CommissionerGame:
 
         rows = []   # (severity, name, emoji, label, color, reason, note)
 
+        # Generational draft signals for this offseason
+        failed_tank_ids = getattr(league, '_failed_tank_teams', set())
+        gen_draft_sn    = getattr(league, '_last_generational_draft', 0)
+        got_gen_pick_ids: set[int] = set()
+        if gen_draft_sn == sn:
+            for t in league.teams:
+                if any(p is not None and getattr(p, 'generational', False)
+                       for p in t.roster):
+                    got_gen_pick_ids.add(t.team_id)
+
         for t in league.teams:
             fname  = t.franchise_at(sn).name
             wins   = season.reg_wins(t)
@@ -6700,22 +6710,41 @@ class CommissionerGame:
                 reason = f"Below .500 ({wins}–{losses}), but no alarm bells yet"
                 severity = 2
 
-            # ── Secondary signal (appended as a note) ────────────────────────
-            note = ""
-            if not is_champ and dynasty:
-                dname = champ.franchise_at(sn).nickname
-                if severity <= 1:
-                    note = f"dynasty fatigue on top of local issues"
-                elif severity == 2:
-                    note = f"losing interest as {dname} run it back again"
-            if rival_hot and severity <= 2 and streak >= 1:
-                note = note or f"{rival.name} drawing curious fans away"
-
-            # Failed tank: team sacrificed the season and missed the generational pick
-            failed_tank_ids = getattr(league, '_failed_tank_teams', set())
+            # ── Generational draft overrides (highest priority) ───────────────
+            # These replace the primary sentiment entirely — draft outcomes matter
+            # more to fans than one regular season's record.
             if t.team_id in failed_tank_ids:
-                note = "TANKED AND MISSED — fans are furious, engagement crater incoming"
-                severity = min(severity, 0)   # force crisis tier
+                # Team deliberately tanked and missed the pick — crisis regardless of record
+                label, emoji, color = "Betrayed", "😡", RED
+                reason   = (f"Gave away {wins}–{losses} season for a shot at the pick — "
+                            f"and came up empty")
+                note     = "fans feel lied to; engagement crater will linger"
+                severity = 0
+
+            elif t.team_id in got_gen_pick_ids:
+                # Team landed a generational player — overrides even a bad record
+                gen_name = next(
+                    (p.name.split()[-1] for p in t.roster
+                     if p is not None and getattr(p, 'generational', False)),
+                    "the pick"
+                )
+                label, emoji, color = "Energized", "⚡", GOLD
+                reason   = (f"Landed {gen_name} in the generational draft — "
+                            f"the future just changed")
+                note     = "long-suffering fans see the light at the end of the tunnel"
+                severity = 3
+
+            else:
+                # ── Secondary signal (appended as a note) ─────────────────────
+                note = ""
+                if not is_champ and dynasty:
+                    dname = champ.franchise_at(sn).nickname
+                    if severity <= 1:
+                        note = f"dynasty fatigue on top of local issues"
+                    elif severity == 2:
+                        note = f"losing interest as {dname} run it back again"
+                if rival_hot and severity <= 2 and streak >= 1:
+                    note = note or f"{rival.name} drawing curious fans away"
 
             rows.append((severity, fname, emoji, label, color, reason, note))
 

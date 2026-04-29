@@ -1096,18 +1096,31 @@ class League:
         """Decide which teams will tank for the upcoming generational draft.
 
         Returns dict mapping Team → list[Player] of players that were cut.
-        Tanking teams cut their co-star (and maybe starter) to worsen their
-        record next season, moving them up the draft order.
+        Tanking teams sell off depth to worsen their record next season,
+        moving them up the draft order.
 
         Eligibility — ineligible if:
           • team has an elite-ceiling star on the roster
           • team is the defending champion
+          • team finished in the top half of the standings last season
         Probability — driven by owner personality/loyalty:
           • Renegade owner:   65%
           • Low-loyalty owner: 50%
           • Default (steady + loyal): 30%
           • Loyal owner:      18%
+
+        Cut behavior (asset-stripping, not roster deletion):
+          • Starter (slot 2): 65% chance of release — most common
+          • Co-star (slot 1): 35% chance of release — less common
+          • Roster floor: never drop below 2 rostered players
         """
+        # Determine bottom half of standings from last season
+        if season.regular_season_standings:
+            n = len(season.regular_season_standings)
+            bottom_half = set(season.regular_season_standings[n // 2:])
+        else:
+            bottom_half = set(self.teams)
+
         tanking: dict = {}
         for team in self.teams:
             # Eligibility
@@ -1117,6 +1130,8 @@ class League:
                 continue
             if self._defending_champion_id == team.team_id:
                 continue
+            if team not in bottom_half:
+                continue   # only bad/mediocre teams have reason to tank
 
             owner = team.owner
             if owner is None:
@@ -1140,20 +1155,29 @@ class League:
         for team, cuts in tanking.items():
             team._tanking_for_pick = True
             self._tanking_teams.add(team.team_id)
-            # Always cut the co-star (slot 1) if occupied
-            if team.roster[1] is not None:
-                p = team.roster[1]
-                team.roster[1] = None
+            rostered = sum(1 for p in team.roster if p is not None)
+
+            def _cut(slot_idx: int) -> bool:
+                """Release player in slot; return True if cut was made."""
+                nonlocal rostered
+                if team.roster[slot_idx] is None:
+                    return False
+                if rostered <= 2:
+                    return False   # roster floor — never strip below 2
+                p = team.roster[slot_idx]
+                team.roster[slot_idx] = None
                 p.team_id = None
                 self.free_agent_pool.append(p)
                 cuts.append(p)
-            # 50% chance to also cut the starter (slot 2)
-            if team.roster[2] is not None and random.random() < 0.5:
-                p = team.roster[2]
-                team.roster[2] = None
-                p.team_id = None
-                self.free_agent_pool.append(p)
-                cuts.append(p)
+                rostered -= 1
+                return True
+
+            # Starter (slot 2): 65% chance — depth piece, easier to cut
+            if random.random() < 0.65:
+                _cut(2)
+            # Co-star (slot 1): 35% chance — bigger move, riskier PR
+            if random.random() < 0.35:
+                _cut(1)
 
         return tanking
 
@@ -1176,9 +1200,12 @@ class League:
             team._tanking_for_pick = False
             if not got_pick:
                 self._failed_tank_teams.add(team.team_id)
-                # Popularity crash: −15 to −20 ppts
-                crash = random.uniform(0.15, 0.20)
-                team.market_engagement = max(0.0, team.market_engagement - crash)
+                # Engagement crash: fans stopped showing up (−12 to −18 ppts)
+                eng_crash = random.uniform(0.12, 0.18)
+                team.market_engagement = max(0.0, team.market_engagement - eng_crash)
+                # Popularity crash: fans like you less (−8 to −12 ppts)
+                pop_crash = random.uniform(0.08, 0.12)
+                team.popularity = max(0.0, team.popularity - pop_crash)
                 # Owner happiness crater
                 if team.owner:
                     team.owner.happiness = max(0.0, team.owner.happiness - 0.30)
