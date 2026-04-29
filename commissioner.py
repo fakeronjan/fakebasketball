@@ -5724,30 +5724,6 @@ class CommissionerGame:
                       f"Peak ORtg {p.peak_ortg:+.1f}  DRtg {p.peak_drtg:+.1f}")
             press_enter()
 
-        # ── Contract expirations ──────────────────────────────────────────────
-        if new_fas:
-            clear()
-            header("CONTRACT NEWS", f"After Season {sn}")
-            print(f"\n  {CYAN}Players entering free agency{RESET}\n")
-            for p in new_fas:
-                old_team = next(
-                    (t.franchise_at(sn).name for t in league.teams
-                     if any(r is p for r in t.roster)),
-                    "—"
-                )
-                mot_c = GREEN if p.motivation == MOT_WINNING else (GOLD if p.motivation == MOT_MARKET else CYAN)
-                ps = season.player_stats.get(p.player_id)
-                if ps and ps.games > 0:
-                    stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
-                                f"{ps.spg:.1f} SPG  {ps.bpg:.1f} BPG")
-                else:
-                    stat_str = f"ORtg {p.ortg_contrib:+.1f}  DRtg {p.drtg_contrib:+.1f}"
-                print(f"  {p.name:<22} {MUTED}{p.position} · Age {p.age}{RESET}  "
-                      f"{stat_str}  "
-                      f"{happiness_emoji(p.happiness)}  "
-                      f"{mot_c}{p.motivation}{RESET}  {MUTED}(was: {old_team}){RESET}")
-            press_enter()
-
         # ── Star FA events ────────────────────────────────────────────────────
         star_fas = [p for p in league.free_agent_pool
                     if p.peak_overall >= league.cfg.star_fa_threshold]
