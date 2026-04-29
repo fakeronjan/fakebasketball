@@ -39,6 +39,8 @@ class Team:
         self._consecutive_losing_seasons: int = 0
         self._bottom2_in_streak: int = 0
         self._protected_until: int = 0
+        self._rebrand_cooldown_until: int = 0   # season number after which rebrand is allowed again
+        self._rebrand_season: int = 0           # season number of most recent rebrand (0 = never)
 
         # Owner
         self.owner: Owner | None = None

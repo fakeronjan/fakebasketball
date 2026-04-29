@@ -66,6 +66,7 @@ class League:
         self.relocation_log: list[tuple] = []  # (season_after, old_name, new_name, losing, bottom2, pop)
         self.expansion_log: list[tuple] = []   # (season_after, franchise_name, is_secondary)
         self.merger_log: list[tuple] = []      # (season_after, franchise_name, is_secondary)
+        self.rebrand_log: list[tuple] = []     # (season_after, city, old_nickname, new_nickname)
         self.league_meta: float = 0.0
         self._meta_velocity: float = 0.0
         self._meta_extreme_seasons: int = 0

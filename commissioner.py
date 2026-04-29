@@ -477,6 +477,7 @@ class CommissionerGame:
              relocation_log=[],
              expansion_log=[],
              merger_log=[],
+             rebrand_log=[],
              _consecutive_championships=0,
              _defending_champion_id=None,
              _generational_draft_season=0,
@@ -488,6 +489,8 @@ class CommissionerGame:
         for team in league.teams:
             _fix(team,
                  _tanking_for_pick=False,
+                 _rebrand_cooldown_until=0,
+                 _rebrand_season=0,
             )
 
         # ── CommissionerGame-level ────────────────────────────────────────────
@@ -3077,6 +3080,8 @@ class CommissionerGame:
         for esn, old, new, losing, bot2, pop in league.relocation_log:
             events.append((esn, f"RELOCATION   {old} > {new}  "
                                f"({losing} losing seasons, pop {pop:.0%})"))
+        for esn, city, old_nick, new_nick in getattr(league, 'rebrand_log', []):
+            events.append((esn, f"REBRAND      {city} {old_nick} > {city} {new_nick}"))
         for s in league.seasons:
             if s.meta_shock:
                 events.append((s.number, f"RULE SHOCK   Era reset after S{s.number}"))
@@ -4096,6 +4101,8 @@ class CommissionerGame:
         for sn, old, new, losing, bot2, pop in league.relocation_log:
             events.append((sn, f"{GOLD}RELOCATION{RESET}  {old} → {new}  "
                               f"{MUTED}({losing} losing seasons, pop {pop:.0%}){RESET}"))
+        for sn, city, old_nick, new_nick in getattr(league, 'rebrand_log', []):
+            events.append((sn, f"{CYAN}REBRAND{RESET}     {city} {old_nick}  →  {city} {new_nick}"))
 
         events.sort(key=lambda x: x[0])
 
@@ -5419,6 +5426,7 @@ class CommissionerGame:
         pre_expansion_len  = len(getattr(league, 'expansion_log',  []))
         pre_merger_len     = len(getattr(league, 'merger_log',     []))
         pre_relocation_len = len(getattr(league, 'relocation_log', []))
+        pre_rebrand_len    = len(getattr(league, 'rebrand_log',    []))
         self._offseason_cba_summary: str | None = None   # set by CBA handler if it fires
 
         # Revenue: 20% to commissioner treasury, 80% to team owners (with competence penalty)
@@ -5474,6 +5482,7 @@ class CommissionerGame:
         self._show_offseason_recap(
             season, pre_coaches, pre_owners, pre_rosters,
             pre_expansion_len, pre_merger_len, pre_relocation_len,
+            pre_rebrand_len,
         )
 
     # ── Coaching market ───────────────────────────────────────────────────────
@@ -5721,6 +5730,7 @@ class CommissionerGame:
         pre_expansion_len: int,
         pre_merger_len:    int,
         pre_relocation_len:int,
+        pre_rebrand_len:   int = 0,
     ) -> None:
         """Summary of everything that changed this offseason, before next season starts."""
         from coach import ARCHETYPE_LABELS as _ARCH_LBLS
@@ -5791,6 +5801,7 @@ class CommissionerGame:
         new_expansions  = league.expansion_log[pre_expansion_len:]
         new_mergers     = league.merger_log[pre_merger_len:]
         new_relocations = league.relocation_log[pre_relocation_len:]
+        new_rebrands    = getattr(league, 'rebrand_log', [])[pre_rebrand_len:]
         rival_notice    = getattr(self, '_rival_fa_notice', None)
         rival           = league.rival_league
 
@@ -5803,7 +5814,7 @@ class CommissionerGame:
             draft_stars, moved_stars,
             coach_changes, owner_changes,
             rule_changed, cba_summary,
-            new_expansions, new_mergers, new_relocations,
+            new_expansions, new_mergers, new_relocations, new_rebrands,
             rival_notice, (rival and rival.active),
         ])
         if not has_content:
@@ -5891,8 +5902,8 @@ class CommissionerGame:
                 era_desc = "balanced era — no dominant style"
             print(f"  {RED}⚡{RESET}  New rules shift the league toward a {BOLD}{era_desc}{RESET}")
 
-        # g) League structure (expansion, relocation, merger)
-        has_structure = new_expansions or new_mergers or new_relocations
+        # g) League structure (expansion, relocation, merger, rebrand)
+        has_structure = new_expansions or new_mergers or new_relocations or new_rebrands
         if has_structure:
             _section("LEAGUE STRUCTURE")
             for log_sn, fname, is_sec in new_expansions:
@@ -5903,6 +5914,9 @@ class CommissionerGame:
             for entry in new_relocations:
                 log_sn, old_city, new_city = entry[0], entry[1], entry[2]
                 print(f"  {GOLD}→{RESET}  Relocation: {old_city}  →  {BOLD}{new_city}{RESET}")
+            for log_sn, city, old_nick, new_nick in new_rebrands:
+                print(f"  {CYAN}✦{RESET}  Rebrand: {city} {old_nick}  →  {BOLD}{city} {new_nick}{RESET}"
+                      f"  {MUTED}(fan buzz +10%){RESET}")
 
         # CBA
         if cba_summary:
@@ -6737,14 +6751,23 @@ class CommissionerGame:
             else:
                 # ── Secondary signal (appended as a note) ─────────────────────
                 note = ""
-                if not is_champ and dynasty:
+                rebrand_sn = getattr(t, '_rebrand_season', 0)
+                if rebrand_sn > 0 and sn - rebrand_sn <= 2:
+                    new_nick = t.franchise.nickname
+                    if severity >= 3:
+                        note = f"new identity ({new_nick}) energizing the fanbase"
+                    elif severity <= 1:
+                        note = f"rebrand buzz can't hide {streak} losing seasons"
+                    else:
+                        note = f"new name ({new_nick}) bought goodwill — needs results"
+                elif not is_champ and dynasty:
                     dname = champ.franchise_at(sn).nickname
                     if severity <= 1:
                         note = f"dynasty fatigue on top of local issues"
                     elif severity == 2:
                         note = f"losing interest as {dname} run it back again"
-                if rival_hot and severity <= 2 and streak >= 1:
-                    note = note or f"{rival.name} drawing curious fans away"
+                if not note and rival_hot and severity <= 2 and streak >= 1:
+                    note = f"{rival.name} drawing curious fans away"
 
             rows.append((severity, fname, emoji, label, color, reason, note))
 
@@ -8539,6 +8562,19 @@ class CommissionerGame:
             options.append(f"Grant league subsidy  {MUTED}($10M — buys patience){RESET}")
             actions.append(("subsidy", 10.0))
 
+        # Rebrand: available to any owner when there are unused nickname options
+        # and the team isn't already in a rebrand cooldown
+        rebrand_eligible = (
+            sn >= getattr(team, '_rebrand_cooldown_until', 0)
+            and bool(getattr(team.franchise, 'nickname_options', []))
+        )
+        if rebrand_eligible:
+            options.append(
+                f"Approve rebrand  {MUTED}(new nickname — immediate fan buzz, "
+                f"fades without results · 5-season cooldown){RESET}"
+            )
+            actions.append(("rebrand", 0.0))
+
         next_denial_count = owner.relocation_blocked + 1
         bp_prob = _owner_breaking_point_prob(owner, next_denial_count)
         if bp_prob == 0.0:
@@ -8607,6 +8643,8 @@ class CommissionerGame:
                 print(f"\n  {RED}Insufficient treasury (need ${cost:.0f}M, have ${self._treasury:.0f}M).{RESET}")
                 owner.relocation_blocked += 1
             press_enter()
+        elif action == "rebrand":
+            self._handle_owner_rebrand(team, owner, season)
         else:  # deny
             owner.relocation_blocked += 1
             print(f"\n  {RED}Request denied.{RESET} {owner.name} is not pleased.")
@@ -8616,6 +8654,59 @@ class CommissionerGame:
                 self._handle_owner_breaking_point(team, owner, season)
                 return
             press_enter()
+
+    def _handle_owner_rebrand(self, team: Team, owner: Owner, season: Season) -> None:
+        """Let the commissioner pick a new nickname for a team at an owner's demand.
+
+        Immediate effects (approved):
+          • New nickname takes effect next season
+          • Fan engagement boost: +0.10 (buzz fades naturally if results don't follow)
+          • Owner happiness: +0.20, threat drops to LEAN
+          • 5-season rebrand cooldown on the team
+        """
+        league = self.league
+        sn     = season.number
+        franchise = team.franchise
+
+        clear()
+        header("REBRAND REQUEST", f"After Season {sn}")
+        fname = team.franchise_at(sn).name
+        print(f"\n  {GOLD}{BOLD}{owner.name}{RESET} wants a fresh identity for the {fname}.")
+        print(f"\n  {MUTED}A new name generates immediate buzz — attendance ticks up,")
+        print(f"  merch moves, local media runs the story. But the boost fades")
+        print(f"  quickly if the team doesn't improve on the court.{RESET}\n")
+
+        # Show nickname options
+        nickname = self._pick_team_nickname(franchise)
+
+        if nickname is None or nickname == franchise.nickname:
+            # Commissioner kept the default / picked same name — treat as deny
+            print(f"\n  {MUTED}No change made.{RESET}")
+            owner.relocation_blocked += 1
+            press_enter()
+            return
+
+        old_nickname = franchise.nickname
+        franchise.nickname = nickname
+        team._rebrand_cooldown_until = sn + 5
+        team._rebrand_season = sn
+
+        # Fan engagement boost — the buzz is real, just temporary without results
+        team.market_engagement = min(1.0, team.market_engagement + 0.10)
+
+        # Owner is satisfied
+        owner.happiness   = min(1.0, owner.happiness + 0.20)
+        owner.threat_level = THREAT_LEAN
+        owner._seasons_unhappy = max(0, owner._seasons_unhappy - 1)
+
+        # Log it
+        league.rebrand_log.append((sn, franchise.city, old_nickname, nickname))
+
+        new_name = f"{franchise.city} {nickname}"
+        print(f"\n  {GREEN}✓ Approved.{RESET}  {fname}  →  {BOLD}{new_name}{RESET}")
+        print(f"  {MUTED}Fan engagement +10%  ·  {owner.name} is satisfied  "
+              f"·  next rebrand allowed after season {sn + 5}{RESET}")
+        press_enter()
 
     def _relocation_eligible(self, team: Team, sn: int) -> list:
         """Return list of eligible relocation destinations for a given team."""
@@ -9752,6 +9843,7 @@ class CommissionerGame:
   Final league size  : {len(league.teams)} teams
   League popularity  : {pop_bar(league.league_popularity)}
   Total relocations  : {len(league.relocation_log)}
+  Total rebrands     : {len(getattr(league, 'rebrand_log', []))}
   Expansion waves    : {len({sn for sn, *_ in league.expansion_log})}
   Merger waves       : {len({sn for sn, *_ in league.merger_log})}
   Most championships : {GOLD}{top_champ}{RESET}  ({top_wins})
