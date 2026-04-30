@@ -37,21 +37,23 @@ class Config:
     playoff_teams_override: int = 0
     series_length: int = 7
     # ── Team rating bounds ────────────────────────────────────────────────────
-    ortg_baseline: float = 110.0     # league average ORtg (pts per 100 poss) — used by compute_ratings_from_roster
-    drtg_baseline: float = 110.0     # league average DRtg (pts per 100 poss allowed)
+    ortg_baseline: float = 110.0     # reference anchor for compute_ratings_from_roster and player contrib scale.
+                                     # NOT a prediction of simulated PPG — actual output is ~96 pts/100 poss in a
+                                     # neutral era (~100 PPG at 104 poss), lower once turnovers and blocks are applied.
+    drtg_baseline: float = 110.0     # mirror of ortg_baseline for defensive rating display
     # player_adj_scale: divisor for ortg_contrib/drtg_contrib in _compute_make_pct.
     # Smaller = sharper discrimination between quality tiers.
     # Calibrated at 88 to bring god-star ceiling back to ~37-39 PPG while keeping
     # Elite vs Cellar ≈ 83-85% win rate, Elite vs Avg ≈ 71-73%.
     # Kept separate from ortg_baseline so rating display and compute_ratings_from_roster are unaffected.
     player_adj_scale: float = 88.0
-    pace_baseline: float = 95.0      # league average pace (poss per team per game)
+    pace_baseline: float = 104.0     # league average pace (poss per team per game); neutral era → ~100 PPG
     ortg_min: float = 100.0
     ortg_max: float = 120.0
     drtg_min: float = 100.0
     drtg_max: float = 120.0
-    pace_min: float = 82.0
-    pace_max: float = 108.0
+    pace_min: float = 78.0           # floor for slow teams in defensive eras (was 82)
+    pace_max: float = 120.0          # ceiling for fast teams in offensive eras (was 108)
     initial_rating_mode: str = "moderate"  # uniform | moderate | haves_havenots
     # ── Home / playoff advantage ──────────────────────────────────────────────
     # Home court is dynamic: base (travel/familiarity) + crowd component (scales with team.popularity).
@@ -78,7 +80,7 @@ class Config:
     meta_max: float = 0.15
     meta_champion_style_influence: float = 0.010  # champ style_3pt → meta velocity push
     meta_style_nudge: float = 0.015    # meta → team style_3pt drift per season
-    meta_pace_scale: float = 50.0      # possessions += league_meta × pace_scale
+    meta_pace_scale: float = 103.0     # possessions += league_meta × pace_scale; at meta=±0.15 → ~88–120 poss (~85–115 PPG)
     # Era-driven zone efficiency: base make% shifts with league_meta
     # 3pt improves in a 3pt era; paint improves in a paint era (and vice versa).
     # FT and mid stay stable. At meta=±0.15: 3pt shifts ±0.020, paint shifts ±0.015.
