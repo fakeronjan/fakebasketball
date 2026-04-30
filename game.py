@@ -55,14 +55,16 @@ _POS_STL_WT  = {GUARD: 4, WING: 2, BIG: 1}   # guards/wings in passing lanes
 _POS_BLK_WT  = {GUARD: 1, WING: 2, BIG: 5}   # bigs protect the rim
 _POS_REB_WT  = {GUARD: 1, WING: 2, BIG: 4}   # bigs dominate glass
 
-# Bench absorption: fraction of each stat credited to untracked bench players.
-# Only 3 named players exist per team; without absorption all team-level totals
-# collapse onto those 3, producing absurdly inflated per-game lines.
-# Targets (star role): REB ~10-13, STL ~1.5-2.5, BLK ~1.0-2.0, TOV ~2.5-3.5
-_TOV_BENCH_ABSORB = 0.40   # 40% of TOs go to bench
-_STL_BENCH_ABSORB = 0.56   # 56% of steals credited to bench
-_BLK_BENCH_ABSORB = 0.46   # 46% of blocks credited to bench
-_REB_BENCH_ABSORB = 0.62   # 62% of rebounds credited to bench
+# Bench competitor weight for stat attribution — named players compete against
+# a single "bench" entry so individual per-game lines reflect realistic NBA shares.
+# Mirrors the offensive bench_wt = 1.75 in _pick_shooter, but scaled per stat
+# category since rebounds are shared across all 10 players on the floor while
+# ball-handling stays concentrated in named players.
+# Targets (average-quality star): REB ~10-13, STL ~1.8, BLK ~1.5, TOV ~3.0
+_BENCH_WT_TOV = 1.8    # ball handling concentrated in named players
+_BENCH_WT_STL = 9.0    # steals spread across the full 5-man unit
+_BENCH_WT_BLK = 7.0    # blocks spread across the full 5-man unit
+_BENCH_WT_REB = 12.0   # rebounds shared across all 10 players on the floor
 
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -301,40 +303,60 @@ def _pick_by_position(players: list[Player], weights: dict[str, int]) -> Player 
     return random.choices(players, weights=wts)[0]
 
 
-def _pick_ball_handler(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
-    """Pick the offensive player credited with a turnover (guards more likely).
-    Returns None (bench credit) at the bench-absorption rate."""
-    if random.random() < _TOV_BENCH_ABSORB:
+def _off_quality(player: Player) -> float:
+    """Offensive quality factor — mirrors _pick_shooter's talent_factor."""
+    return max(0.75, min(1.35, 1.0 + 0.025 * player.ortg_contrib))
+
+
+def _def_quality(player: Player) -> float:
+    """Defensive quality factor — negative drtg_contrib = elite defender = higher weight."""
+    return max(0.75, min(1.35, 1.0 - 0.025 * player.drtg_contrib))
+
+
+def _pick_with_bench(
+    active: list[Player],
+    pos_weights: dict[str, int],
+    bench_weight: float,
+    quality_fn,
+) -> Player | None:
+    """Pick from named players (position weight × quality) competing against bench.
+
+    Returns None when the bench wins the draw — caller skips individual attribution.
+    Mirrors _pick_shooter's bench_wt = 1.75 approach: quality-weighted named players
+    compete against a single bench entry so per-game lines reflect realistic NBA shares.
+    """
+    if not active:
         return None
+    wts = [pos_weights.get(p.position, 1) * quality_fn(p) for p in active]
+    return random.choices(active + [None], weights=wts + [bench_weight])[0]
+
+
+def _pick_ball_handler(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
+    """Pick the offensive player credited with a turnover. Guards more likely;
+    quality scales with ortg_contrib (ball handlers who create more also turn it over more)."""
     active = [p for p in team.roster if p is not None and p.player_id not in out_players]
-    return _pick_by_position(active, _POS_TOV_WT)
+    return _pick_with_bench(active, _POS_TOV_WT, _BENCH_WT_TOV, _off_quality)
 
 
 def _pick_steal_getter(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
-    """Pick the defensive player credited with a steal (guards/wings more likely).
-    Returns None (bench credit) at the bench-absorption rate."""
-    if random.random() < _STL_BENCH_ABSORB:
-        return None
+    """Pick the defensive player credited with a steal. Guards/wings more likely;
+    quality scales with drtg_contrib (better defenders earn more steal credit)."""
     active = [p for p in team.roster if p is not None and p.player_id not in out_players]
-    return _pick_by_position(active, _POS_STL_WT)
+    return _pick_with_bench(active, _POS_STL_WT, _BENCH_WT_STL, _def_quality)
 
 
 def _pick_blocker(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
-    """Pick the defensive player credited with a block (bigs dominate).
-    Returns None (bench credit) at the bench-absorption rate."""
-    if random.random() < _BLK_BENCH_ABSORB:
-        return None
+    """Pick the defensive player credited with a block. Bigs dominate;
+    quality scales with drtg_contrib."""
     active = [p for p in team.roster if p is not None and p.player_id not in out_players]
-    return _pick_by_position(active, _POS_BLK_WT)
+    return _pick_with_bench(active, _POS_BLK_WT, _BENCH_WT_BLK, _def_quality)
 
 
 def _pick_rebounder(team: Team, out_players: frozenset[int] = frozenset()) -> Player | None:
-    """Pick the player credited with a rebound (bigs dominate).
-    Returns None (bench credit) at the bench-absorption rate."""
-    if random.random() < _REB_BENCH_ABSORB:
-        return None
+    """Pick the player credited with a rebound. Bigs dominate;
+    quality scales with drtg_contrib."""
     active = [p for p in team.roster if p is not None and p.player_id not in out_players]
-    return _pick_by_position(active, _POS_REB_WT)
+    return _pick_with_bench(active, _POS_REB_WT, _BENCH_WT_REB, _def_quality)
 
 
 def _compute_make_pct(
