@@ -20,7 +20,7 @@ from owner import (Owner, generate_buyers,
 from player import (Player, GUARD, WING, BIG, POSITIONS, ZONES,
                     MOT_WINNING, MOT_MARKET, MOT_LOYALTY,
                     TIER_ELITE, TIER_HIGH, TIER_MID, TIER_LOW,
-                    happiness_emoji, popularity_tier, durability_label)
+                    happiness_emoji, popularity_tier, durability_label, form_label)
 from season import Season, PlayoffSeries, _games_per_pair, _playoff_count, _round_labels
 from team import Team
 
@@ -440,6 +440,7 @@ class CommissionerGame:
             _fix(p,
                  fatigue=0.0,
                  durability=0.75,
+                 form=1.0,
                  games_missed=0,
                  contract_years_remaining=2,
                  contract_length=3,
@@ -1211,11 +1212,10 @@ class CommissionerGame:
             if not candidates:
                 return "—", 0.0
             top_p, top_s = max(candidates, key=lambda x: x[1].ppg)
-            last = top_p.name.split()[-1][:13]   # last name, max 13 chars
-            return last, round(top_s.ppg, 1)
+            return top_p.name[:22], round(top_s.ppg, 1)
 
         print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'W–L':>5}  {'%':>4}  "
-              f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  {'Top Scorer':<18}{RESET}")
+              f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  {'Top Scorer':<26}{RESET}")
         divider()
         for i, team in enumerate(standings):
             rank = i + 1
@@ -1274,13 +1274,14 @@ class CommissionerGame:
             print(f"\n  {BOLD}STAT LEADERS{RESET}")
             divider()
 
-            def _leader_row(label: str, key_fn, fmt: str, n: int = 5) -> None:
+            def _leader_row(label: str, key_fn, fmt: str, n: int = 3) -> None:
                 ranked = sorted(pool, key=lambda x: key_fn(x[2]), reverse=True)[:n]
                 parts  = []
                 for p, t, s in ranked:
-                    tc   = GOLD if p is season.mvp else (CYAN if p.peak_overall >= 14 else "")
-                    val  = fmt.format(key_fn(s))
-                    parts.append(f"{tc}{p.name}{RESET}  {MUTED}{val}{RESET}")
+                    tc    = GOLD if p is season.mvp else (CYAN if p.peak_overall >= 14 else "")
+                    val   = fmt.format(key_fn(s))
+                    tname = t.franchise_at(season.number).nickname[:14]
+                    parts.append(f"{tc}{p.name}{RESET}  {MUTED}{val}  {tname}{RESET}")
                 print(f"  {GOLD}{label:<6}{RESET}  " + "   ".join(parts))
 
             _leader_row("PPG",  lambda s: s.ppg,                         "{:.1f}")
@@ -1306,7 +1307,7 @@ class CommissionerGame:
         if injured:
             print()
             print(f"  {BOLD}{'NOTABLE INJURIES':^60}{RESET}")
-            print(f"  {MUTED}{'Player':<22} {'Team':<20} {'Slot':<8} {'Missed':>6}  {'Dur':<7}  🔋{RESET}")
+            print(f"  {MUTED}{'Player':<22} {'Team':<20} {'Slot':<8} {'Missed':>6}  {'Dur':<7}  {'Nrg':>5}{RESET}")
             divider()
             for p, t, gm in sorted(injured, key=lambda x: -x[2]):
                 tname = t.franchise_at(sn).nickname[:18]
@@ -1320,7 +1321,7 @@ class CommissionerGame:
                       f" {MUTED}{slot_lbl:<8}{RESET}"
                       f" {RED}{gm:>5} gms{RESET}"
                       f"  {dur_c}{durability_label(p.durability):<7}{RESET}"
-                      f"  {fat_c}🔋{nrg:.0f}%{RESET}")
+                      f"  {fat_c}🔋 {nrg:>3.0f}%{RESET}")
         else:
             print(f"\n  {GREEN}No significant injuries this season.{RESET}")
 
@@ -1334,8 +1335,8 @@ class CommissionerGame:
         fatigue_rows.sort(key=lambda x: -x[2])
         if fatigue_rows:
             print()
-            print(f"  {BOLD}{'PLAYOFF-BOUND FATIGUE LOADS':^60}{RESET}")
-            print(f"  {MUTED}{'Player':<22} {'Team':<20} {'Slot':<8}  🔋  {'Dur':<7}{RESET}")
+            print(f"  {BOLD}{'PLAYOFF-BOUND READINESS':^60}{RESET}")
+            print(f"  {MUTED}{'Player':<22} {'Team':<20} {'Slot':<8}  {'Nrg':>5}  {'Dur':<7}  {'Form':<4}{RESET}")
             divider()
             for p, t, fat in fatigue_rows:
                 tname = t.franchise_at(sn).nickname[:18]
@@ -1345,10 +1346,15 @@ class CommissionerGame:
                 dur_c = (GREEN if p.durability >= 0.88 else
                          CYAN  if p.durability >= 0.75 else
                          MUTED if p.durability >= 0.62 else RED)
+                flbl  = form_label(p.form)
+                form_c = (GREEN if flbl == "Hot" else
+                          RED   if flbl == "Cold" else
+                          GOLD  if flbl == "Cool" else MUTED)
                 print(f"  {p.name:<22} {MUTED}{tname:<20}{RESET}"
                       f" {MUTED}{slot_lbl:<8}{RESET}"
-                      f"  {fat_c}🔋{nrg:.0f}%{RESET}"
-                      f"  {dur_c}{durability_label(p.durability):<7}{RESET}")
+                      f"  {fat_c}🔋 {nrg:>3.0f}%{RESET}"
+                      f"  {dur_c}{durability_label(p.durability):<7}{RESET}"
+                      f"  {form_c}{flbl:<4}{RESET}")
 
         press_enter("Press Enter to begin the playoffs...")
 
@@ -1445,9 +1451,14 @@ class CommissionerGame:
             miss_s = f"  {RED}[{gm} missed]{RESET}" if gm >= 5 else ("  " if gm == 0 else f"  {MUTED}[{gm} missed]{RESET}")
             nrg    = (1 - p.fatigue) * 100
             fat_c  = RED if nrg < 60 else (GOLD if nrg < 80 else MUTED)
-            fat_s  = f"{fat_c}🔋 {nrg:.0f}%{RESET}"
+            fat_s  = f"{fat_c}🔋 {nrg:>3.0f}%{RESET}"
+            flbl   = form_label(p.form)
+            form_c = (GREEN if flbl == "Hot" else
+                      RED   if flbl == "Cold" else
+                      GOLD  if flbl == "Cool" else MUTED)
+            form_s = f"{form_c}{flbl}{RESET}"
             return (f"{indent}{lbl}  {tc}{p.name:<22}{RESET}  "
-                    f"{MUTED}{p.position:<3}{RESET}  {stat_str}{miss_s}  {fat_s}")
+                    f"{MUTED}{p.position:<3}{RESET}  {stat_str}{miss_s}  {fat_s}  {form_s}")
 
         def _coach_row(t: Team, indent: str) -> str:
             """Coach row: 📋  Name  Archetype  net rating mod  COY count"""

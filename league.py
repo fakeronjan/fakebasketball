@@ -742,7 +742,30 @@ class League:
             self._defending_champion_id = None
             self._consecutive_championships = 0
 
-        # 0b. Fatigue: accumulate from playoff exposure, then decay for all players
+        # 0b. Fatigue: accumulate from regular season, then playoffs, then decay
+        # Regular-season fatigue is usage-proportional (PPG / 35 as fraction of star max),
+        # scaled by owner competence (better GMs manage load more carefully).
+        for team in self.teams:
+            owner_load = (2.0 - team.owner.competence) if team.owner else 1.0
+            for player in team.roster:
+                if player is None:
+                    continue
+                ps = season.player_stats.get(player.player_id)
+                if ps and ps.games > 0:
+                    usage_frac = ps.ppg / 35.0
+                    player.fatigue = min(
+                        1.0,
+                        player.fatigue + usage_frac * self.cfg.player_fatigue_per_reg_season * owner_load,
+                    )
+
+        # Form reset to 1.0 each offseason (carry just the end-of-season momentum into next year
+        # is too noisy; a fresh baseline feels cleaner and avoids snowballing)
+        all_for_form_reset = ([p for t in self.teams for p in t.roster if p is not None]
+                               + self.free_agent_pool)
+        for player in all_for_form_reset:
+            player.form = 1.0
+
+        # Playoff fatigue accumulation
         team_playoff_games: dict[int, int] = {}   # team_id → playoff games played
         for round_series in season.playoff_rounds:
             for series in round_series:

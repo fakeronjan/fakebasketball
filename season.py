@@ -121,6 +121,70 @@ class PlayerSeasonStats:
         )
 
 
+def _team_form_bonus(team: "Team", player_forms: dict, cfg: "Config") -> float:
+    """Return prob_bonus from team's average form deviation from 1.0.
+
+    (team_avg_form − 1.0) × form_bonus_scale → passed as home_advantage/away_advantage.
+    """
+    players = [p for p in team.roster if p is not None]
+    if not players:
+        return 0.0
+    avg_form = sum(player_forms.get(p.player_id, 1.0) for p in players) / len(players)
+    return (avg_form - 1.0) * cfg.player_form_bonus_scale
+
+
+def _update_player_forms(
+    result: "GameResult",
+    home: "Team",
+    away: "Team",
+    player_forms: dict,
+    player_cumpts: dict,
+    player_cumgames: dict,
+    cfg: "Config",
+) -> None:
+    """Update per-player form floats after one regular-season game."""
+    from coach import ARCH_WHISPERER, ARCH_MOTIVATOR
+
+    for team, logs in [(home, result.home_logs), (away, result.away_logs)]:
+        arch = team.coach.archetype if team.coach else None
+        won = result.winner is team
+
+        for p in team.roster:
+            if p is None:
+                continue
+            pid = p.player_id
+            if pid not in logs:
+                continue  # injured / unavailable this game
+
+            log = logs[pid]
+            form = player_forms.get(pid, 1.0)
+
+            # Win / loss delta
+            form += cfg.player_form_win_delta if won else -cfg.player_form_win_delta
+
+            # PPG vs season-average-to-date (using pre-game cumulative stats)
+            prior_pts   = player_cumpts.get(pid, 0.0)
+            prior_games = player_cumgames.get(pid, 0)
+            season_avg  = prior_pts / prior_games if prior_games > 0 else 0.0
+            form += (log.points - season_avg) * cfg.player_form_ppg_scale
+
+            # Random regression toward 1.0 (coach arch modifiers)
+            regress_chance = cfg.player_form_regress_chance
+            if arch == ARCH_WHISPERER and form > 1.0 and p.peak_overall >= 14:
+                regress_chance *= 0.5   # star whisperer slows peak-form decay for stars
+            elif arch == ARCH_MOTIVATOR and form < 1.0:
+                regress_chance *= 2.0   # motivator accelerates slump recovery
+
+            if random.random() < regress_chance:
+                form += (1.0 - form) * cfg.player_form_regress_rate
+
+            player_forms[pid] = max(cfg.player_form_min, min(cfg.player_form_max, form))
+
+            # Update running cumulative stats (after the comparison so avg is pre-game)
+            player_cumpts[pid]   = prior_pts + log.points
+            player_cumgames[pid] = prior_games + 1
+
+
 def _playoff_count(n_teams: int) -> int:
     """Dynamic playoff bracket size based on league size."""
     if n_teams >= 24:
@@ -350,6 +414,7 @@ class Season:
         # ── Pre-season injury rolls ───────────────────────────────────────────
         # Each rostered player rolls for injury once. If injured, they miss a
         # contiguous block of games distributed through the season.
+        # Uses effective_durability (base − age wear − mileage) rather than raw durability.
         injury_remaining: dict[int, int] = {}  # player_id → games still to miss
         for team in self.teams:
             for player in team.roster:
@@ -357,7 +422,7 @@ class Season:
                     continue
                 prob = min(0.80,
                     cfg.player_injury_base_prob
-                    + (1.0 - player.durability) * cfg.player_injury_durability_scale
+                    + (1.0 - player.effective_durability) * cfg.player_injury_durability_scale
                     + player.fatigue * cfg.player_injury_fatigue_scale
                     + max(0, player.age - cfg.player_injury_age_threshold) * cfg.player_injury_age_scale
                 )
@@ -365,6 +430,16 @@ class Season:
                     injury_remaining[player.player_id] = random.randint(
                         cfg.player_injury_games_min, cfg.player_injury_games_max
                     )
+
+        # ── Form tracking ─────────────────────────────────────────────────────
+        # player_forms seeds from each player's carried-over form value
+        player_forms:   dict[int, float] = {}
+        player_cumpts:  dict[int, float] = {}
+        player_cumgames: dict[int, int]  = {}
+        for team in self.teams:
+            for p in team.roster:
+                if p is not None:
+                    player_forms[p.player_id] = p.form
 
         for home, away in _generate_schedule(self.teams, self.cfg.games_per_pair):
             # Determine which players are out for this game
@@ -383,11 +458,28 @@ class Season:
                     self.player_stats[pid] = PlayerSeasonStats(player_id=pid)
                 self.player_stats[pid].games_missed += 1
 
+            # Compute dynamic home advantage + form bonus for each team
+            home_adv = (cfg.home_pscore_bonus_base
+                        + cfg.home_pscore_bonus_pop_scale * home.popularity
+                        + _team_form_bonus(home, player_forms, cfg))
+            away_adv = _team_form_bonus(away, player_forms, cfg)
+
             result = play_game(home, away, cfg, league_meta=self.league_meta,
+                               home_advantage=home_adv, away_advantage=away_adv,
                                out_home=out_home, out_away=out_away)
             self.regular_season_games.append(result)
             self._record(result)
             self._absorb_game_logs(result)
+
+            # Update form after stats are absorbed
+            _update_player_forms(result, home, away, player_forms,
+                                 player_cumpts, player_cumgames, cfg)
+
+        # Write form back to players so it persists into the offseason
+        for team in self.teams:
+            for p in team.roster:
+                if p is not None and p.player_id in player_forms:
+                    p.form = player_forms[p.player_id]
 
         self.regular_season_standings = self.standings()
         # Snapshot records before playoffs inflate the counts

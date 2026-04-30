@@ -52,6 +52,12 @@ def durability_label(d: float) -> str:
     if d >= 0.62: return "Average"
     return "Glass"
 
+def form_label(f: float) -> str:
+    if f >= 1.08: return "Hot"
+    if f >= 1.02: return "Warm"
+    if f >= 0.96: return "Cool"
+    return "Cold"
+
 # ── Name generator ────────────────────────────────────────────────────────────
 
 _FIRST_MALE = [
@@ -310,9 +316,10 @@ class Player:
     happiness: float = 0.5         # 0.0–1.0; recomputed each offseason
     popularity: float = 0.0        # 0.0–1.0; updated each season
     seasons_with_team: int = 0     # resets on team change; drives loyalty happiness
-    fatigue: float = 0.0           # accumulated playoff load (0.0–1.0); decays each offseason
+    fatigue: float = 0.0           # accumulated load (0.0–1.0); decays each offseason
     crossed_picket: bool = False   # True if player signed a scab/replacement contract (Type C)
     dev_boost: float = 0.0        # development accelerator from high-horizon coach; reset each season
+    form: float = 1.0             # game-to-game momentum (0.80–1.20, baseline 1.0); resets each offseason
 
     # ── Career totals (accumulated end of each season) ────────────────────────
     championships:   int = 0
@@ -404,6 +411,19 @@ class Player:
         if self.happiness >= 0.50: return 1.0
         if self.happiness >= 0.25: return 0.93   # Restless: −7%
         return 0.85                               # Miserable: −15%
+
+    @property
+    def effective_durability(self) -> float:
+        """Durability accounting for age wear and career mileage.
+
+        Older players and high-mileage veterans are more injury-prone than
+        their base durability would suggest.
+          age_decay:  −1.5% per year past 30 (at 35 → −7.5%)
+          mileage:    up to −15% for 800+ career games
+        """
+        age_decay = max(0.0, (self.age - 30) * 0.015)
+        mileage   = min(0.15, self.career_games / 800.0 * 0.12)
+        return max(0.10, self.durability - age_decay - mileage)
 
     # ── Career derived stats ──────────────────────────────────────────────────
 

@@ -174,9 +174,18 @@ class Config:
     player_injury_age_scale: float = 0.012         # per year past threshold
     player_injury_games_min: int = 5
     player_injury_games_max: int = 20
-    # Fatigue: earned from playoff exposure; decays (but not fully) each offseason
-    player_fatigue_per_playoff_game: float = 0.020  # per playoff game played (was 0.012)
-    player_fatigue_decay: float = 0.68              # fraction carried to next season (was 0.60)
+    # Fatigue: earned from usage; decays (but not fully) each offseason
+    player_fatigue_per_playoff_game: float = 0.020  # per playoff game played
+    player_fatigue_per_reg_season:   float = 0.060  # max reg-season fatigue (star at 30 PPG); owner competence scales this
+    player_fatigue_decay: float = 0.68              # fraction carried to next season
+    # Form: game-to-game momentum (per player, 0.80–1.20, baseline 1.0)
+    player_form_win_delta:    float = 0.04   # form gain on a win
+    player_form_ppg_scale:    float = 0.002  # additional form per PPG above season avg (and negative below)
+    player_form_regress_chance: float = 0.20 # per-game probability of regression toward 1.0
+    player_form_regress_rate:   float = 0.20 # fraction snapped toward 1.0 on regression event
+    player_form_max: float = 1.20
+    player_form_min: float = 0.80
+    player_form_bonus_scale: float = 0.15    # (team_avg_form − 1.0) × this = prob_bonus applied to next game
     # ── Rival league (Type A — external investors) ────────────────────────────
     rival_a_min_season: int = 8                     # earliest season a rival can form (was 5)
     rival_a_popularity_threshold: float = 0.43      # league_popularity must exceed this (was 0.72 — unreachable; recalibrated to actual equilibrium ~0.47)
