@@ -7182,31 +7182,50 @@ class CommissionerGame:
 
         PUSH = 0.08
         COUNTER_PUSH = 0.10
+        PPG_PER_META = 100.0   # calibrated: ~15 PPG swing across full ±0.15 range
 
-        def _projected(delta: float) -> str:
-            new = max(-cfg.meta_max, min(cfg.meta_max, meta + delta))
-            return f"{new:+.3f}  {era_label(new)}"
+        def _projected(delta: float) -> tuple[str, float, bool]:
+            """Returns (display_str, actual_delta, capped)."""
+            new      = max(-cfg.meta_max, min(cfg.meta_max, meta + delta))
+            actual   = new - meta
+            ppg_chg  = actual * PPG_PER_META
+            capped   = abs(actual) < abs(delta) - 0.001
+            near_cap = abs(new) >= cfg.meta_max - 0.02   # within 0.02 of wall
+            ppg_sign = "+" if ppg_chg >= 0 else ""
+            ppg_col  = GREEN if ppg_chg > 0 else (RED if ppg_chg < 0 else MUTED)
+            cap_tag  = f"  {RED}⚠ at cap{RESET}" if capped else (
+                       f"  {GOLD}near cap{RESET}" if near_cap else "")
+            return (f"{new:+.3f}  {era_label(new)}  "
+                    f"{ppg_col}{ppg_sign}{ppg_chg:.1f} PPG{RESET}{cap_tag}",
+                    actual, capped)
+
+        def _opt(label: str, delta: float) -> tuple[str, float]:
+            disp, _, _ = _projected(delta)
+            return (f"{label}  {MUTED}→ {disp}{RESET}", delta)
+
+        def _opt_reset() -> tuple[str, None]:
+            new      = max(-cfg.meta_max, min(cfg.meta_max, meta * 0.4))
+            ppg_chg  = (new - meta) * PPG_PER_META
+            ppg_sign = "+" if ppg_chg >= 0 else ""
+            ppg_col  = GREEN if ppg_chg > 0 else (RED if ppg_chg < 0 else MUTED)
+            return (f"{CYAN}Reset toward balance{RESET}  "
+                    f"{MUTED}→ ~{new:+.3f}  {era_label(new)}  "
+                    f"{ppg_col}{ppg_sign}{ppg_chg:.1f} PPG{RESET}",
+                    None)
 
         options = [
-            (f"{GREEN}Push offense{RESET}        "
-             f"{MUTED}→ {_projected(+PUSH)}{RESET}",
-             +PUSH),
-            (f"{RED}Push defense{RESET}        "
-             f"{MUTED}→ {_projected(-PUSH)}{RESET}",
-             -PUSH),
-            (f"{CYAN}Reset toward balance{RESET} "
-             f"{MUTED}→ ~{_projected(-meta * 0.6)}{RESET}",
-             None),   # special: partial reversion
+            _opt(f"{GREEN}Push offense{RESET}      ", +PUSH),
+            _opt(f"{RED}Push defense{RESET}      ", -PUSH),
+            _opt_reset(),
         ]
         if champ:
             champ_style = "3pt-heavy" if champ.style_3pt > 0.25 else "interior"
             counter_sign = -1 if champ.style_3pt > 0.25 else +1
-            options.append((
-                f"{GOLD}Counter champion{RESET}    "
-                f"{MUTED}→ {_projected(counter_sign * COUNTER_PUSH)}  "
-                f"(push against {champ_style}){RESET}",
-                counter_sign * COUNTER_PUSH,
-            ))
+            options.append(
+                _opt(f"{GOLD}Counter champion{RESET}  "
+                     f"{MUTED}(push against {champ_style}){RESET}",
+                     counter_sign * COUNTER_PUSH)
+            )
         options.append((f"{MUTED}No change{RESET}", "skip"))
 
         choice = choose([o[0] for o in options], default=len(options) - 1)
