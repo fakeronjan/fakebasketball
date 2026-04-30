@@ -518,27 +518,10 @@ class CommissionerGame:
     # ── Setup ─────────────────────────────────────────────────────────────────
 
     def _show_wip_status(self):
-        clear()
-        header("FAKE BASKETBALL", "Commissioner Mode")
-        print(f"""
-  {BOLD}You are the Commissioner of a fictional basketball league.{RESET}
-  Players develop, age, and retire. Owners push back. Rivals
-  emerge. You won't control outcomes — you'll influence them.
-""")
-        cols = [
-            ("Season & playoff simulation",    "Owner system & CBA"),
-            ("Player arcs, injuries & fatigue", "Rival leagues  (3 types)"),
-            ("Chemistry, awards & draft",       "Expansion & relocation"),
-            ("Free agency & star FA events",    "Revenue, era & reports"),
-        ]
-        for left, right in cols:
-            print(f"  {GREEN}✓{RESET}  {left:<36}  {GREEN}✓{RESET}  {right}")
-        print()
-        input("\n  Press Enter to start a new league...")
+        pass  # welcome is now shown in _start_menu for all players (new + returning)
 
     def _setup_quick(self) -> None:
         """Quick start — all defaults, no prompts."""
-        self._show_wip_status()
         seed = random.randint(1, 9999)
         random.seed(seed)
 
@@ -574,7 +557,6 @@ class CommissionerGame:
         press_enter("Press Enter to tip off Season 1...")
 
     def _setup(self):
-        self._show_wip_status()
         clear()
         header("COMMISSIONER MODE", "Build and manage your basketball league")
         # League name
@@ -1063,10 +1045,27 @@ class CommissionerGame:
             f"{O}         \\  )         |         (  /{R}",
             f"{O}          `-----------.-----------.{R}",
             f"              {MUTED}a fakeronjan game{R}",
+            f"                    {GOLD}v 1 . 0{R}",
         ]
         print()
         for line in logo:
             print("  " + line)
+        print(f"""
+  {BOLD}You are the Commissioner of a fictional basketball league.{RESET}
+  Every game is simulated possession by possession — player
+  quality, form, fatigue, and coach archetypes all shape each
+  result. Owners demand results. Rivals emerge. You won't
+  control the outcomes. You'll build the conditions for them.
+""")
+        cols = [
+            ("Possession-level game engine",     "Owner demands & CBA"),
+            ("Player arcs, form & momentum",     "Rival leagues  (3 types)"),
+            ("Fatigue, injuries & durability",   "Expansion & relocation"),
+            ("Coach archetypes & chemistry",     "Revenue, era & reports"),
+            ("Free agency & star FA events",     "Draft, awards & history"),
+        ]
+        for left, right in cols:
+            print(f"  {GREEN}✓{RESET}  {left:<36}  {GREEN}✓{RESET}  {right}")
         print()
         if _save_exists():
             print(f"\n  {GREEN}Save file found.{RESET}\n")
@@ -1649,7 +1648,7 @@ class CommissionerGame:
                                   else "")
                         _nrg = (1 - player.fatigue) * 100
                         fat_c = RED if _nrg < 60 else (GOLD if _nrg < 80 else MUTED)
-                        fat_str = f"  {fat_c}🔋{_nrg:.0f}%{RESET}"
+                        fat_str = f"  {fat_c}🔋 {_nrg:>3.0f}%{RESET}"
                         print(f"       {MUTED}{lbl:<9}{RESET}"
                               f"{happiness_emoji(player.happiness)} {tc}{player.name:<22}{RESET}"
                               f"  {player.position:<5} {player.age:>2}"
@@ -2024,11 +2023,11 @@ class CommissionerGame:
                 elif lbl == "MIP":
                     ppg_sign = "+" if season.mip_ppg_delta >= 0 else ""
                     if ps and ps.games > 0:
-                        stat_str = (f"{ps.ppg:.1f} PPG  "
-                                    f"{ppg_sign}{season.mip_ppg_delta:.1f} PPG  "
-                                    f"{season.mip_delta:>+.2f} score vs prior season")
+                        stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
+                                    f"{ps.spg:.1f} SPG  {ps.bpg:.1f} BPG  "
+                                    f"({ppg_sign}{season.mip_ppg_delta:.1f} PPG vs last season)")
                     else:
-                        stat_str = f"{season.mip_delta:>+.2f} score vs prior season"
+                        stat_str = f"({ppg_sign}{season.mip_ppg_delta:.1f} PPG vs last season)"
                 elif lbl == "ROY":
                     if ps and ps.games > 0:
                         stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
@@ -3987,7 +3986,7 @@ class CommissionerGame:
                       f"{'ORtg':>5}  {'DRtg':>5}  {'Zone':<6}  "
                       f"{'Yrs':>3}  {'Tr':>2}  {'Mood':<4}  {'PPG':>5}  {'FG%':>5}  "
                       f"{'RPG':>5}  {'SPG':>5}  {'BPG':>5}  "
-                      f"{'Gms':>3}  {'Dur':<6}  {'🔋':>5}  Mot")
+                      f"{'Gms':>3}  {'Dur':<6}  {'Nrg':>5}  Mot")
                 print(f"  {MUTED}{'─' * 118}{RESET}")
                 for idx, player in enumerate(team.roster):
                     slot_lbl = team.slot_label(idx)
@@ -4019,7 +4018,7 @@ class CommissionerGame:
                               f"  {happiness_emoji(player.happiness):<4}"
                               f"  {ppg_str}  {fg_str}"
                               f"  {rpg_str}  {spg_str}  {bpg_str}"
-                              f"  {gms_str}  {dur_c}{dur_lbl:<6}{RESET}  {fat_c}🔋{_nrg2:>3.0f}%{RESET}"
+                              f"  {gms_str}  {dur_c}{dur_lbl:<6}{RESET}  {fat_c}🔋 {_nrg2:>3.0f}%{RESET}"
                               f"  {mot_c}{player.motivation}{RESET}")
 
             print()
