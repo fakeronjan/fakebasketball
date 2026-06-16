@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ronjan Basketball League — 100-Season Simulation</title>
+  <style>
+:root {
+  --bg: #0c0d10;
+  --bg2: #13141a;
+  --bg3: #1c1e27;
+  --border: #2a2d3a;
+  --gold: #f0b429;
+  --gold2: #ffd166;
+  --text: #e8eaf0;
+  --muted: #8890a8;
+  --red: #ff6b6b;
+  --green: #69db7c;
+  --blue: #74c0fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+a { color: var(--gold); text-decoration: none; }
+a:hover { color: var(--gold2); text-decoration: underline; }
+
+/* ── Nav ── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(12,13,16,0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  display: flex; gap: 2rem; align-items: center;
+  height: 52px;
+}
+nav .brand { font-weight: 700; font-size: 1rem; color: var(--gold); letter-spacing: 0.05em; }
+nav a { font-size: 0.85rem; color: var(--muted); transition: color 0.15s; }
+nav a:hover { color: var(--text); text-decoration: none; }
+
+/* ── Hero ── */
+.hero {
+  background: linear-gradient(135deg, #0c0d10 0%, #13141a 50%, #0f1118 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 5rem 2rem 4rem;
+  text-align: center;
+}
+.hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.75rem;
+}
+.hero .subtitle {
+  font-size: 1.1rem;
+  color: var(--muted);
+  max-width: 600px;
+  margin: 0 auto 1.5rem;
+}
+.hero .badge {
+  display: inline-block;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.hero .badge span { color: var(--gold); }
+
+/* ── Sections ── */
+section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+}
+section.full-bleed {
+  max-width: none;
+  padding: 4rem 2rem;
+}
+section.alt { background: var(--bg2); max-width: none; }
+section.alt > .inner { max-width: 1400px; margin: 0 auto; }
+.section-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: -0.01em;
+  margin-bottom: 0.5rem;
+}
+.section-sub {
+  color: var(--muted);
+  margin-bottom: 2.5rem;
+  font-size: 0.95rem;
+}
+
+/* ── Story ── */
+.story-text {
+  max-width: 780px;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: #c8cadb;
+}
+.story-text p { margin-bottom: 1.25rem; }
+.story-text strong { color: var(--text); }
+
+/* ── Code cards ── */
+.code-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+.code-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+.code-card .filename {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: var(--gold);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.05em;
+}
+.code-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+.code-card p { font-size: 0.875rem; color: var(--muted); line-height: 1.6; }
+.code-card ul { font-size: 0.875rem; color: var(--muted); padding-left: 1.2rem; line-height: 1.7; }
+
+/* ── Stats grid ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+.stat-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+.stat-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.4rem; }
+.stat-card .value { font-size: 1.6rem; font-weight: 700; color: var(--gold); }
+.stat-card .sub { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+/* ── Season table ── */
+.table-wrap {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.8rem;
+  font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+  white-space: nowrap;
+}
+table thead th {
+  background: var(--bg3);
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+}
+table thead th:first-child { width: 3rem; text-align: center; }
+table tbody tr { border-bottom: 1px solid var(--border); }
+table tbody tr:hover { background: var(--bg3); }
+table tbody td {
+  padding: 0.55rem 0.9rem;
+  vertical-align: middle;
+}
+table tbody td:first-child { text-align: center; color: var(--muted); font-size: 0.75rem; }
+.champ-cell { color: var(--gold); font-weight: 600; }
+.repeat-star { color: var(--gold2); margin-right: 0.15rem; }
+.seed { color: var(--muted); font-size: 0.7rem; }
+.fin-score { text-align: center; color: var(--muted); }
+.moves-cell { color: var(--blue); font-size: 0.75rem; }
+.hi-ppg { color: var(--green); }
+.lo-ppg { color: var(--red); }
+.avg-cell { color: var(--muted); }
+
+/* ── Championships bar chart ── */
+.champ-list { display: flex; flex-direction: column; gap: 0.5rem; max-width: 700px; }
+.champ-row { display: flex; align-items: center; gap: 1rem; }
+.champ-name { width: 200px; font-size: 0.9rem; flex-shrink: 0; }
+.champ-bar-wrap { flex: 1; background: var(--bg3); border-radius: 4px; height: 22px; overflow: hidden; }
+.champ-bar { height: 100%; background: linear-gradient(90deg, var(--gold) 0%, var(--gold2) 100%); border-radius: 4px; display: flex; align-items: center; padding-left: 8px; }
+.champ-count { font-size: 0.8rem; font-weight: 700; color: var(--bg); }
+
+/* ── Two-col layout ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+/* ── Small tables ── */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.data-table th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.data-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--bg3); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.gold { color: var(--gold); }
+
+/* ── Sub-section headers ── */
+.sub-header {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.sub-header:first-child { margin-top: 0; }
+
+/* ── Relocation list ── */
+.reloc-list { font-size: 0.85rem; columns: 2; column-gap: 2rem; }
+@media (max-width: 700px) { .reloc-list { columns: 1; } }
+.reloc-item { padding: 0.3rem 0; border-bottom: 1px solid var(--border); break-inside: avoid; }
+.reloc-item .sn { color: var(--muted); font-size: 0.75rem; margin-right: 0.5rem; }
+.arrow { color: var(--gold); margin: 0 0.4rem; }
+
+/* ── Series dist ── */
+.series-dist { display: flex; flex-direction: column; gap: 0.6rem; max-width: 400px; }
+.series-row { display: flex; align-items: center; gap: 1rem; font-size: 0.875rem; }
+.series-label { width: 160px; flex-shrink: 0; }
+.series-bar-wrap { flex: 1; background: var(--bg3); border-radius: 4px; height: 20px; overflow: hidden; }
+.series-bar { height: 100%; background: var(--bg); border-radius: 4px; }
+.series-pct { width: 50px; text-align: right; color: var(--muted); font-size: 0.8rem; }
+
+/* ── Footer ── */
+footer {
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+footer a { color: var(--muted); }
+footer a:hover { color: var(--gold); }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="brand">RBL</span>
+  <a href="#season-results">Results</a>
+  <a href="#all-time">All-Time</a>
+  <a href="#rivalries">Rivalries</a>
+  <a href="#relocations">Moves</a>
+  <a href="#how-it-works">How It Works</a>
+</nav>
+
+<div class="hero">
+  <h1>Ronjan Basketball League</h1>
+  <p class="subtitle">A 100-season simulation recreating a program originally written in Visual Basic — roughly 30 years ago.</p>
+  <span class="badge">seed: <span>19</span> &nbsp;·&nbsp; seasons: <span>100</span> &nbsp;·&nbsp; teams: <span>20</span></span>
+</div>
+
+<!-- ── Quick stats ─────────────────────────────────────────── -->
+<section id="season-results">
+  <div class="section-title">100-Season Results</div>
+  <p class="section-sub">Seed 19 · Every season played, every franchise move logged</p>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="label">Most Championships</div>
+      <div class="value">12</div>
+      <div class="sub">Washington Monuments</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Longest Streak</div>
+      <div class="value">3</div>
+      <div class="sub">Chicago Blues (S95–S97)</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Longest Drought</div>
+      <div class="value">74</div>
+      <div class="sub">Philadelphia Fighters</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Best Season</div>
+      <div class="value">35–3</div>
+      <div class="sub">San Diego Surf (S53)</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Worst Season</div>
+      <div class="value">3–35</div>
+      <div class="sub">Vancouver Gales (S15)</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Franchise Moves</div>
+      <div class="value">11</div>
+      <div class="sub">across 100 seasons</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Champion</th>
+        <th>Runner-up</th>
+        <th>FIN</th>
+        <th>Clincher</th>
+        <th>RS Leader</th>
+        <th>RS 2nd</th>
+      </tr>
+    </thead>
+<tbody>
+      <tr>
+        <td>1</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(3)</span></td>
+        <td>Mexico City Jaguars <span class="seed">(5)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">115–110</td>
+        <td>Chicago Blues 32–6</td>
+        <td>Vancouver Gales 30–8</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(2)</span></td>
+        <td>Vancouver Gales <span class="seed">(4)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">117–111</td>
+        <td>Toronto Ice 30–8</td>
+        <td>Detroit Motors 30–8</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td class="champ-cell">Philadelphia Fighters <span class="seed">(5)</span></td>
+        <td>Montreal Royals <span class="seed">(2)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">115–113</td>
+        <td>Washington Monuments 34–4</td>
+        <td>Montreal Royals 31–7</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td class="champ-cell">Montreal Royals <span class="seed">(7)</span></td>
+        <td>Denver Blizzards <span class="seed">(4)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">129–118</td>
+        <td>Philadelphia Fighters 33–5</td>
+        <td>Detroit Motors 30–8</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td class="champ-cell">Philadelphia Fighters <span class="seed">(8)</span></td>
+        <td>Toronto Ice <span class="seed">(3)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">140–115</td>
+        <td>Mexico City Jaguars 31–7</td>
+        <td>Denver Blizzards 28–10</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Philadelphia Fighters <span class="seed">(5)</span></td>
+        <td>Denver Blizzards <span class="seed">(6)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">123–112</td>
+        <td>Montreal Royals 33–5</td>
+        <td>New Orleans Voodoo 29–9</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(1)</span></td>
+        <td>New York Empires <span class="seed">(6)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">117–111</td>
+        <td>Denver Blizzards 33–5</td>
+        <td>Chicago Blues 29–9</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(2)</span></td>
+        <td>New York Empires <span class="seed">(1)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">125–112</td>
+        <td>New York Empires 30–8</td>
+        <td>Toronto Ice 30–8</td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td class="champ-cell">Montreal Royals <span class="seed">(4)</span></td>
+        <td>Toronto Ice <span class="seed">(2)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">122–121</td>
+        <td>Denver Blizzards 32–6</td>
+        <td>Toronto Ice 32–6</td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Montreal Royals <span class="seed">(2)</span></td>
+        <td>Mexico City Jaguars <span class="seed">(4)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">121–114</td>
+        <td>New York Empires 29–9</td>
+        <td>Montreal Royals 29–9</td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(4)</span></td>
+        <td>Detroit Motors <span class="seed">(3)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">128–88</td>
+        <td>Boston Common 29–9</td>
+        <td>Denver Blizzards 28–10</td>
+      </tr>
+      <tr>
+        <td>12</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(1)</span></td>
+        <td>Denver Blizzards <span class="seed">(3)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">117–106</td>
+        <td>Las Vegas Dealers 28–10</td>
+        <td>Miami Flamingos 28–10</td>
+      </tr>
+      <tr>
+        <td>13</td>
+        <td class="champ-cell">New York Empires <span class="seed">(4)</span></td>
+        <td>Washington Monuments <span class="seed">(7)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">120–111</td>
+        <td>Toronto Ice 30–8</td>
+        <td>Chicago Blues 30–8</td>
+      </tr>
+      <tr>
+        <td>14</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(3)</span></td>
+        <td>New York Empires <span class="seed">(1)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">118–110</td>
+        <td>New York Empires 30–8</td>
+        <td>Phoenix Scorpions 30–8</td>
+      </tr>
+      <tr>
+        <td>15</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(2)</span></td>
+        <td>Dallas Smoke <span class="seed">(1)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">127–116</td>
+        <td>Dallas Smoke 30–8</td>
+        <td>Denver Blizzards 28–10</td>
+      </tr>
+      <tr>
+        <td>16</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(7)</span></td>
+        <td>New Orleans Voodoo <span class="seed">(1)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">130–123</td>
+        <td>New Orleans Voodoo 30–8</td>
+        <td>Denver Blizzards 30–8</td>
+      </tr>
+      <tr>
+        <td>17</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(4)</span></td>
+        <td>Miami Flamingos <span class="seed">(3)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">139–99</td>
+        <td>Dallas Smoke 33–5</td>
+        <td>Los Angeles Palms 27–11</td>
+      </tr>
+      <tr>
+        <td>18</td>
+        <td class="champ-cell">New York Empires <span class="seed">(4)</span></td>
+        <td>Miami Flamingos <span class="seed">(3)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">139–115</td>
+        <td>Washington Monuments 33–5</td>
+        <td>Phoenix Scorpions 30–8</td>
+      </tr>
+      <tr>
+        <td>19</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(7)</span></td>
+        <td>New York Empires <span class="seed">(8)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">124–109</td>
+        <td>Dallas Smoke 32–6</td>
+        <td>Miami Flamingos 31–7</td>
+      </tr>
+      <tr>
+        <td>20</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(3)</span></td>
+        <td>Las Vegas Dealers <span class="seed">(5)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">125–123</td>
+        <td>Detroit Motors 30–8</td>
+        <td>Mexico City Jaguars 28–10</td>
+      </tr>
+      <tr>
+        <td>21</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(4)</span></td>
+        <td>Toronto Ice <span class="seed">(2)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">126–119</td>
+        <td>Miami Flamingos 30–8</td>
+        <td>Toronto Ice 27–11</td>
+      </tr>
+      <tr>
+        <td>22</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(5)</span></td>
+        <td>Montreal Royals <span class="seed">(7)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">133–115</td>
+        <td>Detroit Motors 30–8</td>
+        <td>Phoenix Scorpions 29–9</td>
+      </tr>
+      <tr>
+        <td>23</td>
+        <td class="champ-cell">New Orleans Voodoo <span class="seed">(2)</span></td>
+        <td>Detroit Motors <span class="seed">(1)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">123–116</td>
+        <td>Detroit Motors 31–7</td>
+        <td>New Orleans Voodoo 30–8</td>
+      </tr>
+      <tr>
+        <td>24</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(2)</span></td>
+        <td>New York Empires <span class="seed">(4)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">121–115</td>
+        <td>Minneapolis Freeze 32–6</td>
+        <td>Detroit Motors 31–7</td>
+      </tr>
+      <tr>
+        <td>25</td>
+        <td class="champ-cell">Montreal Royals <span class="seed">(7)</span></td>
+        <td>New Orleans Voodoo <span class="seed">(8)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">114–112</td>
+        <td>Detroit Motors 34–4</td>
+        <td>Philadelphia Fighters 30–8</td>
+      </tr>
+      <tr>
+        <td>26</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(1)</span></td>
+        <td>New York Empires <span class="seed">(3)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">120–112</td>
+        <td>Detroit Motors 31–7</td>
+        <td>Mexico City Jaguars 30–8</td>
+      </tr>
+      <tr>
+        <td>27</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Detroit Motors <span class="seed">(1)</span></td>
+        <td>New York Empires <span class="seed">(6)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">123–121</td>
+        <td>Detroit Motors 31–7</td>
+        <td>Mexico City Jaguars 29–9</td>
+      </tr>
+      <tr>
+        <td>28</td>
+        <td class="champ-cell">New York Empires <span class="seed">(7)</span></td>
+        <td>Guadalajara Sol <span class="seed">(5)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">113–110</td>
+        <td>Toronto Ice 31–7</td>
+        <td>Philadelphia Fighters 29–9</td>
+      </tr>
+      <tr>
+        <td>29</td>
+        <td class="champ-cell">Guadalajara Sol <span class="seed">(4)</span></td>
+        <td>New York Empires <span class="seed">(6)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">125–115</td>
+        <td>Philadelphia Fighters 30–8</td>
+        <td>Montreal Royals 29–9</td>
+      </tr>
+      <tr>
+        <td>30</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(4)</span></td>
+        <td>Minneapolis Freeze <span class="seed">(2)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">129–106</td>
+        <td>Houston Oilers 31–7</td>
+        <td>Minneapolis Freeze 29–9</td>
+      </tr>
+      <tr>
+        <td>31</td>
+        <td class="champ-cell">New York Empires <span class="seed">(4)</span></td>
+        <td>Dallas Smoke <span class="seed">(3)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">132–106</td>
+        <td>Houston Oilers 30–8</td>
+        <td>Toronto Ice 30–8</td>
+      </tr>
+      <tr>
+        <td>32</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(5)</span></td>
+        <td>Chicago Blues <span class="seed">(3)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">109–102</td>
+        <td>Denver Blizzards 31–7</td>
+        <td>Toronto Ice 27–11</td>
+      </tr>
+      <tr>
+        <td>33</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(7)</span></td>
+        <td>Miami Flamingos <span class="seed">(8)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">129–110</td>
+        <td>Philadelphia Fighters 34–4</td>
+        <td>Washington Monuments 30–8</td>
+      </tr>
+      <tr>
+        <td>34</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(4)</span></td>
+        <td>Chicago Blues <span class="seed">(7)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">118–108</td>
+        <td>Dallas Smoke 32–6</td>
+        <td>Philadelphia Fighters 29–9</td>
+      </tr>
+      <tr>
+        <td>35</td>
+        <td class="champ-cell">Miami Flamingos <span class="seed">(4)</span></td>
+        <td>Houston Oilers <span class="seed">(7)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">123–121</td>
+        <td>Boston Common 32–6</td>
+        <td>Washington Monuments 28–10</td>
+      </tr>
+      <tr>
+        <td>36</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(1)</span></td>
+        <td>Phoenix Scorpions <span class="seed">(6)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">110–102</td>
+        <td>Houston Oilers 30–8</td>
+        <td>Dallas Smoke 29–9</td>
+      </tr>
+      <tr>
+        <td>37</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(1)</span></td>
+        <td>Los Angeles Palms <span class="seed">(2)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">121–104</td>
+        <td>Phoenix Scorpions 31–7</td>
+        <td>Los Angeles Palms 29–9</td>
+      </tr>
+      <tr>
+        <td>38</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(2)</span></td>
+        <td>Miami Flamingos <span class="seed">(8)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">136–110</td>
+        <td>Philadelphia Fighters 29–9</td>
+        <td>Detroit Motors 29–9</td>
+      </tr>
+      <tr>
+        <td>39</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(5)</span></td>
+        <td>Las Vegas Dealers <span class="seed">(2)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">125–112</td>
+        <td>Boston Common 30–8</td>
+        <td>Las Vegas Dealers 29–9</td>
+      </tr>
+      <tr>
+        <td>40</td>
+        <td class="champ-cell">Boston Common <span class="seed">(2)</span></td>
+        <td>Houston Oilers <span class="seed">(1)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">129–124</td>
+        <td>Houston Oilers 31–7</td>
+        <td>Boston Common 31–7</td>
+      </tr>
+      <tr>
+        <td>41</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(1)</span></td>
+        <td>Toronto Ice <span class="seed">(3)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">115–103</td>
+        <td>Houston Oilers 30–8</td>
+        <td>Chicago Blues 29–9</td>
+      </tr>
+      <tr>
+        <td>42</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(5)</span></td>
+        <td>Washington Monuments <span class="seed">(3)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">122–103</td>
+        <td>Montreal Royals 28–10</td>
+        <td>Houston Oilers 28–10</td>
+      </tr>
+      <tr>
+        <td>43</td>
+        <td class="champ-cell">New York Empires <span class="seed">(1)</span></td>
+        <td>New Orleans Voodoo <span class="seed">(3)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">115–101</td>
+        <td>New York Empires 31–7</td>
+        <td>Los Angeles Palms 30–8</td>
+      </tr>
+      <tr>
+        <td>44</td>
+        <td class="champ-cell">Montreal Royals <span class="seed">(8)</span></td>
+        <td>Washington Monuments <span class="seed">(6)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">121–110</td>
+        <td>Boston Common 31–7</td>
+        <td>New Orleans Voodoo 28–10</td>
+      </tr>
+      <tr>
+        <td>45</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(1)</span></td>
+        <td>New York Empires <span class="seed">(3)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">112–111</td>
+        <td>Washington Monuments 30–8</td>
+        <td>Denver Blizzards 29–9</td>
+      </tr>
+      <tr>
+        <td>46</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Washington Monuments <span class="seed">(2)</span></td>
+        <td>Denver Blizzards <span class="seed">(4)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">124–123</td>
+        <td>Montreal Royals 31–7</td>
+        <td>Washington Monuments 31–7</td>
+      </tr>
+      <tr>
+        <td>47</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Washington Monuments <span class="seed">(7)</span></td>
+        <td>New Orleans Voodoo <span class="seed">(5)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">118–114</td>
+        <td>Denver Blizzards 31–7</td>
+        <td>Houston Oilers 29–9</td>
+      </tr>
+      <tr>
+        <td>48</td>
+        <td class="champ-cell">San Diego Surf <span class="seed">(8)</span></td>
+        <td>Washington Monuments <span class="seed">(7)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">132–105</td>
+        <td>Miami Flamingos 29–9</td>
+        <td>Phoenix Scorpions 27–11</td>
+      </tr>
+      <tr>
+        <td>49</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(7)</span></td>
+        <td>Miami Flamingos <span class="seed">(5)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">116–108</td>
+        <td>Phoenix Scorpions 29–9</td>
+        <td>New Orleans Voodoo 29–9</td>
+      </tr>
+      <tr>
+        <td>50</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(3)</span></td>
+        <td>Mexico City Jaguars <span class="seed">(1)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">129–107</td>
+        <td>Mexico City Jaguars 31–7</td>
+        <td>New Orleans Voodoo 30–8</td>
+      </tr>
+      <tr>
+        <td>51</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(6)</span></td>
+        <td>Toronto Ice <span class="seed">(5)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">122–115</td>
+        <td>San Diego Surf 31–7</td>
+        <td>Indianapolis Racers 30–8</td>
+      </tr>
+      <tr>
+        <td>52</td>
+        <td class="champ-cell">Dallas Smoke <span class="seed">(3)</span></td>
+        <td>Indianapolis Racers <span class="seed">(8)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">122–104</td>
+        <td>Philadelphia Fighters 31–7</td>
+        <td>Miami Flamingos 31–7</td>
+      </tr>
+      <tr>
+        <td>53</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(5)</span></td>
+        <td>Washington Monuments <span class="seed">(7)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">115–108</td>
+        <td>San Diego Surf 35–3</td>
+        <td>Dallas Smoke 29–9</td>
+      </tr>
+      <tr>
+        <td>54</td>
+        <td class="champ-cell">Miami Flamingos <span class="seed">(6)</span></td>
+        <td>New Orleans Voodoo <span class="seed">(4)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">112–107</td>
+        <td>Montreal Royals 30–8</td>
+        <td>Toronto Ice 27–11</td>
+      </tr>
+      <tr>
+        <td>55</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(5)</span></td>
+        <td>Toronto Ice <span class="seed">(2)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">129–112</td>
+        <td>Phoenix Scorpions 31–7</td>
+        <td>Toronto Ice 29–9</td>
+      </tr>
+      <tr>
+        <td>56</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Los Angeles Palms <span class="seed">(2)</span></td>
+        <td>San Diego Surf <span class="seed">(5)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">128–103</td>
+        <td>Mexico City Jaguars 31–7</td>
+        <td>Los Angeles Palms 28–10</td>
+      </tr>
+      <tr>
+        <td>57</td>
+        <td class="champ-cell">Miami Flamingos <span class="seed">(2)</span></td>
+        <td>New York Empires <span class="seed">(8)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">133–119</td>
+        <td>Phoenix Scorpions 29–9</td>
+        <td>Miami Flamingos 28–10</td>
+      </tr>
+      <tr>
+        <td>58</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(5)</span></td>
+        <td>Boston Common <span class="seed">(6)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">108–103</td>
+        <td>Miami Flamingos 31–7</td>
+        <td>New York Empires 28–10</td>
+      </tr>
+      <tr>
+        <td>59</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(5)</span></td>
+        <td>New York Empires <span class="seed">(7)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">124–109</td>
+        <td>Philadelphia Fighters 34–4</td>
+        <td>Miami Flamingos 29–9</td>
+      </tr>
+      <tr>
+        <td>60</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(3)</span></td>
+        <td>Montreal Royals <span class="seed">(4)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">120–119</td>
+        <td>Los Angeles Palms 30–8</td>
+        <td>New York Empires 29–9</td>
+      </tr>
+      <tr>
+        <td>61</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(6)</span></td>
+        <td>Indianapolis Racers <span class="seed">(4)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">123–121</td>
+        <td>Chicago Blues 28–10</td>
+        <td>New York Empires 28–10</td>
+      </tr>
+      <tr>
+        <td>62</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(2)</span></td>
+        <td>Phoenix Scorpions <span class="seed">(8)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">125–108</td>
+        <td>Monterrey Summit 31–7</td>
+        <td>Washington Monuments 30–8</td>
+      </tr>
+      <tr>
+        <td>63</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(8)</span></td>
+        <td>Detroit Motors <span class="seed">(6)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">127–114</td>
+        <td>Chicago Blues 31–7</td>
+        <td>Dallas Smoke 28–10</td>
+      </tr>
+      <tr>
+        <td>64</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(4)</span></td>
+        <td>Monterrey Summit <span class="seed">(2)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">118–103</td>
+        <td>Houston Oilers 29–9</td>
+        <td>Monterrey Summit 29–9</td>
+      </tr>
+      <tr>
+        <td>65</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(4)</span></td>
+        <td>Dallas Smoke <span class="seed">(3)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">138–121</td>
+        <td>Phoenix Scorpions 29–9</td>
+        <td>Detroit Motors 29–9</td>
+      </tr>
+      <tr>
+        <td>66</td>
+        <td class="champ-cell">Dallas Smoke <span class="seed">(5)</span></td>
+        <td>Chicago Blues <span class="seed">(6)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">131–118</td>
+        <td>San Diego Surf 32–6</td>
+        <td>Los Angeles Palms 31–7</td>
+      </tr>
+      <tr>
+        <td>67</td>
+        <td class="champ-cell">Montreal Royals <span class="seed">(1)</span></td>
+        <td>Phoenix Scorpions <span class="seed">(2)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">129–103</td>
+        <td>Montreal Royals 31–7</td>
+        <td>Phoenix Scorpions 29–9</td>
+      </tr>
+      <tr>
+        <td>68</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(2)</span></td>
+        <td>Los Angeles Palms <span class="seed">(1)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">129–121</td>
+        <td>Los Angeles Palms 29–9</td>
+        <td>Mexico City Jaguars 29–9</td>
+      </tr>
+      <tr>
+        <td>69</td>
+        <td class="champ-cell">Indianapolis Racers <span class="seed">(1)</span></td>
+        <td>Phoenix Scorpions <span class="seed">(6)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">128–113</td>
+        <td>Indianapolis Racers 32–6</td>
+        <td>Denver Blizzards 29–9</td>
+      </tr>
+      <tr>
+        <td>70</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(3)</span></td>
+        <td>Washington Monuments <span class="seed">(1)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">120–118</td>
+        <td>Washington Monuments 30–8</td>
+        <td>Dallas Smoke 29–9</td>
+      </tr>
+      <tr>
+        <td>71</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(1)</span></td>
+        <td>Indianapolis Racers <span class="seed">(2)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">128–122</td>
+        <td>Toronto Ice 28–10</td>
+        <td>Indianapolis Racers 27–11</td>
+      </tr>
+      <tr>
+        <td>72</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(1)</span></td>
+        <td>Miami Flamingos <span class="seed">(6)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">134–112</td>
+        <td>Washington Monuments 31–7</td>
+        <td>Toronto Ice 31–7</td>
+      </tr>
+      <tr>
+        <td>73</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Washington Monuments <span class="seed">(2)</span></td>
+        <td>Miami Flamingos <span class="seed">(8)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">135–125</td>
+        <td>Dallas Smoke 31–7</td>
+        <td>Washington Monuments 29–9</td>
+      </tr>
+      <tr>
+        <td>74</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(4)</span></td>
+        <td>Washington Monuments <span class="seed">(2)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">131–116</td>
+        <td>Denver Blizzards 28–10</td>
+        <td>Washington Monuments 27–11</td>
+      </tr>
+      <tr>
+        <td>75</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(2)</span></td>
+        <td>Toronto Ice <span class="seed">(8)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">118–117</td>
+        <td>Detroit Motors 34–4</td>
+        <td>Denver Blizzards 30–8</td>
+      </tr>
+      <tr>
+        <td>76</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Denver Blizzards <span class="seed">(4)</span></td>
+        <td>Indianapolis Racers <span class="seed">(6)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">112–100</td>
+        <td>Detroit Motors 31–7</td>
+        <td>Washington Monuments 30–8</td>
+      </tr>
+      <tr>
+        <td>77</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(7)</span></td>
+        <td>Las Vegas Dealers <span class="seed">(4)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">117–110</td>
+        <td>Denver Blizzards 31–7</td>
+        <td>Indianapolis Racers 29–9</td>
+      </tr>
+      <tr>
+        <td>78</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(7)</span></td>
+        <td>Las Vegas Dealers <span class="seed">(4)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">128–100</td>
+        <td>Mexico City Jaguars 30–8</td>
+        <td>Detroit Motors 30–8</td>
+      </tr>
+      <tr>
+        <td>79</td>
+        <td class="champ-cell">Monterrey Summit <span class="seed">(7)</span></td>
+        <td>Phoenix Scorpions <span class="seed">(8)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">116–105</td>
+        <td>New Orleans Voodoo 32–6</td>
+        <td>Washington Monuments 30–8</td>
+      </tr>
+      <tr>
+        <td>80</td>
+        <td class="champ-cell">New Orleans Voodoo <span class="seed">(7)</span></td>
+        <td>Monterrey Summit <span class="seed">(1)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">128–125</td>
+        <td>Monterrey Summit 30–8</td>
+        <td>Boston Common 30–8</td>
+      </tr>
+      <tr>
+        <td>81</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(1)</span></td>
+        <td>Phoenix Scorpions <span class="seed">(6)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">115–100</td>
+        <td>Mexico City Jaguars 31–7</td>
+        <td>Washington Monuments 29–9</td>
+      </tr>
+      <tr>
+        <td>82</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(2)</span></td>
+        <td>Boston Common <span class="seed">(8)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">126–106</td>
+        <td>Phoenix Scorpions 32–6</td>
+        <td>Las Vegas Dealers 29–9</td>
+      </tr>
+      <tr>
+        <td>83</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(3)</span></td>
+        <td>San Diego Surf <span class="seed">(8)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">137–104</td>
+        <td>Vancouver Gales 29–9</td>
+        <td>Boston Common 28–10</td>
+      </tr>
+      <tr>
+        <td>84</td>
+        <td class="champ-cell">Dallas Smoke <span class="seed">(7)</span></td>
+        <td>San Diego Surf <span class="seed">(1)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">121–105</td>
+        <td>San Diego Surf 29–9</td>
+        <td>Toronto Ice 28–10</td>
+      </tr>
+      <tr>
+        <td>85</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(2)</span></td>
+        <td>Vancouver Gales <span class="seed">(1)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">123–113</td>
+        <td>Vancouver Gales 33–5</td>
+        <td>Phoenix Scorpions 31–7</td>
+      </tr>
+      <tr>
+        <td>86</td>
+        <td class="champ-cell">Miami Flamingos <span class="seed">(6)</span></td>
+        <td>Mexico City Jaguars <span class="seed">(4)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">134–126</td>
+        <td>Vancouver Gales 32–6</td>
+        <td>Montreal Royals 32–6</td>
+      </tr>
+      <tr>
+        <td>87</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(2)</span></td>
+        <td>Miami Flamingos <span class="seed">(4)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">130–116</td>
+        <td>Mexico City Jaguars 32–6</td>
+        <td>Los Angeles Palms 28–10</td>
+      </tr>
+      <tr>
+        <td>88</td>
+        <td class="champ-cell">Monterrey Summit <span class="seed">(2)</span></td>
+        <td>San Diego Surf <span class="seed">(8)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">125–120</td>
+        <td>Washington Monuments 29–9</td>
+        <td>Monterrey Summit 29–9</td>
+      </tr>
+      <tr>
+        <td>89</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(6)</span></td>
+        <td>Boston Common <span class="seed">(4)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">117–112</td>
+        <td>Phoenix Scorpions 32–6</td>
+        <td>Washington Monuments 28–10</td>
+      </tr>
+      <tr>
+        <td>90</td>
+        <td class="champ-cell">Vancouver Gales <span class="seed">(2)</span></td>
+        <td>Monterrey Summit <span class="seed">(1)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">128–126</td>
+        <td>Monterrey Summit 31–7</td>
+        <td>Vancouver Gales 29–9</td>
+      </tr>
+      <tr>
+        <td>91</td>
+        <td class="champ-cell">Miami Flamingos <span class="seed">(1)</span></td>
+        <td>Monterrey Summit <span class="seed">(3)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">125–116</td>
+        <td>Miami Flamingos 29–9</td>
+        <td>Las Vegas Dealers 28–10</td>
+      </tr>
+      <tr>
+        <td>92</td>
+        <td class="champ-cell">San Diego Surf <span class="seed">(7)</span></td>
+        <td>New York Empires <span class="seed">(1)</span></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">123–108</td>
+        <td>New York Empires 32–6</td>
+        <td>Phoenix Scorpions 32–6</td>
+      </tr>
+      <tr>
+        <td>93</td>
+        <td class="champ-cell">New York Empires <span class="seed">(2)</span></td>
+        <td>Boston Common <span class="seed">(4)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">124–121</td>
+        <td>Dallas Smoke 29–9</td>
+        <td>New York Empires 28–10</td>
+      </tr>
+      <tr>
+        <td>94</td>
+        <td class="champ-cell">San Diego Surf <span class="seed">(2)</span></td>
+        <td>Detroit Motors <span class="seed">(8)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">136–126</td>
+        <td>Boston Common 32–6</td>
+        <td>San Diego Surf 30–8</td>
+      </tr>
+      <tr>
+        <td>95</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(5)</span></td>
+        <td>Montreal Royals <span class="seed">(3)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">131–115</td>
+        <td>Indianapolis Racers 30–8</td>
+        <td>New York Empires 29–9</td>
+      </tr>
+      <tr>
+        <td>96</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Chicago Blues <span class="seed">(1)</span></td>
+        <td>Vancouver Gales <span class="seed">(2)</span></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">116–108</td>
+        <td>Chicago Blues 31–7</td>
+        <td>Vancouver Gales 28–10</td>
+      </tr>
+      <tr>
+        <td>97</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Chicago Blues <span class="seed">(8)</span></td>
+        <td>Denver Blizzards <span class="seed">(2)</span></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">139–110</td>
+        <td>Vancouver Gales 30–8</td>
+        <td>Denver Blizzards 29–9</td>
+      </tr>
+      <tr>
+        <td>98</td>
+        <td class="champ-cell">Vancouver Gales <span class="seed">(1)</span></td>
+        <td>Las Vegas Dealers <span class="seed">(3)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">123–116</td>
+        <td>Vancouver Gales 32–6</td>
+        <td>Toronto Ice 30–8</td>
+      </tr>
+      <tr>
+        <td>99</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(5)</span></td>
+        <td>Phoenix Scorpions <span class="seed">(6)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">125–121</td>
+        <td>San Diego Surf 32–6</td>
+        <td>Dallas Smoke 30–8</td>
+      </tr>
+      <tr>
+        <td>100</td>
+        <td class="champ-cell">Guadalajara Sol <span class="seed">(8)</span></td>
+        <td>Phoenix Scorpions <span class="seed">(2)</span></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">117–113</td>
+        <td>Toronto Ice 29–9</td>
+        <td>Phoenix Scorpions 29–9</td>
+      </tr>
+</tbody>
+</table>
+    </div>
+  </div>
+  <p style="font-size:0.75rem; color:var(--muted); margin-top:0.75rem;">
+    ★ = repeat champion &nbsp;·&nbsp; seed in parentheses = playoff seeding &nbsp;·&nbsp; FIN = finals series score &nbsp;·&nbsp; Avg = league pts/game
+  </p>
+</section>
+
+<!-- ── All-time records ────────────────────────────────────── -->
+<section id="all-time" class="alt">
+  <div class="inner">
+    <div class="section-title">All-Time Records</div>
+    <p class="section-sub">Cumulative stats across all 100 seasons</p>
+
+    <div class="sub-header">Championships</div>
+    <div class="champ-list">
+    <div class="champ-row">
+      <div class="champ-name">Washington Monuments</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:100.0%">
+          <span class="champ-count">12</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Phoenix Scorpions</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:75.0%">
+          <span class="champ-count">9</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Detroit Motors</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:66.66666666666666%">
+          <span class="champ-count">8</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Chicago Blues</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:58.333333333333336%">
+          <span class="champ-count">7</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Montreal Royals</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:50.0%">
+          <span class="champ-count">6</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Toronto Ice</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:50.0%">
+          <span class="champ-count">6</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">New York Empires</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:50.0%">
+          <span class="champ-count">6</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Las Vegas Dealers</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:41.66666666666667%">
+          <span class="champ-count">5</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Denver Blizzards</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:41.66666666666667%">
+          <span class="champ-count">5</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Miami Flamingos</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:41.66666666666667%">
+          <span class="champ-count">5</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Houston Oilers</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:33.33333333333333%">
+          <span class="champ-count">4</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Mexico City Jaguars</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:33.33333333333333%">
+          <span class="champ-count">4</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Los Angeles Palms</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:33.33333333333333%">
+          <span class="champ-count">4</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Philadelphia Fighters</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:25.0%">
+          <span class="champ-count">3</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">San Diego Surf</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:25.0%">
+          <span class="champ-count">3</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Dallas Smoke</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:25.0%">
+          <span class="champ-count">3</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">New Orleans Voodoo</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Guadalajara Sol</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Monterrey Summit</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Vancouver Gales</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Boston Common</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:8.333333333333332%">
+          <span class="champ-count">1</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Indianapolis Racers</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:8.333333333333332%">
+          <span class="champ-count">1</span>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="two-col" style="margin-top:3rem">
+      <div>
+        <div class="sub-header">Finals Appearances</div>
+        <table class="data-table">
+  <thead><tr><th>Team</th><th class="num">App</th><th class="num">W</th><th class="num">L</th><th class="num">Win%</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Washington Monuments</td>
+      <td class="num">19</td>
+      <td class="num gold">12</td>
+      <td class="num">7</td>
+      <td class="num">63%</td>
+    </tr>
+    <tr>
+      <td>New York Empires</td>
+      <td class="num">18</td>
+      <td class="num gold">6</td>
+      <td class="num">12</td>
+      <td class="num">33%</td>
+    </tr>
+    <tr>
+      <td>Phoenix Scorpions</td>
+      <td class="num">17</td>
+      <td class="num gold">9</td>
+      <td class="num">8</td>
+      <td class="num">53%</td>
+    </tr>
+    <tr>
+      <td>Toronto Ice</td>
+      <td class="num">13</td>
+      <td class="num gold">6</td>
+      <td class="num">7</td>
+      <td class="num">46%</td>
+    </tr>
+    <tr>
+      <td>Miami Flamingos</td>
+      <td class="num">13</td>
+      <td class="num gold">5</td>
+      <td class="num">8</td>
+      <td class="num">38%</td>
+    </tr>
+    <tr>
+      <td>Detroit Motors</td>
+      <td class="num">12</td>
+      <td class="num gold">8</td>
+      <td class="num">4</td>
+      <td class="num">67%</td>
+    </tr>
+    <tr>
+      <td>Las Vegas Dealers</td>
+      <td class="num">10</td>
+      <td class="num gold">5</td>
+      <td class="num">5</td>
+      <td class="num">50%</td>
+    </tr>
+    <tr>
+      <td>Montreal Royals</td>
+      <td class="num">10</td>
+      <td class="num gold">6</td>
+      <td class="num">4</td>
+      <td class="num">60%</td>
+    </tr>
+    <tr>
+      <td>Denver Blizzards</td>
+      <td class="num">10</td>
+      <td class="num gold">5</td>
+      <td class="num">5</td>
+      <td class="num">50%</td>
+    </tr>
+    <tr>
+      <td>Chicago Blues</td>
+      <td class="num">10</td>
+      <td class="num gold">7</td>
+      <td class="num">3</td>
+      <td class="num">70%</td>
+    </tr>
+    <tr>
+      <td>Mexico City Jaguars</td>
+      <td class="num">8</td>
+      <td class="num gold">4</td>
+      <td class="num">4</td>
+      <td class="num">50%</td>
+    </tr>
+    <tr>
+      <td>New Orleans Voodoo</td>
+      <td class="num">7</td>
+      <td class="num gold">2</td>
+      <td class="num">5</td>
+      <td class="num">29%</td>
+    </tr>
+    <tr>
+      <td>San Diego Surf</td>
+      <td class="num">7</td>
+      <td class="num gold">3</td>
+      <td class="num">4</td>
+      <td class="num">43%</td>
+    </tr>
+    <tr>
+      <td>Houston Oilers</td>
+      <td class="num">6</td>
+      <td class="num gold">4</td>
+      <td class="num">2</td>
+      <td class="num">67%</td>
+    </tr>
+    <tr>
+      <td>Dallas Smoke</td>
+      <td class="num">6</td>
+      <td class="num gold">3</td>
+      <td class="num">3</td>
+      <td class="num">50%</td>
+    </tr>
+    <tr>
+      <td>Los Angeles Palms</td>
+      <td class="num">6</td>
+      <td class="num gold">4</td>
+      <td class="num">2</td>
+      <td class="num">67%</td>
+    </tr>
+    <tr>
+      <td>Monterrey Summit</td>
+      <td class="num">6</td>
+      <td class="num gold">2</td>
+      <td class="num">4</td>
+      <td class="num">33%</td>
+    </tr>
+    <tr>
+      <td>Vancouver Gales</td>
+      <td class="num">5</td>
+      <td class="num gold">2</td>
+      <td class="num">3</td>
+      <td class="num">40%</td>
+    </tr>
+    <tr>
+      <td>Boston Common</td>
+      <td class="num">5</td>
+      <td class="num gold">1</td>
+      <td class="num">4</td>
+      <td class="num">20%</td>
+    </tr>
+    <tr>
+      <td>Indianapolis Racers</td>
+      <td class="num">5</td>
+      <td class="num gold">1</td>
+      <td class="num">4</td>
+      <td class="num">20%</td>
+    </tr>
+    <tr>
+      <td>Philadelphia Fighters</td>
+      <td class="num">3</td>
+      <td class="num gold">3</td>
+      <td class="num">0</td>
+      <td class="num">100%</td>
+    </tr>
+    <tr>
+      <td>Guadalajara Sol</td>
+      <td class="num">3</td>
+      <td class="num gold">2</td>
+      <td class="num">1</td>
+      <td class="num">67%</td>
+    </tr>
+    <tr>
+      <td>Minneapolis Freeze</td>
+      <td class="num">1</td>
+      <td class="num gold">0</td>
+      <td class="num">1</td>
+      <td class="num">0%</td>
+    </tr></tbody>
+</table>
+      </div>
+      <div>
+        <div class="sub-header">Regular Season Titles</div>
+        <table class="data-table">
+  <thead><tr><th>Team</th><th class="num">RS Titles</th></tr></thead>
+  <tbody><tr><td>Detroit Motors</td><td class="num gold">8</td></tr><tr><td>Phoenix Scorpions</td><td class="num gold">7</td></tr><tr><td>Washington Monuments</td><td class="num gold">6</td></tr><tr><td>Philadelphia Fighters</td><td class="num gold">6</td></tr><tr><td>Mexico City Jaguars</td><td class="num gold">6</td></tr><tr><td>Denver Blizzards</td><td class="num gold">6</td></tr><tr><td>Dallas Smoke</td><td class="num gold">6</td></tr><tr><td>Houston Oilers</td><td class="num gold">6</td></tr><tr><td>Toronto Ice</td><td class="num gold">5</td></tr><tr><td>Montreal Royals</td><td class="num gold">5</td></tr><tr><td>New York Empires</td><td class="num gold">5</td></tr><tr><td>Boston Common</td><td class="num gold">5</td></tr><tr><td>San Diego Surf</td><td class="num gold">5</td></tr><tr><td>Vancouver Gales</td><td class="num gold">5</td></tr><tr><td>Chicago Blues</td><td class="num gold">4</td></tr><tr><td>Miami Flamingos</td><td class="num gold">4</td></tr><tr><td>Monterrey Summit</td><td class="num gold">3</td></tr><tr><td>New Orleans Voodoo</td><td class="num gold">2</td></tr><tr><td>Los Angeles Palms</td><td class="num gold">2</td></tr><tr><td>Indianapolis Racers</td><td class="num gold">2</td></tr><tr><td>Las Vegas Dealers</td><td class="num gold">1</td></tr><tr><td>Minneapolis Freeze</td><td class="num gold">1</td></tr></tbody>
+</table>
+      </div>
+    </div>
+
+    <div class="two-col" style="margin-top:3rem">
+      <div>
+        <div class="sub-header">Longest Championship Streaks</div>
+        <table class="data-table">
+  <thead><tr><th>Team</th><th class="num">Length</th><th class="num">Seasons</th></tr></thead>
+  <tbody><tr><td>Chicago Blues</td><td class="num gold">3</td><td class="num">S95–S97</td></tr><tr><td>Washington Monuments</td><td class="num gold">3</td><td class="num">S45–S47</td></tr><tr><td>Denver Blizzards</td><td class="num gold">2</td><td class="num">S75–S76</td></tr><tr><td>Washington Monuments</td><td class="num gold">2</td><td class="num">S72–S73</td></tr><tr><td>Los Angeles Palms</td><td class="num gold">2</td><td class="num">S55–S56</td></tr><tr><td>Detroit Motors</td><td class="num gold">2</td><td class="num">S26–S27</td></tr><tr><td>Montreal Royals</td><td class="num gold">2</td><td class="num">S9–S10</td></tr><tr><td>Philadelphia Fighters</td><td class="num gold">2</td><td class="num">S5–S6</td></tr></tbody>
+</table>
+      </div>
+      <div>
+        <div class="sub-header">Longest Championship Droughts</div>
+        <table class="data-table">
+  <thead><tr><th>Team</th><th class="num">Seasons</th><th class="num">Period</th></tr></thead>
+  <tbody><tr><td>Philadelphia Fighters</td><td class="num">74</td><td class="num">S7–S80</td></tr><tr><td>Boston Common</td><td class="num">60</td><td class="num">S41–S100</td></tr><tr><td>New Orleans Voodoo</td><td class="num">56</td><td class="num">S24–S79</td></tr><tr><td>Los Angeles Palms</td><td class="num">54</td><td class="num">S1–S54</td></tr><tr><td>Dallas Smoke</td><td class="num">51</td><td class="num">S1–S51</td></tr><tr><td>Mexico City Jaguars</td><td class="num">50</td><td class="num">S1–S50</td></tr><tr><td>New York Empires</td><td class="num">49</td><td class="num">S44–S92</td></tr><tr><td>San Diego Surf</td><td class="num">43</td><td class="num">S49–S91</td></tr></tbody>
+</table>
+      </div>
+    </div>
+
+    <div style="margin-top:3rem">
+      <div class="sub-header">Finals by Series Length</div>
+      <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">13x</div><div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">Sweep (4–0)</div><div style="font-size:0.75rem;color:var(--muted)">13%</div></div><div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">32x</div><div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">5 games</div><div style="font-size:0.75rem;color:var(--muted)">32%</div></div><div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">26x</div><div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">6 games</div><div style="font-size:0.75rem;color:var(--muted)">26%</div></div><div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">29x</div><div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">7 games</div><div style="font-size:0.75rem;color:var(--muted)">29%</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Rivalries ─────────────────────────────────────────── -->
+<section id="rivalries" class="alt">
+  <div class="inner">
+    <div class="section-title">Rivalries</div>
+    <p class="section-sub">Most frequent matchups across all 100 seasons</p>
+    <div class="two-col">
+      <div>
+        <div class="sub-header">Most Common Playoff Matchups</div>
+        <table class="data-table">
+  <thead><tr><th colspan="3">Matchup</th><th class="num">Meetings</th><th>Series Record</th></tr></thead>
+  <tbody><tr><td>Denver Blizzards</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Washington Monuments</td><td class="num gold">11</td><td style="color:var(--muted);font-size:0.82em">Washington Monuments leads 7–4</td></tr><tr><td>Phoenix Scorpions</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Washington Monuments</td><td class="num gold">10</td><td style="color:var(--muted);font-size:0.82em">Washington Monuments leads 7–3</td></tr><tr><td>Chicago Blues</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Washington Monuments</td><td class="num gold">9</td><td style="color:var(--muted);font-size:0.82em">Washington Monuments leads 8–1</td></tr><tr><td>Denver Blizzards</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New York Empires</td><td class="num gold">9</td><td style="color:var(--muted);font-size:0.82em">New York Empires leads 6–3</td></tr><tr><td>Montreal Royals</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New York Empires</td><td class="num gold">9</td><td style="color:var(--muted);font-size:0.82em">New York Empires leads 5–4</td></tr><tr><td>Mexico City Jaguars</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Washington Monuments</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Tied 4–4</td></tr><tr><td>Detroit Motors</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New Orleans Voodoo</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Tied 4–4</td></tr><tr><td>Detroit Motors</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New York Empires</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Detroit Motors leads 5–3</td></tr><tr><td>Dallas Smoke</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Washington Monuments</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Washington Monuments leads 5–3</td></tr><tr><td>Dallas Smoke</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Detroit Motors</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Detroit Motors leads 5–3</td></tr><tr><td>Denver Blizzards</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Toronto Ice</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Toronto Ice leads 5–3</td></tr><tr><td>Phoenix Scorpions</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>San Diego Surf</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">San Diego Surf leads 5–3</td></tr><tr><td>Monterrey Summit</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Phoenix Scorpions</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Tied 4–4</td></tr><tr><td>Mexico City Jaguars</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Miami Flamingos</td><td class="num gold">7</td><td style="color:var(--muted);font-size:0.82em">Miami Flamingos leads 5–2</td></tr><tr><td>Mexico City Jaguars</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Montreal Royals</td><td class="num gold">7</td><td style="color:var(--muted);font-size:0.82em">Montreal Royals leads 5–2</td></tr></tbody>
+</table>
+      </div>
+      <div>
+        <div class="sub-header">Most Common Finals Matchups</div>
+        <table class="data-table">
+  <thead><tr><th colspan="3">Matchup</th><th class="num">Finals</th><th>Series Record</th></tr></thead>
+  <tbody><tr><td>New York Empires</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Washington Monuments</td><td class="num gold">3</td><td style="color:var(--muted);font-size:0.82em">Washington Monuments leads 2–1</td></tr><tr><td>Detroit Motors</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New York Empires</td><td class="num gold">3</td><td style="color:var(--muted);font-size:0.82em">Detroit Motors leads 3–0</td></tr><tr><td>Montreal Royals</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Toronto Ice</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Tied 1–1</td></tr><tr><td>Detroit Motors</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Houston Oilers</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Houston Oilers leads 2–0</td></tr><tr><td>New Orleans Voodoo</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Washington Monuments</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Washington Monuments leads 2–0</td></tr><tr><td>Miami Flamingos</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Phoenix Scorpions</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Phoenix Scorpions leads 2–0</td></tr><tr><td>Miami Flamingos</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New York Empires</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Tied 1–1</td></tr><tr><td>Guadalajara Sol</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New York Empires</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Tied 1–1</td></tr><tr><td>Chicago Blues</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Washington Monuments</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Tied 1–1</td></tr><tr><td>Chicago Blues</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Denver Blizzards</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Tied 1–1</td></tr></tbody>
+</table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Relocations ────────────────────────────────────────── -->
+<section id="relocations">
+  <div class="section-title">Franchise Moves</div>
+  <p class="section-sub">11 relocations across 100 seasons</p>
+  <div class="reloc-list"><div class="reloc-item"><span class="sn">After S9</span>Seattle Emeralds<span class="arrow">→</span>Austin Outlaws<span class="sn" style="margin-left:0.5rem">(9 losing, 4 bot-2)</span></div><div class="reloc-item"><span class="sn">After S17</span>Austin Outlaws<span class="arrow">→</span>Guadalajara Sol<span class="sn" style="margin-left:0.5rem">(8 losing, 5 bot-2)</span></div><div class="reloc-item"><span class="sn">After S23</span>Atlanta Peaches<span class="arrow">→</span>Minneapolis Freeze<span class="sn" style="margin-left:0.5rem">(9 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S30</span>Vancouver Gales<span class="arrow">→</span>San Diego Surf<span class="sn" style="margin-left:0.5rem">(9 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S41</span>Minneapolis Freeze<span class="arrow">→</span>Indianapolis Racers<span class="sn" style="margin-left:0.5rem">(11 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S54</span>Las Vegas Dealers<span class="arrow">→</span>Monterrey Summit<span class="sn" style="margin-left:0.5rem">(8 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S58</span>Denver Blizzards<span class="arrow">→</span>Orlando Springs<span class="sn" style="margin-left:0.5rem">(8 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S60</span>Guadalajara Sol<span class="arrow">→</span>Denver Blizzards<span class="sn" style="margin-left:0.5rem">(13 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S72</span>Orlando Springs<span class="arrow">→</span>Las Vegas Dealers<span class="sn" style="margin-left:0.5rem">(14 losing, 4 bot-2)</span></div><div class="reloc-item"><span class="sn">After S80</span>Philadelphia Fighters<span class="arrow">→</span>Vancouver Gales<span class="sn" style="margin-left:0.5rem">(9 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S87</span>Houston Oilers<span class="arrow">→</span>Guadalajara Sol<span class="sn" style="margin-left:0.5rem">(23 losing, 4 bot-2)</span></div></div>
+</section>
+
+<!-- ── How It Works ───────────────────────────────────────── -->
+<section id="how-it-works" class="alt">
+  <div class="inner">
+    <div class="section-title">How It Works</div>
+    <p class="section-sub">Six Python files, ~500 lines total</p>
+    <div class="code-grid">
+      <div class="code-card">
+        <div class="filename">config.py</div>
+        <h3>All the knobs</h3>
+        <p>A single dataclass with every tunable parameter: team count, possessions per game, min/max strength, strength delta, home advantage, playoff bracket size, series length, relocation thresholds, and championship protection windows.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">game.py</div>
+        <h3>The possession engine</h3>
+        <p>The heart of the simulation. Each possession yields <code>floor(random() × strength)</code> points. Play 100 possessions per team, break ties with sudden-death possessions, then adjust both teams' strength by ±0.03 (bounded at 3.0–3.3). Home court adds a configurable bonus to the home team's effective strength.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">season.py</div>
+        <h3>Schedule + playoffs</h3>
+        <p>Generates a full home-and-away round robin (38 games per team). Snapshots records after the regular season so playoff wins don't inflate standings. Runs seeded bracket playoffs — 1v8, 2v7, etc. — in best-of-7 series with the proper home court pattern.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">franchises.py</div>
+        <h3>Cities and nicknames</h3>
+        <p>Defines 20 active franchises (New York Empires through Las Vegas Dealers) and 18 reserve cities — each with a metro population used to enforce relocation market-size rules. No team can move to a market smaller than half its current city.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">team.py</div>
+        <h3>Franchise history</h3>
+        <p>Each team object tracks its full franchise history as a list of (season, Franchise) pairs. The <code>franchise_at(season)</code> method returns the correct city and nickname for any point in history — so the 100-season table shows what teams were <em>actually called</em> when they won.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">league.py</div>
+        <h3>Multi-season + relocation</h3>
+        <p>Orchestrates all 100 seasons. After each season, checks every team for relocation eligibility: 8 consecutive losing seasons, at least 3 bottom-2 finishes, no championship/finals protection, a viable destination market — and a 50% coin flip. Champions earn 20 seasons of protection; finalists earn 10.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Built with <a href="https://claude.ai/claude-code">Claude Code</a> · Python · ~500 lines · seed 19</p>
+  <p style="margin-top:0.4rem">Recreating a Visual Basic program from ~1995, one season at a time.</p>
+</footer>
+
+</body>
+</html>

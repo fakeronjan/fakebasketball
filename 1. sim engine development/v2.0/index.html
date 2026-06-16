@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ronjan Basketball League — 100-Season Simulation</title>
+  <style>
+:root {
+  --bg: #0c0d10;
+  --bg2: #13141a;
+  --bg3: #1c1e27;
+  --border: #2a2d3a;
+  --gold: #f0b429;
+  --gold2: #ffd166;
+  --text: #e8eaf0;
+  --muted: #8890a8;
+  --red: #ff6b6b;
+  --green: #69db7c;
+  --blue: #74c0fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+a { color: var(--gold); text-decoration: none; }
+a:hover { color: var(--gold2); text-decoration: underline; }
+
+/* ── Nav ── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(12,13,16,0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  display: flex; gap: 2rem; align-items: center;
+  height: 52px;
+}
+nav .brand { font-weight: 700; font-size: 1rem; color: var(--gold); letter-spacing: 0.05em; }
+nav a { font-size: 0.85rem; color: var(--muted); transition: color 0.15s; }
+nav a:hover { color: var(--text); text-decoration: none; }
+
+/* ── Hero ── */
+.hero {
+  background: linear-gradient(135deg, #0c0d10 0%, #13141a 50%, #0f1118 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 5rem 2rem 4rem;
+  text-align: center;
+}
+.hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.75rem;
+}
+.hero .subtitle {
+  font-size: 1.1rem;
+  color: var(--muted);
+  max-width: 600px;
+  margin: 0 auto 1.5rem;
+}
+.hero .badge {
+  display: inline-block;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.hero .badge span { color: var(--gold); }
+
+/* ── Sections ── */
+section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+}
+section.full-bleed {
+  max-width: none;
+  padding: 4rem 2rem;
+}
+section.alt { background: var(--bg2); max-width: none; }
+section.alt > .inner { max-width: 1400px; margin: 0 auto; }
+.section-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: -0.01em;
+  margin-bottom: 0.5rem;
+}
+.section-sub {
+  color: var(--muted);
+  margin-bottom: 2.5rem;
+  font-size: 0.95rem;
+}
+
+/* ── Story ── */
+.story-text {
+  max-width: 780px;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: #c8cadb;
+}
+.story-text p { margin-bottom: 1.25rem; }
+.story-text strong { color: var(--text); }
+
+/* ── Code cards ── */
+.code-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+.code-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+.code-card .filename {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: var(--gold);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.05em;
+}
+.code-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+.code-card p { font-size: 0.875rem; color: var(--muted); line-height: 1.6; }
+.code-card ul { font-size: 0.875rem; color: var(--muted); padding-left: 1.2rem; line-height: 1.7; }
+
+/* ── Stats grid ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+.stat-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+}
+.stat-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.4rem; }
+.stat-card .value { font-size: 1.6rem; font-weight: 700; color: var(--gold); }
+.stat-card .sub { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+/* ── Season table ── */
+.table-wrap {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.8rem;
+  font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+  white-space: nowrap;
+}
+table thead th {
+  background: var(--bg3);
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+}
+table thead th:first-child { width: 3rem; text-align: center; }
+table tbody tr { border-bottom: 1px solid var(--border); }
+table tbody tr:hover { background: var(--bg3); }
+table tbody td {
+  padding: 0.55rem 0.9rem;
+  vertical-align: middle;
+}
+table tbody td:first-child { text-align: center; color: var(--muted); font-size: 0.75rem; }
+.champ-cell { color: var(--gold); font-weight: 600; }
+.repeat-star { color: var(--gold2); margin-right: 0.15rem; }
+.seed { color: var(--muted); font-size: 0.7rem; }
+.cell-sub { font-size: 0.68rem; color: var(--muted); margin-top: 0.15rem; }
+.fin-score { text-align: center; color: var(--muted); }
+.moves-cell { color: var(--blue); font-size: 0.75rem; }
+.hi-ppg { color: var(--green); }
+.lo-ppg { color: var(--red); }
+.avg-cell { color: var(--muted); }
+
+/* ── Championships bar chart ── */
+.champ-list { display: flex; flex-direction: column; gap: 0.5rem; max-width: 700px; }
+.champ-row { display: flex; align-items: center; gap: 1rem; }
+.champ-name { width: 200px; font-size: 0.9rem; flex-shrink: 0; }
+.champ-bar-wrap { flex: 1; background: var(--bg3); border-radius: 4px; height: 22px; overflow: hidden; }
+.champ-bar { height: 100%; background: linear-gradient(90deg, var(--gold) 0%, var(--gold2) 100%); border-radius: 4px; display: flex; align-items: center; padding-left: 8px; }
+.champ-count { font-size: 0.8rem; font-weight: 700; color: var(--bg); }
+
+/* ── Two-col layout ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+/* ── Small tables ── */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.data-table th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.data-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--bg3); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.gold { color: var(--gold); }
+
+/* ── Sub-section headers ── */
+.sub-header {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.sub-header:first-child { margin-top: 0; }
+
+/* ── Relocation list ── */
+.reloc-list { font-size: 0.85rem; columns: 2; column-gap: 2rem; }
+@media (max-width: 700px) { .reloc-list { columns: 1; } }
+.reloc-item { padding: 0.3rem 0; border-bottom: 1px solid var(--border); break-inside: avoid; }
+.reloc-item .sn { color: var(--muted); font-size: 0.75rem; margin-right: 0.5rem; }
+.arrow { color: var(--gold); margin: 0 0.4rem; }
+
+/* ── Series dist ── */
+.series-dist { display: flex; flex-direction: column; gap: 0.6rem; max-width: 400px; }
+.series-row { display: flex; align-items: center; gap: 1rem; font-size: 0.875rem; }
+.series-label { width: 160px; flex-shrink: 0; }
+.series-bar-wrap { flex: 1; background: var(--bg3); border-radius: 4px; height: 20px; overflow: hidden; }
+.series-bar { height: 100%; background: var(--bg); border-radius: 4px; }
+.series-pct { width: 50px; text-align: right; color: var(--muted); font-size: 0.8rem; }
+
+/* ── Footer ── */
+footer {
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+footer a { color: var(--muted); }
+footer a:hover { color: var(--gold); }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="brand">RBL</span>
+  <a href="#season-results">Results</a>
+  <a href="#all-time">All-Time</a>
+  <a href="#rivalries">Rivalries</a>
+  <a href="#relocations">Moves</a>
+  <a href="#how-it-works">How It Works</a>
+</nav>
+
+<div class="hero">
+  <h1>Ronjan Basketball League</h1>
+  <p style="font-size:0.85rem; color:var(--muted); margin-bottom:0.5rem; letter-spacing:0.08em;">EST. 1998</p>
+  <p class="subtitle">A 100-season simulation recreating a program originally written in Visual Basic in 1998.</p>
+  <span class="badge">seed: <span>19</span> &nbsp;·&nbsp; seasons: <span>100</span> &nbsp;·&nbsp; teams: <span>20</span></span>
+</div>
+
+<!-- ── Quick stats ─────────────────────────────────────────── -->
+<section id="season-results">
+  <div class="section-title">100-Season Results</div>
+  <p class="section-sub">Seed 19 · Every season played, every franchise move logged</p>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="label">Most Championships</div>
+      <div class="value">12</div>
+      <div class="sub">Chicago Blues</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Longest Streak</div>
+      <div class="value">2</div>
+      <div class="sub">Toronto Ice (S77–S78)</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Longest Drought</div>
+      <div class="value">70</div>
+      <div class="sub">Sacramento Rush</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Best Season</div>
+      <div class="value">35–3</div>
+      <div class="sub">Chicago Blues (S33)</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Worst Season</div>
+      <div class="value">3–35</div>
+      <div class="sub">Washington Monuments (S38)</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Franchise Moves</div>
+      <div class="value">8</div>
+      <div class="sub">across 100 seasons</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Champion</th>
+        <th>Runner-up</th>
+        <th>FIN</th>
+        <th>Clincher</th>
+        <th>Regular Season Champion</th>
+        <th>Last Place</th>
+      </tr>
+    </thead>
+<tbody>
+      <tr>
+        <td>1</td>
+        <td class="champ-cell">Philadelphia Fighters <span class="seed">(4 seed)</span> 39–12<div class="cell-sub">(1 title, 1 finals) · PS/PA: 108.5 / 99.6</div></td>
+        <td>Vancouver Gales <span class="seed">(2 seed)</span> 38–14<div class="cell-sub">(1 finals) · PS/PA: 113.4 / 104.3</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">124–116</td>
+        <td>Seattle Emeralds 32–6<div class="cell-sub">(1 title) · PS/PA: 112.3 / 99.3</div></td>
+        <td>Detroit Motors 8–30<div class="cell-sub">(1x last) · PS/PA: 99.0 / 109.4</div></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(8 seed)</span> 34–18<div class="cell-sub">(1 title, 1 finals) · PS/PA: 105.1 / 102.0</div></td>
+        <td>Washington Monuments <span class="seed">(6 seed)</span> 33–21<div class="cell-sub">(1 finals) · PS/PA: 101.8 / 98.9</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">109–103</td>
+        <td>Mexico City Jaguars 30–8<div class="cell-sub">(1 title) · PS/PA: 114.2 / 104.5</div></td>
+        <td>Boston Common 10–28<div class="cell-sub">(1x last) · PS/PA: 101.5 / 107.8</div></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td class="champ-cell">New Orleans Voodoo <span class="seed">(7 seed)</span> 36–20<div class="cell-sub">(1 title, 1 finals) · PS/PA: 103.2 / 101.1</div></td>
+        <td>Mexico City Jaguars <span class="seed">(1 seed)</span> 44–9<div class="cell-sub">(1 finals) · PS/PA: 113.1 / 103.0</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">118–100</td>
+        <td>Mexico City Jaguars 33–5<div class="cell-sub">(2 titles) · PS/PA: 113.3 / 101.1</div></td>
+        <td>Washington Monuments 8–30<div class="cell-sub">(1x last) · PS/PA: 99.4 / 105.0</div></td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(5 seed)</span> 36–22<div class="cell-sub">(2 titles, 2 finals) · PS/PA: 102.7 / 100.3</div></td>
+        <td>Boston Common <span class="seed">(2 seed)</span> 39–14<div class="cell-sub">(1 finals) · PS/PA: 103.0 / 99.3</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">100–80</td>
+        <td>Miami Flamingos 30–8<div class="cell-sub">(1 title) · PS/PA: 106.7 / 99.7</div></td>
+        <td>Seattle Emeralds 8–30<div class="cell-sub">(1x last) · PS/PA: 98.6 / 104.8</div></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td class="champ-cell">Miami Flamingos <span class="seed">(6 seed)</span> 35–19<div class="cell-sub">(1 title, 1 finals) · PS/PA: 106.1 / 103.2</div></td>
+        <td>Denver Blizzards <span class="seed">(5 seed)</span> 32–21<div class="cell-sub">(1 finals) · PS/PA: 106.2 / 103.6</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">111–109</td>
+        <td>Boston Common 30–8<div class="cell-sub">(1 title) · PS/PA: 106.4 / 98.5</div></td>
+        <td>Houston Oilers 10–28<div class="cell-sub">(1x last) · PS/PA: 99.2 / 104.8</div></td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td class="champ-cell">Atlanta Peaches <span class="seed">(1 seed)</span> 44–9<div class="cell-sub">(1 title, 1 finals) · PS/PA: 108.8 / 99.6</div></td>
+        <td>Phoenix Scorpions <span class="seed">(7 seed)</span> 33–20<div class="cell-sub">(1 finals) · PS/PA: 107.1 / 102.4</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">109–104</td>
+        <td>Atlanta Peaches 32–6<div class="cell-sub">(1 title) · PS/PA: 108.3 / 98.5</div></td>
+        <td>Washington Monuments 6–32<div class="cell-sub">(2x last) · PS/PA: 99.4 / 111.1</div></td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(8 seed)</span> 33–22<div class="cell-sub">(1 title, 1 finals) · PS/PA: 107.5 / 103.8</div></td>
+        <td>Seattle Emeralds <span class="seed">(2 seed)</span> 42–11<div class="cell-sub">(1 finals) · PS/PA: 113.6 / 103.2</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">133–106</td>
+        <td>Mexico City Jaguars 31–7<div class="cell-sub">(3 titles) · PS/PA: 114.1 / 102.5</div></td>
+        <td>Houston Oilers 8–30<div class="cell-sub">(2x last) · PS/PA: 99.8 / 106.8</div></td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(7 seed)</span> 36–19<div class="cell-sub">(1 title, 2 finals) · PS/PA: 105.1 / 101.3</div></td>
+        <td>Seattle Emeralds <span class="seed">(1 seed)</span> 42–12<div class="cell-sub">(2 finals) · PS/PA: 111.9 / 101.4</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">105–97</td>
+        <td>Seattle Emeralds 32–6<div class="cell-sub">(2 titles) · PS/PA: 112.2 / 99.2</div></td>
+        <td>Toronto Ice 6–32<div class="cell-sub">(1x last) · PS/PA: 97.5 / 109.9</div></td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td class="champ-cell">Seattle Emeralds <span class="seed">(2 seed)</span> 43–12<div class="cell-sub">(1 title, 3 finals) · PS/PA: 112.4 / 105.7</div></td>
+        <td>Vancouver Gales <span class="seed">(5 seed)</span> 37–21<div class="cell-sub">(2 finals) · PS/PA: 110.6 / 107.2</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">107–104</td>
+        <td>Los Angeles Palms 31–7<div class="cell-sub">(1 title) · PS/PA: 113.8 / 102.3</div></td>
+        <td>Dallas Smoke 9–29<div class="cell-sub">(1x last) · PS/PA: 100.9 / 110.0</div></td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(1 seed)</span> 44–9<div class="cell-sub">(1 title, 2 finals) · PS/PA: 113.7 / 100.5</div></td>
+        <td>New Orleans Voodoo <span class="seed">(7 seed)</span> 36–20<div class="cell-sub">(2 finals) · PS/PA: 104.6 / 101.7</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">108–107</td>
+        <td>Denver Blizzards 32–6<div class="cell-sub">(1 title) · PS/PA: 114.6 / 100.2</div></td>
+        <td>Phoenix Scorpions 6–32<div class="cell-sub">(1x last) · PS/PA: 99.9 / 110.7</div></td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(3 seed)</span> 41–13<div class="cell-sub">(1 title, 2 finals) · PS/PA: 114.9 / 107.0</div></td>
+        <td>New York Empires <span class="seed">(4 seed)</span> 37–16<div class="cell-sub">(1 finals) · PS/PA: 115.7 / 107.5</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">115–114</td>
+        <td>Vancouver Gales 32–6<div class="cell-sub">(1 title) · PS/PA: 113.8 / 102.7</div></td>
+        <td>Miami Flamingos 10–28<div class="cell-sub">(1x last) · PS/PA: 98.3 / 104.1</div></td>
+      </tr>
+      <tr>
+        <td>12</td>
+        <td class="champ-cell">Vancouver Gales <span class="seed">(3 seed)</span> 41–13<div class="cell-sub">(1 title, 3 finals) · PS/PA: 114.1 / 103.6</div></td>
+        <td>Houston Oilers <span class="seed">(8 seed)</span> 32–25<div class="cell-sub">(3 finals) · PS/PA: 106.9 / 105.1</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">122–105</td>
+        <td>Mexico City Jaguars 31–7<div class="cell-sub">(4 titles) · PS/PA: 117.8 / 107.4</div></td>
+        <td>New Orleans Voodoo 9–29<div class="cell-sub">(1x last) · PS/PA: 99.9 / 107.6</div></td>
+      </tr>
+      <tr>
+        <td>13</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(2 seed)</span> 40–12<div class="cell-sub">(3 titles, 4 finals) · PS/PA: 112.6 / 104.3</div></td>
+        <td>Denver Blizzards <span class="seed">(8 seed)</span> 31–20<div class="cell-sub">(3 finals) · PS/PA: 111.2 / 106.9</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">120–110</td>
+        <td>Los Angeles Palms 29–9<div class="cell-sub">(2 titles) · PS/PA: 113.5 / 104.2</div></td>
+        <td>Las Vegas Dealers 9–29<div class="cell-sub">(1x last) · PS/PA: 97.4 / 107.8</div></td>
+      </tr>
+      <tr>
+        <td>14</td>
+        <td class="champ-cell">New Orleans Voodoo <span class="seed">(6 seed)</span> 35–19<div class="cell-sub">(2 titles, 3 finals) · PS/PA: 106.3 / 101.6</div></td>
+        <td>Denver Blizzards <span class="seed">(1 seed)</span> 37–17<div class="cell-sub">(4 finals) · PS/PA: 110.7 / 105.1</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">113–103</td>
+        <td>Denver Blizzards 28–10<div class="cell-sub">(2 titles) · PS/PA: 111.1 / 103.8</div></td>
+        <td>Las Vegas Dealers 8–30<div class="cell-sub">(2x last) · PS/PA: 97.9 / 110.1</div></td>
+      </tr>
+      <tr>
+        <td>15</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(1 seed)</span> 41–10<div class="cell-sub">(2 titles, 5 finals) · PS/PA: 114.8 / 105.6</div></td>
+        <td>Houston Oilers <span class="seed">(6 seed)</span> 33–20<div class="cell-sub">(5 finals) · PS/PA: 108.4 / 104.4</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">112–106</td>
+        <td>Denver Blizzards 29–9<div class="cell-sub">(3 titles) · PS/PA: 114.5 / 105.7</div></td>
+        <td>Phoenix Scorpions 9–29<div class="cell-sub">(2x last) · PS/PA: 100.5 / 109.8</div></td>
+      </tr>
+      <tr>
+        <td>16</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(1 seed)</span> 43–13<div class="cell-sub">(1 title, 1 finals) · PS/PA: 112.9 / 104.4</div></td>
+        <td>Philadelphia Fighters <span class="seed">(3 seed)</span> 38–16<div class="cell-sub">(2 finals) · PS/PA: 110.7 / 104.4</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">124–105</td>
+        <td>Toronto Ice 31–7<div class="cell-sub">(1 title) · PS/PA: 112.9 / 103.5</div></td>
+        <td>New York Empires 6–32<div class="cell-sub">(1x last) · PS/PA: 101.4 / 111.3</div></td>
+      </tr>
+      <tr>
+        <td>17</td>
+        <td class="champ-cell">Philadelphia Fighters <span class="seed">(1 seed)</span> 43–14<div class="cell-sub">(2 titles, 3 finals) · PS/PA: 108.7 / 101.8</div></td>
+        <td>Houston Oilers <span class="seed">(6 seed)</span> 35–20<div class="cell-sub">(6 finals) · PS/PA: 109.0 / 103.8</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">128–110</td>
+        <td>Philadelphia Fighters 31–7<div class="cell-sub">(1 title) · PS/PA: 111.1 / 101.3</div></td>
+        <td>Chicago Blues 8–30<div class="cell-sub">(1x last) · PS/PA: 99.6 / 109.4</div></td>
+      </tr>
+      <tr>
+        <td>18</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(3 seed)</span> 39–14<div class="cell-sub">(2 titles, 2 finals) · PS/PA: 110.8 / 101.7</div></td>
+        <td>Houston Oilers <span class="seed">(1 seed)</span> 38–14<div class="cell-sub">(7 finals) · PS/PA: 110.9 / 104.0</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">117–91</td>
+        <td>Houston Oilers 30–8<div class="cell-sub">(1 title) · PS/PA: 111.9 / 102.8</div></td>
+        <td>Phoenix Scorpions 8–30<div class="cell-sub">(3x last) · PS/PA: 98.6 / 109.3</div></td>
+      </tr>
+      <tr>
+        <td>19</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(6 seed)</span> 37–17<div class="cell-sub">(1 title, 1 finals) · PS/PA: 106.4 / 103.0</div></td>
+        <td>Houston Oilers <span class="seed">(1 seed)</span> 41–12<div class="cell-sub">(8 finals) · PS/PA: 108.1 / 100.0</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">119–90</td>
+        <td>Houston Oilers 33–5<div class="cell-sub">(2 titles) · PS/PA: 110.6 / 99.3</div></td>
+        <td>Detroit Motors 8–30<div class="cell-sub">(2x last) · PS/PA: 101.3 / 107.8</div></td>
+      </tr>
+      <tr>
+        <td>20</td>
+        <td class="champ-cell">Philadelphia Fighters <span class="seed">(2 seed)</span> 41–14<div class="cell-sub">(3 titles, 4 finals) · PS/PA: 113.3 / 102.6</div></td>
+        <td>Houston Oilers <span class="seed">(5 seed)</span> 37–16<div class="cell-sub">(9 finals) · PS/PA: 109.6 / 103.3</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">116–97</td>
+        <td>Toronto Ice 31–7<div class="cell-sub">(2 titles) · PS/PA: 113.8 / 102.1</div></td>
+        <td>New York Empires 8–30<div class="cell-sub">(2x last) · PS/PA: 102.4 / 109.2</div></td>
+      </tr>
+      <tr>
+        <td>21</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Philadelphia Fighters <span class="seed">(3 seed)</span> 41–13<div class="cell-sub">(4 titles, 5 finals) · PS/PA: 111.4 / 102.5</div></td>
+        <td>Denver Blizzards <span class="seed">(1 seed)</span> 40–12<div class="cell-sub">(6 finals) · PS/PA: 115.7 / 106.6</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">134–103</td>
+        <td>Denver Blizzards 30–8<div class="cell-sub">(4 titles) · PS/PA: 114.8 / 104.3</div></td>
+        <td>Washington Monuments 9–29<div class="cell-sub">(3x last) · PS/PA: 101.0 / 111.2</div></td>
+      </tr>
+      <tr>
+        <td>22</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(6 seed)</span> 38–16<div class="cell-sub">(2 titles, 2 finals) · PS/PA: 110.7 / 102.1</div></td>
+        <td>Sacramento Rush <span class="seed">(1 seed)</span> 41–12<div class="cell-sub">(1 finals) · PS/PA: 110.3 / 103.3</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">117–99</td>
+        <td>Sacramento Rush 31–7<div class="cell-sub">(1 title) · PS/PA: 110.7 / 101.3</div></td>
+        <td>New York Empires 7–31<div class="cell-sub">(3x last) · PS/PA: 100.0 / 109.9</div></td>
+      </tr>
+      <tr>
+        <td>23</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(2 seed)</span> 38–19<div class="cell-sub">(2 titles, 2 finals) · PS/PA: 111.9 / 107.0</div></td>
+        <td>New Orleans Voodoo <span class="seed">(5 seed)</span> 36–19<div class="cell-sub">(4 finals) · PS/PA: 111.0 / 103.8</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">114–111</td>
+        <td>Chicago Blues 28–10<div class="cell-sub">(1 title) · PS/PA: 110.1 / 103.7</div></td>
+        <td>Boston Common 10–28<div class="cell-sub">(2x last) · PS/PA: 100.6 / 109.9</div></td>
+      </tr>
+      <tr>
+        <td>24</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(5 seed)</span> 40–10<div class="cell-sub">(1 title, 1 finals) · PS/PA: 111.3 / 101.7</div></td>
+        <td>Boston Common <span class="seed">(6 seed)</span> 33–18<div class="cell-sub">(2 finals) · PS/PA: 104.6 / 100.3</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">98–95</td>
+        <td>Los Angeles Palms 32–6<div class="cell-sub">(3 titles) · PS/PA: 109.7 / 100.1</div></td>
+        <td>Dallas Smoke 8–30<div class="cell-sub">(2x last) · PS/PA: 103.6 / 108.2</div></td>
+      </tr>
+      <tr>
+        <td>25</td>
+        <td class="champ-cell">Washington Monuments <span class="seed">(5 seed)</span> 37–19<div class="cell-sub">(2 titles, 3 finals) · PS/PA: 104.0 / 99.4</div></td>
+        <td>Las Vegas Dealers <span class="seed">(3 seed)</span> 40–16<div class="cell-sub">(3 finals) · PS/PA: 112.5 / 105.3</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">113–112</td>
+        <td>Toronto Ice 34–4<div class="cell-sub">(3 titles) · PS/PA: 114.6 / 103.0</div></td>
+        <td>Dallas Smoke 9–29<div class="cell-sub">(3x last) · PS/PA: 100.8 / 108.2</div></td>
+      </tr>
+      <tr>
+        <td>26</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(2 seed)</span> 38–18<div class="cell-sub">(4 titles, 10 finals) · PS/PA: 106.8 / 103.5</div></td>
+        <td>Toronto Ice <span class="seed">(1 seed)</span> 35–19<div class="cell-sub">(3 finals) · PS/PA: 110.4 / 104.1</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">121–98</td>
+        <td>Toronto Ice 26–12<div class="cell-sub">(4 titles) · PS/PA: 111.1 / 102.5</div></td>
+        <td>Vancouver Gales 6–32<div class="cell-sub">(1x last) · PS/PA: 101.8 / 110.8</div></td>
+      </tr>
+      <tr>
+        <td>27</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(2 seed)</span> 41–11<div class="cell-sub">(3 titles, 3 finals) · PS/PA: 111.4 / 101.6</div></td>
+        <td>Denver Blizzards <span class="seed">(1 seed)</span> 40–16<div class="cell-sub">(7 finals) · PS/PA: 114.5 / 107.3</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">110–103</td>
+        <td>Denver Blizzards 30–8<div class="cell-sub">(5 titles) · PS/PA: 114.9 / 105.4</div></td>
+        <td>Vancouver Gales 7–31<div class="cell-sub">(2x last) · PS/PA: 100.6 / 110.0</div></td>
+      </tr>
+      <tr>
+        <td>28</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(1 seed)</span> 41–14<div class="cell-sub">(3 titles, 8 finals) · PS/PA: 115.9 / 106.3</div></td>
+        <td>Mexico City Jaguars <span class="seed">(6 seed)</span> 36–21<div class="cell-sub">(3 finals) · PS/PA: 111.2 / 107.0</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">126–109</td>
+        <td>Denver Blizzards 29–9<div class="cell-sub">(6 titles) · PS/PA: 116.4 / 105.8</div></td>
+        <td>Houston Oilers 8–30<div class="cell-sub">(3x last) · PS/PA: 99.7 / 108.4</div></td>
+      </tr>
+      <tr>
+        <td>29</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(2 seed)</span> 42–14<div class="cell-sub">(2 titles, 2 finals) · PS/PA: 111.7 / 103.7</div></td>
+        <td>Seattle Emeralds <span class="seed">(5 seed)</span> 37–18<div class="cell-sub">(4 finals) · PS/PA: 114.6 / 108.5</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">122–98</td>
+        <td>Las Vegas Dealers 31–7<div class="cell-sub">(1 title) · PS/PA: 115.4 / 104.8</div></td>
+        <td>New Orleans Voodoo 7–31<div class="cell-sub">(2x last) · PS/PA: 98.6 / 112.6</div></td>
+      </tr>
+      <tr>
+        <td>30</td>
+        <td class="champ-cell">New York Empires <span class="seed">(6 seed)</span> 38–20<div class="cell-sub">(1 title, 2 finals) · PS/PA: 107.6 / 100.6</div></td>
+        <td>Dallas Smoke <span class="seed">(8 seed)</span> 34–21<div class="cell-sub">(1 finals) · PS/PA: 101.9 / 100.7</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">110–93</td>
+        <td>Vancouver Gales 32–6<div class="cell-sub">(2 titles) · PS/PA: 109.6 / 100.6</div></td>
+        <td>Sacramento Rush 7–31<div class="cell-sub">(1x last) · PS/PA: 98.1 / 109.9</div></td>
+      </tr>
+      <tr>
+        <td>31</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>New York Empires <span class="seed">(2 seed)</span> 42–14<div class="cell-sub">(2 titles, 3 finals) · PS/PA: 104.7 / 97.5</div></td>
+        <td>New Orleans Voodoo <span class="seed">(4 seed)</span> 36–17<div class="cell-sub">(5 finals) · PS/PA: 108.7 / 102.0</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">99–85</td>
+        <td>Vancouver Gales 33–5<div class="cell-sub">(3 titles) · PS/PA: 113.3 / 101.7</div></td>
+        <td>Atlanta Peaches 6–32<div class="cell-sub">(1x last) · PS/PA: 99.8 / 110.3</div></td>
+      </tr>
+      <tr>
+        <td>32</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(2 seed)</span> 41–13<div class="cell-sub">(2 titles, 4 finals) · PS/PA: 110.4 / 102.3</div></td>
+        <td>Philadelphia Fighters <span class="seed">(8 seed)</span> 31–26<div class="cell-sub">(6 finals) · PS/PA: 104.4 / 103.3</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">117–116</td>
+        <td>New York Empires 30–8<div class="cell-sub">(1 title) · PS/PA: 106.3 / 97.3</div></td>
+        <td>Phoenix Scorpions 8–30<div class="cell-sub">(4x last) · PS/PA: 101.1 / 106.3</div></td>
+      </tr>
+      <tr>
+        <td>33</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(7 seed)</span> 36–19<div class="cell-sub">(3 titles, 4 finals) · PS/PA: 108.0 / 103.1</div></td>
+        <td>Philadelphia Fighters <span class="seed">(8 seed)</span> 30–23<div class="cell-sub">(7 finals) · PS/PA: 105.0 / 103.8</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">105–104</td>
+        <td>Chicago Blues 35–3<div class="cell-sub">(2 titles) · PS/PA: 113.8 / 99.8</div></td>
+        <td>Seattle Emeralds 6–32<div class="cell-sub">(2x last) · PS/PA: 100.9 / 109.3</div></td>
+      </tr>
+      <tr>
+        <td>34</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(6 seed)</span> 36–19<div class="cell-sub">(3 titles, 5 finals) · PS/PA: 107.2 / 102.5</div></td>
+        <td>Phoenix Scorpions <span class="seed">(8 seed)</span> 34–22<div class="cell-sub">(2 finals) · PS/PA: 101.3 / 97.6</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">100–95</td>
+        <td>Detroit Motors 30–8<div class="cell-sub">(1 title) · PS/PA: 109.3 / 101.9</div></td>
+        <td>Toronto Ice 8–30<div class="cell-sub">(2x last) · PS/PA: 101.5 / 108.4</div></td>
+      </tr>
+      <tr>
+        <td>35</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(5 seed)</span> 40–14<div class="cell-sub">(5 titles, 11 finals) · PS/PA: 108.6 / 103.0</div></td>
+        <td>New York Empires <span class="seed">(2 seed)</span> 39–13<div class="cell-sub">(4 finals) · PS/PA: 109.0 / 102.4</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">115–108</td>
+        <td>Vancouver Gales 32–6<div class="cell-sub">(4 titles) · PS/PA: 114.4 / 103.5</div></td>
+        <td>Los Angeles Palms 8–30<div class="cell-sub">(1x last) · PS/PA: 98.9 / 109.7</div></td>
+      </tr>
+      <tr>
+        <td>36</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(2 seed)</span> 40–14<div class="cell-sub">(4 titles, 4 finals) · PS/PA: 107.7 / 100.3</div></td>
+        <td>Sacramento Rush <span class="seed">(8 seed)</span> 34–24<div class="cell-sub">(2 finals) · PS/PA: 101.8 / 99.5</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">99–81</td>
+        <td>Houston Oilers 35–3<div class="cell-sub">(3 titles) · PS/PA: 112.9 / 99.8</div></td>
+        <td>New Orleans Voodoo 9–29<div class="cell-sub">(3x last) · PS/PA: 100.2 / 108.7</div></td>
+      </tr>
+      <tr>
+        <td>37</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Los Angeles Palms <span class="seed">(2 seed)</span> 41–14<div class="cell-sub">(5 titles, 5 finals) · PS/PA: 109.5 / 102.6</div></td>
+        <td>Sacramento Rush <span class="seed">(5 seed)</span> 37–20<div class="cell-sub">(3 finals) · PS/PA: 104.9 / 100.7</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">102–91</td>
+        <td>Mexico City Jaguars 32–6<div class="cell-sub">(5 titles) · PS/PA: 113.6 / 102.0</div></td>
+        <td>New York Empires 6–32<div class="cell-sub">(4x last) · PS/PA: 100.1 / 109.7</div></td>
+      </tr>
+      <tr>
+        <td>38</td>
+        <td class="champ-cell">Vancouver Gales <span class="seed">(1 seed)</span> 41–14<div class="cell-sub">(2 titles, 4 finals) · PS/PA: 112.1 / 103.7</div></td>
+        <td>Los Angeles Palms <span class="seed">(3 seed)</span> 35–19<div class="cell-sub">(6 finals) · PS/PA: 107.8 / 104.3</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">128–100</td>
+        <td>Vancouver Gales 29–9<div class="cell-sub">(5 titles) · PS/PA: 111.4 / 103.5</div></td>
+        <td>Washington Monuments 3–35<div class="cell-sub">(4x last) · PS/PA: 98.2 / 108.5</div></td>
+      </tr>
+      <tr>
+        <td>39</td>
+        <td class="champ-cell">New York Empires <span class="seed">(6 seed)</span> 38–17<div class="cell-sub">(3 titles, 5 finals) · PS/PA: 107.6 / 102.4</div></td>
+        <td>New Orleans Voodoo <span class="seed">(4 seed)</span> 37–16<div class="cell-sub">(6 finals) · PS/PA: 111.7 / 106.1</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">129–98</td>
+        <td>Mexico City Jaguars 30–8<div class="cell-sub">(6 titles) · PS/PA: 113.8 / 104.7</div></td>
+        <td>Las Vegas Dealers 7–31<div class="cell-sub">(3x last) · PS/PA: 99.0 / 110.4</div></td>
+      </tr>
+      <tr>
+        <td>40</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(7 seed)</span> 38–16<div class="cell-sub">(1 title, 3 finals) · PS/PA: 106.5 / 101.5</div></td>
+        <td>New Orleans Voodoo <span class="seed">(5 seed)</span> 35–20<div class="cell-sub">(7 finals) · PS/PA: 112.0 / 105.3</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">121–95</td>
+        <td>Mexico City Jaguars 31–7<div class="cell-sub">(7 titles) · PS/PA: 112.9 / 104.1</div></td>
+        <td>Dallas Smoke 7–31<div class="cell-sub">(4x last) · PS/PA: 97.2 / 106.2</div></td>
+      </tr>
+      <tr>
+        <td>41</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(1 seed)</span> 40–13<div class="cell-sub">(3 titles, 3 finals) · PS/PA: 111.3 / 102.5</div></td>
+        <td>Phoenix Scorpions <span class="seed">(7 seed)</span> 35–17<div class="cell-sub">(4 finals) · PS/PA: 109.7 / 103.2</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">111–97</td>
+        <td>Chicago Blues 28–10<div class="cell-sub">(3 titles) · PS/PA: 111.0 / 101.3</div></td>
+        <td>Denver Blizzards 9–29<div class="cell-sub">(1x last) · PS/PA: 100.1 / 108.3</div></td>
+      </tr>
+      <tr>
+        <td>42</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(3 seed)</span> 40–14<div class="cell-sub">(3 titles, 4 finals) · PS/PA: 110.5 / 104.0</div></td>
+        <td>Washington Monuments <span class="seed">(8 seed)</span> 29–28<div class="cell-sub">(4 finals) · PS/PA: 101.9 / 101.2</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">111–103</td>
+        <td>Chicago Blues 31–7<div class="cell-sub">(4 titles) · PS/PA: 114.9 / 104.4</div></td>
+        <td>Miami Flamingos 8–30<div class="cell-sub">(2x last) · PS/PA: 99.5 / 107.1</div></td>
+      </tr>
+      <tr>
+        <td>43</td>
+        <td class="champ-cell">Boston Common <span class="seed">(1 seed)</span> 44–10<div class="cell-sub">(1 title, 3 finals) · PS/PA: 116.4 / 104.9</div></td>
+        <td>Chicago Blues <span class="seed">(3 seed)</span> 39–17<div class="cell-sub">(4 finals) · PS/PA: 114.3 / 106.6</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">123–100</td>
+        <td>Boston Common 32–6<div class="cell-sub">(2 titles) · PS/PA: 116.3 / 103.2</div></td>
+        <td>New Orleans Voodoo 7–31<div class="cell-sub">(4x last) · PS/PA: 99.9 / 107.3</div></td>
+      </tr>
+      <tr>
+        <td>44</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(4 seed)</span> 38–16<div class="cell-sub">(4 titles, 5 finals) · PS/PA: 108.5 / 102.4</div></td>
+        <td>Chicago Blues <span class="seed">(7 seed)</span> 33–21<div class="cell-sub">(5 finals) · PS/PA: 113.1 / 106.5</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">124–84</td>
+        <td>Los Angeles Palms 31–7<div class="cell-sub">(4 titles) · PS/PA: 109.4 / 101.1</div></td>
+        <td>Sacramento Rush 8–30<div class="cell-sub">(2x last) · PS/PA: 99.3 / 111.2</div></td>
+      </tr>
+      <tr>
+        <td>45</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(7 seed)</span> 37–18<div class="cell-sub">(4 titles, 6 finals) · PS/PA: 107.2 / 103.4</div></td>
+        <td>Los Angeles Palms <span class="seed">(1 seed)</span> 39–16<div class="cell-sub">(7 finals) · PS/PA: 111.2 / 102.0</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">113–102</td>
+        <td>Los Angeles Palms 29–9<div class="cell-sub">(5 titles) · PS/PA: 111.3 / 100.6</div></td>
+        <td>New Orleans Voodoo 5–33<div class="cell-sub">(5x last) · PS/PA: 100.4 / 110.0</div></td>
+      </tr>
+      <tr>
+        <td>46</td>
+        <td class="champ-cell">Miami Flamingos <span class="seed">(3 seed)</span> 42–14<div class="cell-sub">(2 titles, 2 finals) · PS/PA: 108.1 / 100.0</div></td>
+        <td>Las Vegas Dealers <span class="seed">(4 seed)</span> 38–15<div class="cell-sub">(6 finals) · PS/PA: 107.7 / 102.4</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">100–95</td>
+        <td>Mexico City Jaguars 32–6<div class="cell-sub">(8 titles) · PS/PA: 110.8 / 100.6</div></td>
+        <td>Dallas Smoke 9–29<div class="cell-sub">(5x last) · PS/PA: 101.7 / 107.5</div></td>
+      </tr>
+      <tr>
+        <td>47</td>
+        <td class="champ-cell">Phoenix Scorpions <span class="seed">(5 seed)</span> 36–18<div class="cell-sub">(2 titles, 5 finals) · PS/PA: 105.1 / 99.3</div></td>
+        <td>Washington Monuments <span class="seed">(2 seed)</span> 35–21<div class="cell-sub">(5 finals) · PS/PA: 103.4 / 99.4</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">106–99</td>
+        <td>Mexico City Jaguars 28–10<div class="cell-sub">(9 titles) · PS/PA: 108.9 / 100.3</div></td>
+        <td>New York Empires 9–29<div class="cell-sub">(5x last) · PS/PA: 98.3 / 107.0</div></td>
+      </tr>
+      <tr>
+        <td>48</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(3 seed)</span> 40–14<div class="cell-sub">(6 titles, 8 finals) · PS/PA: 107.8 / 101.8</div></td>
+        <td>Houston Oilers <span class="seed">(4 seed)</span> 36–20<div class="cell-sub">(12 finals) · PS/PA: 110.6 / 104.3</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">120–118</td>
+        <td>Guadalajara Sol 30–8<div class="cell-sub">(1 title) · PS/PA: 112.5 / 102.9</div></td>
+        <td>New Orleans Voodoo 9–29<div class="cell-sub">(6x last) · PS/PA: 102.1 / 110.6</div></td>
+      </tr>
+      <tr>
+        <td>49</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(5 seed)</span> 38–16<div class="cell-sub">(6 titles, 13 finals) · PS/PA: 109.7 / 103.2</div></td>
+        <td>Las Vegas Dealers <span class="seed">(2 seed)</span> 37–18<div class="cell-sub">(7 finals) · PS/PA: 107.5 / 102.7</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">103–98</td>
+        <td>New York Empires 30–8<div class="cell-sub">(2 titles) · PS/PA: 112.0 / 103.3</div></td>
+        <td>Philadelphia Fighters 8–30<div class="cell-sub">(1x last) · PS/PA: 100.0 / 107.3</div></td>
+      </tr>
+      <tr>
+        <td>50</td>
+        <td class="champ-cell">Guadalajara Sol <span class="seed">(8 seed)</span> 35–21<div class="cell-sub">(1 title, 1 finals) · PS/PA: 112.3 / 106.7</div></td>
+        <td>Toronto Ice <span class="seed">(7 seed)</span> 37–20<div class="cell-sub">(5 finals) · PS/PA: 114.8 / 109.4</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">128–105</td>
+        <td>Seattle Emeralds 31–7<div class="cell-sub">(3 titles) · PS/PA: 117.8 / 107.6</div></td>
+        <td>Atlanta Peaches 10–28<div class="cell-sub">(2x last) · PS/PA: 101.5 / 108.1</div></td>
+      </tr>
+      <tr>
+        <td>51</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(7 seed)</span> 37–20<div class="cell-sub">(5 titles, 8 finals) · PS/PA: 110.2 / 104.6</div></td>
+        <td>Chicago Blues <span class="seed">(5 seed)</span> 38–15<div class="cell-sub">(6 finals) · PS/PA: 113.3 / 106.5</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">118–109</td>
+        <td>Toronto Ice 31–7<div class="cell-sub">(5 titles) · PS/PA: 119.7 / 106.4</div></td>
+        <td>Washington Monuments 7–31<div class="cell-sub">(5x last) · PS/PA: 101.3 / 108.4</div></td>
+      </tr>
+      <tr>
+        <td>52</td>
+        <td class="champ-cell">Guadalajara Sol <span class="seed">(1 seed)</span> 45–7<div class="cell-sub">(2 titles, 2 finals) · PS/PA: 115.9 / 103.9</div></td>
+        <td>Detroit Motors <span class="seed">(2 seed)</span> 37–16<div class="cell-sub">(1 finals) · PS/PA: 114.1 / 108.1</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">121–103</td>
+        <td>Guadalajara Sol 33–5<div class="cell-sub">(2 titles) · PS/PA: 113.8 / 101.9</div></td>
+        <td>Sacramento Rush 9–29<div class="cell-sub">(3x last) · PS/PA: 99.0 / 111.6</div></td>
+      </tr>
+      <tr>
+        <td>53</td>
+        <td class="champ-cell">New York Empires <span class="seed">(3 seed)</span> 40–17<div class="cell-sub">(4 titles, 6 finals) · PS/PA: 109.1 / 103.5</div></td>
+        <td>Las Vegas Dealers <span class="seed">(1 seed)</span> 41–12<div class="cell-sub">(9 finals) · PS/PA: 112.1 / 101.9</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">106–97</td>
+        <td>Las Vegas Dealers 31–7<div class="cell-sub">(2 titles) · PS/PA: 111.5 / 100.6</div></td>
+        <td>Boston Common 5–33<div class="cell-sub">(3x last) · PS/PA: 101.0 / 110.4</div></td>
+      </tr>
+      <tr>
+        <td>54</td>
+        <td class="champ-cell">Atlanta Peaches <span class="seed">(2 seed)</span> 41–11<div class="cell-sub">(2 titles, 2 finals) · PS/PA: 110.0 / 100.8</div></td>
+        <td>Philadelphia Fighters <span class="seed">(1 seed)</span> 38–15<div class="cell-sub">(8 finals) · PS/PA: 113.2 / 104.8</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">120–112</td>
+        <td>Philadelphia Fighters 30–8<div class="cell-sub">(2 titles) · PS/PA: 112.1 / 101.4</div></td>
+        <td>Seattle Emeralds 7–31<div class="cell-sub">(3x last) · PS/PA: 98.9 / 110.3</div></td>
+      </tr>
+      <tr>
+        <td>55</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(1 seed)</span> 43–14<div class="cell-sub">(7 titles, 9 finals) · PS/PA: 109.2 / 101.7</div></td>
+        <td>Philadelphia Fighters <span class="seed">(3 seed)</span> 40–17<div class="cell-sub">(9 finals) · PS/PA: 108.9 / 100.8</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">94–90</td>
+        <td>Los Angeles Palms 31–7<div class="cell-sub">(6 titles) · PS/PA: 110.4 / 100.9</div></td>
+        <td>Sacramento Rush 8–30<div class="cell-sub">(4x last) · PS/PA: 100.7 / 108.1</div></td>
+      </tr>
+      <tr>
+        <td>56</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Los Angeles Palms <span class="seed">(8 seed)</span> 34–22<div class="cell-sub">(8 titles, 10 finals) · PS/PA: 104.2 / 101.6</div></td>
+        <td>Houston Oilers <span class="seed">(2 seed)</span> 40–16<div class="cell-sub">(14 finals) · PS/PA: 108.4 / 103.3</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">106–101</td>
+        <td>Las Vegas Dealers 29–9<div class="cell-sub">(3 titles) · PS/PA: 111.1 / 102.4</div></td>
+        <td>Chicago Blues 9–29<div class="cell-sub">(2x last) · PS/PA: 98.8 / 107.9</div></td>
+      </tr>
+      <tr>
+        <td>57</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(2 seed)</span> 40–10<div class="cell-sub">(4 titles, 9 finals) · PS/PA: 115.1 / 104.6</div></td>
+        <td>Houston Oilers <span class="seed">(4 seed)</span> 34–19<div class="cell-sub">(15 finals) · PS/PA: 109.7 / 105.5</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">117–92</td>
+        <td>Vancouver Gales 28–10<div class="cell-sub">(6 titles) · PS/PA: 110.2 / 102.4</div></td>
+        <td>Guadalajara Sol 7–31<div class="cell-sub">(1x last) · PS/PA: 99.0 / 107.9</div></td>
+      </tr>
+      <tr>
+        <td>58</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(2 seed)</span> 39–15<div class="cell-sub">(1 title, 2 finals) · PS/PA: 115.9 / 108.6</div></td>
+        <td>Houston Oilers <span class="seed">(1 seed)</span> 37–16<div class="cell-sub">(16 finals) · PS/PA: 114.0 / 107.4</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">128–120</td>
+        <td>Houston Oilers 28–10<div class="cell-sub">(4 titles) · PS/PA: 112.6 / 104.7</div></td>
+        <td>Guadalajara Sol 9–29<div class="cell-sub">(2x last) · PS/PA: 98.8 / 109.6</div></td>
+      </tr>
+      <tr>
+        <td>59</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(3 seed)</span> 40–10<div class="cell-sub">(6 titles, 10 finals) · PS/PA: 111.8 / 101.7</div></td>
+        <td>Houston Oilers <span class="seed">(5 seed)</span> 34–19<div class="cell-sub">(17 finals) · PS/PA: 110.2 / 106.1</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">112–107</td>
+        <td>Mexico City Jaguars 32–6<div class="cell-sub">(10 titles) · PS/PA: 112.8 / 100.2</div></td>
+        <td>Miami Flamingos 6–32<div class="cell-sub">(3x last) · PS/PA: 99.0 / 111.1</div></td>
+      </tr>
+      <tr>
+        <td>60</td>
+        <td class="champ-cell">Vancouver Gales <span class="seed">(2 seed)</span> 41–10<div class="cell-sub">(3 titles, 5 finals) · PS/PA: 113.6 / 103.0</div></td>
+        <td>Atlanta Peaches <span class="seed">(4 seed)</span> 36–17<div class="cell-sub">(3 finals) · PS/PA: 105.8 / 101.8</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">120–105</td>
+        <td>Denver Blizzards 31–7<div class="cell-sub">(7 titles) · PS/PA: 114.9 / 102.9</div></td>
+        <td>Chicago Blues 7–31<div class="cell-sub">(3x last) · PS/PA: 99.3 / 110.8</div></td>
+      </tr>
+      <tr>
+        <td>61</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(5 seed)</span> 38–15<div class="cell-sub">(2 titles, 3 finals) · PS/PA: 116.0 / 109.3</div></td>
+        <td>Denver Blizzards <span class="seed">(7 seed)</span> 32–20<div class="cell-sub">(10 finals) · PS/PA: 112.9 / 107.8</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">128–119</td>
+        <td>Philadelphia Fighters 29–9<div class="cell-sub">(3 titles) · PS/PA: 112.1 / 102.2</div></td>
+        <td>Chicago Blues 8–30<div class="cell-sub">(4x last) · PS/PA: 100.2 / 108.7</div></td>
+      </tr>
+      <tr>
+        <td>62</td>
+        <td class="champ-cell">Los Angeles Palms <span class="seed">(2 seed)</span> 42–13<div class="cell-sub">(9 titles, 11 finals) · PS/PA: 108.9 / 100.3</div></td>
+        <td>Las Vegas Dealers <span class="seed">(1 seed)</span> 40–15<div class="cell-sub">(11 finals) · PS/PA: 111.3 / 105.5</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">112–103</td>
+        <td>Las Vegas Dealers 31–7<div class="cell-sub">(4 titles) · PS/PA: 112.7 / 102.9</div></td>
+        <td>Boston Common 7–31<div class="cell-sub">(4x last) · PS/PA: 100.7 / 111.4</div></td>
+      </tr>
+      <tr>
+        <td>63</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(3 seed)</span> 42–14<div class="cell-sub">(7 titles, 12 finals) · PS/PA: 115.0 / 106.4</div></td>
+        <td>Philadelphia Fighters <span class="seed">(4 seed)</span> 39–17<div class="cell-sub">(10 finals) · PS/PA: 114.0 / 106.1</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">109–106</td>
+        <td>Detroit Motors 30–8<div class="cell-sub">(2 titles) · PS/PA: 117.9 / 108.5</div></td>
+        <td>New York Empires 6–32<div class="cell-sub">(6x last) · PS/PA: 98.3 / 112.1</div></td>
+      </tr>
+      <tr>
+        <td>64</td>
+        <td class="champ-cell">Philadelphia Fighters <span class="seed">(8 seed)</span> 38–19<div class="cell-sub">(5 titles, 11 finals) · PS/PA: 115.5 / 108.9</div></td>
+        <td>Las Vegas Dealers <span class="seed">(6 seed)</span> 37–20<div class="cell-sub">(13 finals) · PS/PA: 112.2 / 107.1</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">114–83</td>
+        <td>Seattle Emeralds 31–7<div class="cell-sub">(4 titles) · PS/PA: 117.2 / 105.7</div></td>
+        <td>Phoenix Scorpions 7–31<div class="cell-sub">(5x last) · PS/PA: 101.9 / 110.0</div></td>
+      </tr>
+      <tr>
+        <td>65</td>
+        <td class="champ-cell">Seattle Emeralds <span class="seed">(4 seed)</span> 40–16<div class="cell-sub">(2 titles, 5 finals) · PS/PA: 117.6 / 110.1</div></td>
+        <td>Chicago Blues <span class="seed">(3 seed)</span> 38–17<div class="cell-sub">(7 finals) · PS/PA: 110.2 / 104.4</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">117–114</td>
+        <td>Denver Blizzards 31–7<div class="cell-sub">(8 titles) · PS/PA: 116.1 / 103.5</div></td>
+        <td>New York Empires 6–32<div class="cell-sub">(7x last) · PS/PA: 98.0 / 110.3</div></td>
+      </tr>
+      <tr>
+        <td>66</td>
+        <td class="champ-cell">Boston Common <span class="seed">(1 seed)</span> 43–10<div class="cell-sub">(2 titles, 4 finals) · PS/PA: 115.0 / 105.9</div></td>
+        <td>Las Vegas Dealers <span class="seed">(7 seed)</span> 35–18<div class="cell-sub">(14 finals) · PS/PA: 111.8 / 107.1</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">130–107</td>
+        <td>Boston Common 31–7<div class="cell-sub">(3 titles) · PS/PA: 114.3 / 105.8</div></td>
+        <td>Phoenix Scorpions 6–32<div class="cell-sub">(6x last) · PS/PA: 101.6 / 112.5</div></td>
+      </tr>
+      <tr>
+        <td>67</td>
+        <td class="champ-cell">Houston Oilers <span class="seed">(3 seed)</span> 40–16<div class="cell-sub">(7 titles, 18 finals) · PS/PA: 114.0 / 109.3</div></td>
+        <td>Philadelphia Fighters <span class="seed">(1 seed)</span> 43–12<div class="cell-sub">(12 finals) · PS/PA: 115.9 / 107.5</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">121–110</td>
+        <td>Philadelphia Fighters 32–6<div class="cell-sub">(4 titles) · PS/PA: 115.5 / 106.2</div></td>
+        <td>New York Empires 6–32<div class="cell-sub">(8x last) · PS/PA: 100.1 / 109.4</div></td>
+      </tr>
+      <tr>
+        <td>68</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(4 seed)</span> 41–14<div class="cell-sub">(4 titles, 8 finals) · PS/PA: 111.9 / 105.0</div></td>
+        <td>Miami Flamingos <span class="seed">(7 seed)</span> 35–19<div class="cell-sub">(3 finals) · PS/PA: 108.1 / 103.8</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">125–121</td>
+        <td>Denver Blizzards 30–8<div class="cell-sub">(9 titles) · PS/PA: 114.1 / 105.3</div></td>
+        <td>Washington Monuments 5–33<div class="cell-sub">(6x last) · PS/PA: 99.2 / 112.2</div></td>
+      </tr>
+      <tr>
+        <td>69</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Chicago Blues <span class="seed">(6 seed)</span> 38–12<div class="cell-sub">(5 titles, 9 finals) · PS/PA: 113.6 / 103.6</div></td>
+        <td>Boston Common <span class="seed">(8 seed)</span> 33–20<div class="cell-sub">(5 finals) · PS/PA: 112.8 / 107.7</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">132–112</td>
+        <td>Houston Oilers 34–4<div class="cell-sub">(5 titles) · PS/PA: 114.5 / 103.9</div></td>
+        <td>Los Angeles Palms 5–33<div class="cell-sub">(2x last) · PS/PA: 98.8 / 110.7</div></td>
+      </tr>
+      <tr>
+        <td>70</td>
+        <td class="champ-cell">Detroit Motors <span class="seed">(3 seed)</span> 40–12<div class="cell-sub">(3 titles, 4 finals) · PS/PA: 116.3 / 105.2</div></td>
+        <td>Toronto Ice <span class="seed">(4 seed)</span> 36–17<div class="cell-sub">(6 finals) · PS/PA: 115.5 / 108.8</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">114–110</td>
+        <td>Chicago Blues 31–7<div class="cell-sub">(5 titles) · PS/PA: 112.3 / 100.8</div></td>
+        <td>Atlanta Peaches 6–32<div class="cell-sub">(3x last) · PS/PA: 98.2 / 111.7</div></td>
+      </tr>
+      <tr>
+        <td>71</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(7 seed)</span> 38–16<div class="cell-sub">(5 titles, 7 finals) · PS/PA: 113.3 / 105.1</div></td>
+        <td>New York Empires <span class="seed">(8 seed)</span> 35–19<div class="cell-sub">(7 finals) · PS/PA: 105.8 / 102.4</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">118–103</td>
+        <td>Detroit Motors 30–8<div class="cell-sub">(3 titles) · PS/PA: 117.5 / 109.1</div></td>
+        <td>Miami Flamingos 5–33<div class="cell-sub">(4x last) · PS/PA: 98.1 / 110.2</div></td>
+      </tr>
+      <tr>
+        <td>72</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Mexico City Jaguars <span class="seed">(1 seed)</span> 43–13<div class="cell-sub">(6 titles, 8 finals) · PS/PA: 113.5 / 104.2</div></td>
+        <td>New York Empires <span class="seed">(6 seed)</span> 34–20<div class="cell-sub">(8 finals) · PS/PA: 105.4 / 100.5</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">113–95</td>
+        <td>Mexico City Jaguars 31–7<div class="cell-sub">(11 titles) · PS/PA: 115.8 / 103.3</div></td>
+        <td>Philadelphia Fighters 8–30<div class="cell-sub">(2x last) · PS/PA: 100.6 / 108.3</div></td>
+      </tr>
+      <tr>
+        <td>73</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(4 seed)</span> 40–12<div class="cell-sub">(6 titles, 10 finals) · PS/PA: 114.0 / 104.6</div></td>
+        <td>Boston Common <span class="seed">(2 seed)</span> 40–14<div class="cell-sub">(6 finals) · PS/PA: 113.1 / 101.9</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">116–114</td>
+        <td>Detroit Motors 33–5<div class="cell-sub">(4 titles) · PS/PA: 117.6 / 107.0</div></td>
+        <td>Houston Oilers 7–31<div class="cell-sub">(4x last) · PS/PA: 102.9 / 110.3</div></td>
+      </tr>
+      <tr>
+        <td>74</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Chicago Blues <span class="seed">(4 seed)</span> 41–13<div class="cell-sub">(7 titles, 11 finals) · PS/PA: 111.5 / 104.1</div></td>
+        <td>Toronto Ice <span class="seed">(3 seed)</span> 38–15<div class="cell-sub">(7 finals) · PS/PA: 115.7 / 110.0</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">120–105</td>
+        <td>Boston Common 32–6<div class="cell-sub">(4 titles) · PS/PA: 116.1 / 103.1</div></td>
+        <td>Phoenix Scorpions 8–30<div class="cell-sub">(7x last) · PS/PA: 100.8 / 110.3</div></td>
+      </tr>
+      <tr>
+        <td>75</td>
+        <td class="champ-cell">Mexico City Jaguars <span class="seed">(6 seed)</span> 38–15<div class="cell-sub">(7 titles, 9 finals) · PS/PA: 113.3 / 102.8</div></td>
+        <td>Atlanta Peaches <span class="seed">(8 seed)</span> 32–23<div class="cell-sub">(4 finals) · PS/PA: 103.3 / 102.0</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">107–85</td>
+        <td>Los Angeles Palms 32–6<div class="cell-sub">(7 titles) · PS/PA: 111.8 / 101.9</div></td>
+        <td>Detroit Motors 8–30<div class="cell-sub">(3x last) · PS/PA: 102.3 / 110.4</div></td>
+      </tr>
+      <tr>
+        <td>76</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(1 seed)</span> 40–13<div class="cell-sub">(8 titles, 15 finals) · PS/PA: 111.9 / 105.4</div></td>
+        <td>Los Angeles Palms <span class="seed">(6 seed)</span> 33–19<div class="cell-sub">(12 finals) · PS/PA: 104.7 / 103.0</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">130–108</td>
+        <td>Las Vegas Dealers 28–10<div class="cell-sub">(5 titles) · PS/PA: 108.6 / 104.6</div></td>
+        <td>Detroit Motors 3–35<div class="cell-sub">(4x last) · PS/PA: 99.4 / 110.7</div></td>
+      </tr>
+      <tr>
+        <td>77</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(4 seed)</span> 39–16<div class="cell-sub">(4 titles, 8 finals) · PS/PA: 115.6 / 107.4</div></td>
+        <td>Seattle Emeralds <span class="seed">(6 seed)</span> 36–20<div class="cell-sub">(6 finals) · PS/PA: 114.0 / 110.2</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">125–120</td>
+        <td>Mexico City Jaguars 31–7<div class="cell-sub">(12 titles) · PS/PA: 114.5 / 103.1</div></td>
+        <td>Miami Flamingos 6–32<div class="cell-sub">(5x last) · PS/PA: 99.7 / 112.8</div></td>
+      </tr>
+      <tr>
+        <td>78</td>
+        <td class="champ-cell"><span class="repeat-star">★</span>Toronto Ice <span class="seed">(1 seed)</span> 44–10<div class="cell-sub">(5 titles, 9 finals) · PS/PA: 118.5 / 106.5</div></td>
+        <td>Chicago Blues <span class="seed">(2 seed)</span> 39–12<div class="cell-sub">(12 finals) · PS/PA: 113.2 / 104.1</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">120–109</td>
+        <td>Toronto Ice 32–6<div class="cell-sub">(6 titles) · PS/PA: 118.2 / 104.5</div></td>
+        <td>Houston Oilers 8–30<div class="cell-sub">(5x last) · PS/PA: 100.7 / 107.9</div></td>
+      </tr>
+      <tr>
+        <td>79</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(1 seed)</span> 46–4<div class="cell-sub">(8 titles, 13 finals) · PS/PA: 115.5 / 101.6</div></td>
+        <td>Denver Blizzards <span class="seed">(3 seed)</span> 35–17<div class="cell-sub">(11 finals) · PS/PA: 113.3 / 106.5</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">117–101</td>
+        <td>Chicago Blues 34–4<div class="cell-sub">(6 titles) · PS/PA: 115.3 / 100.4</div></td>
+        <td>New York Empires 8–30<div class="cell-sub">(9x last) · PS/PA: 98.8 / 109.4</div></td>
+      </tr>
+      <tr>
+        <td>80</td>
+        <td class="champ-cell">Atlanta Peaches <span class="seed">(7 seed)</span> 35–17<div class="cell-sub">(3 titles, 5 finals) · PS/PA: 104.6 / 100.5</div></td>
+        <td>Miami Flamingos <span class="seed">(8 seed)</span> 31–21<div class="cell-sub">(4 finals) · PS/PA: 104.8 / 102.1</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">104–96</td>
+        <td>Denver Blizzards 32–6<div class="cell-sub">(10 titles) · PS/PA: 115.7 / 103.2</div></td>
+        <td>New York Empires 7–31<div class="cell-sub">(10x last) · PS/PA: 100.1 / 109.2</div></td>
+      </tr>
+      <tr>
+        <td>81</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(7 seed)</span> 36–17<div class="cell-sub">(9 titles, 14 finals) · PS/PA: 108.6 / 103.7</div></td>
+        <td>Miami Flamingos <span class="seed">(5 seed)</span> 35–19<div class="cell-sub">(5 finals) · PS/PA: 103.9 / 100.0</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">104–100</td>
+        <td>Las Vegas Dealers 30–8<div class="cell-sub">(6 titles) · PS/PA: 114.7 / 105.4</div></td>
+        <td>Houston Oilers 8–30<div class="cell-sub">(6x last) · PS/PA: 98.2 / 107.6</div></td>
+      </tr>
+      <tr>
+        <td>82</td>
+        <td class="champ-cell">Miami Flamingos <span class="seed">(2 seed)</span> 42–16<div class="cell-sub">(3 titles, 6 finals) · PS/PA: 107.6 / 100.1</div></td>
+        <td>Las Vegas Dealers <span class="seed">(1 seed)</span> 44–11<div class="cell-sub">(16 finals) · PS/PA: 113.4 / 104.8</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">108–96</td>
+        <td>Las Vegas Dealers 33–5<div class="cell-sub">(7 titles) · PS/PA: 115.8 / 104.8</div></td>
+        <td>Minneapolis Freeze 6–32<div class="cell-sub">(1x last) · PS/PA: 100.3 / 110.8</div></td>
+      </tr>
+      <tr>
+        <td>83</td>
+        <td class="champ-cell">Sacramento Rush <span class="seed">(2 seed)</span> 41–16<div class="cell-sub">(1 title, 4 finals) · PS/PA: 110.6 / 105.0</div></td>
+        <td>Vancouver Gales <span class="seed">(1 seed)</span> 41–14<div class="cell-sub">(6 finals) · PS/PA: 115.1 / 106.8</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">115–97</td>
+        <td>Vancouver Gales 30–8<div class="cell-sub">(7 titles) · PS/PA: 113.5 / 103.9</div></td>
+        <td>Seattle Emeralds 6–32<div class="cell-sub">(4x last) · PS/PA: 98.9 / 109.7</div></td>
+      </tr>
+      <tr>
+        <td>84</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(1 seed)</span> 43–12<div class="cell-sub">(9 titles, 17 finals) · PS/PA: 115.5 / 107.0</div></td>
+        <td>Houston Oilers <span class="seed">(2 seed)</span> 41–14<div class="cell-sub">(19 finals) · PS/PA: 113.2 / 104.2</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">111–104</td>
+        <td>Las Vegas Dealers 31–7<div class="cell-sub">(8 titles) · PS/PA: 115.9 / 104.9</div></td>
+        <td>Tampa Storm 8–30<div class="cell-sub">(1x last) · PS/PA: 102.1 / 110.3</div></td>
+      </tr>
+      <tr>
+        <td>85</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(2 seed)</span> 41–13<div class="cell-sub">(10 titles, 15 finals) · PS/PA: 112.4 / 102.9</div></td>
+        <td>Sacramento Rush <span class="seed">(4 seed)</span> 37–15<div class="cell-sub">(5 finals) · PS/PA: 112.1 / 104.5</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">122–106</td>
+        <td>Houston Oilers 33–5<div class="cell-sub">(6 titles) · PS/PA: 113.8 / 101.6</div></td>
+        <td>Atlanta Peaches 6–32<div class="cell-sub">(4x last) · PS/PA: 98.4 / 108.8</div></td>
+      </tr>
+      <tr>
+        <td>86</td>
+        <td class="champ-cell">New York Empires <span class="seed">(7 seed)</span> 37–20<div class="cell-sub">(5 titles, 9 finals) · PS/PA: 111.5 / 106.7</div></td>
+        <td>Mexico City Jaguars <span class="seed">(4 seed)</span> 36–18<div class="cell-sub">(10 finals) · PS/PA: 111.4 / 104.7</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">123–112</td>
+        <td>Sacramento Rush 30–8<div class="cell-sub">(2 titles) · PS/PA: 112.4 / 103.3</div></td>
+        <td>Miami Flamingos 9–29<div class="cell-sub">(6x last) · PS/PA: 102.1 / 111.4</div></td>
+      </tr>
+      <tr>
+        <td>87</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(2 seed)</span> 40–14<div class="cell-sub">(11 titles, 16 finals) · PS/PA: 111.1 / 103.7</div></td>
+        <td>New York Empires <span class="seed">(1 seed)</span> 39–16<div class="cell-sub">(10 finals) · PS/PA: 112.5 / 105.9</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">110–107</td>
+        <td>New York Empires 29–9<div class="cell-sub">(3 titles) · PS/PA: 112.4 / 105.1</div></td>
+        <td>Denver Blizzards 6–32<div class="cell-sub">(2x last) · PS/PA: 98.3 / 111.1</div></td>
+      </tr>
+      <tr>
+        <td>88</td>
+        <td class="champ-cell">Guadalajara Sol <span class="seed">(5 seed)</span> 38–18<div class="cell-sub">(3 titles, 3 finals) · PS/PA: 107.0 / 101.7</div></td>
+        <td>New York Empires <span class="seed">(7 seed)</span> 36–20<div class="cell-sub">(11 finals) · PS/PA: 112.6 / 105.9</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">108–105</td>
+        <td>Sacramento Rush 29–9<div class="cell-sub">(3 titles) · PS/PA: 112.4 / 103.7</div></td>
+        <td>Atlanta Peaches 7–31<div class="cell-sub">(5x last) · PS/PA: 99.0 / 109.2</div></td>
+      </tr>
+      <tr>
+        <td>89</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(5 seed)</span> 37–18<div class="cell-sub">(5 titles, 12 finals) · PS/PA: 110.7 / 105.5</div></td>
+        <td>Guadalajara Sol <span class="seed">(7 seed)</span> 35–19<div class="cell-sub">(4 finals) · PS/PA: 105.2 / 101.9</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">117–108</td>
+        <td>Tampa Storm 31–7<div class="cell-sub">(1 title) · PS/PA: 115.8 / 103.8</div></td>
+        <td>Sacramento Rush 7–31<div class="cell-sub">(5x last) · PS/PA: 102.1 / 108.6</div></td>
+      </tr>
+      <tr>
+        <td>90</td>
+        <td class="champ-cell">Tampa Storm <span class="seed">(1 seed)</span> 46–9<div class="cell-sub">(1 title, 1 finals) · PS/PA: 115.3 / 105.3</div></td>
+        <td>Guadalajara Sol <span class="seed">(6 seed)</span> 39–16<div class="cell-sub">(5 finals) · PS/PA: 110.5 / 103.9</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">117–116</td>
+        <td>Tampa Storm 34–4<div class="cell-sub">(2 titles) · PS/PA: 115.7 / 103.6</div></td>
+        <td>Sacramento Rush 6–32<div class="cell-sub">(6x last) · PS/PA: 100.8 / 110.7</div></td>
+      </tr>
+      <tr>
+        <td>91</td>
+        <td class="champ-cell">Charlotte Crown <span class="seed">(2 seed)</span> 42–14<div class="cell-sub">(1 title, 1 finals) · PS/PA: 113.1 / 105.4</div></td>
+        <td>Toronto Ice <span class="seed">(1 seed)</span> 42–11<div class="cell-sub">(10 finals) · PS/PA: 111.8 / 102.1</div></td>
+        <td class="fin-score">4–2</td>
+        <td class="fin-score">126–123</td>
+        <td>Toronto Ice 32–6<div class="cell-sub">(7 titles) · PS/PA: 110.7 / 99.7</div></td>
+        <td>Chicago Blues 7–31<div class="cell-sub">(5x last) · PS/PA: 98.9 / 109.0</div></td>
+      </tr>
+      <tr>
+        <td>92</td>
+        <td class="champ-cell">Sacramento Rush <span class="seed">(8 seed)</span> 35–16<div class="cell-sub">(2 titles, 6 finals) · PS/PA: 112.4 / 105.5</div></td>
+        <td>Denver Blizzards <span class="seed">(6 seed)</span> 33–22<div class="cell-sub">(13 finals) · PS/PA: 112.5 / 108.9</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">115–103</td>
+        <td>New York Empires 33–5<div class="cell-sub">(4 titles) · PS/PA: 112.8 / 103.2</div></td>
+        <td>Austin Outlaws 6–32<div class="cell-sub">(1x last) · PS/PA: 99.3 / 111.3</div></td>
+      </tr>
+      <tr>
+        <td>93</td>
+        <td class="champ-cell">Denver Blizzards <span class="seed">(6 seed)</span> 38–14<div class="cell-sub">(6 titles, 14 finals) · PS/PA: 111.7 / 104.9</div></td>
+        <td>Mexico City Jaguars <span class="seed">(4 seed)</span> 37–17<div class="cell-sub">(11 finals) · PS/PA: 111.1 / 104.9</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">126–108</td>
+        <td>Tampa Storm 32–6<div class="cell-sub">(3 titles) · PS/PA: 114.7 / 102.5</div></td>
+        <td>Austin Outlaws 9–29<div class="cell-sub">(2x last) · PS/PA: 101.7 / 111.8</div></td>
+      </tr>
+      <tr>
+        <td>94</td>
+        <td class="champ-cell">New York Empires <span class="seed">(4 seed)</span> 40–14<div class="cell-sub">(6 titles, 12 finals) · PS/PA: 113.2 / 105.1</div></td>
+        <td>Toronto Ice <span class="seed">(2 seed)</span> 40–14<div class="cell-sub">(11 finals) · PS/PA: 113.0 / 105.4</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">119–105</td>
+        <td>Denver Blizzards 33–5<div class="cell-sub">(11 titles) · PS/PA: 112.7 / 99.4</div></td>
+        <td>Phoenix Scorpions 9–29<div class="cell-sub">(8x last) · PS/PA: 101.3 / 109.9</div></td>
+      </tr>
+      <tr>
+        <td>95</td>
+        <td class="champ-cell">Chicago Blues <span class="seed">(5 seed)</span> 41–15<div class="cell-sub">(12 titles, 17 finals) · PS/PA: 110.7 / 102.2</div></td>
+        <td>Tampa Storm <span class="seed">(3 seed)</span> 41–16<div class="cell-sub">(2 finals) · PS/PA: 113.8 / 105.4</div></td>
+        <td class="fin-score">4–3</td>
+        <td class="fin-score">111–83</td>
+        <td>Las Vegas Dealers 33–5<div class="cell-sub">(9 titles) · PS/PA: 119.8 / 105.9</div></td>
+        <td>Detroit Motors 7–31<div class="cell-sub">(5x last) · PS/PA: 101.2 / 111.5</div></td>
+      </tr>
+      <tr>
+        <td>96</td>
+        <td class="champ-cell">New York Empires <span class="seed">(6 seed)</span> 37–16<div class="cell-sub">(7 titles, 13 finals) · PS/PA: 107.5 / 101.1</div></td>
+        <td>Atlanta Peaches <span class="seed">(8 seed)</span> 34–19<div class="cell-sub">(6 finals) · PS/PA: 104.3 / 100.7</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">113–109</td>
+        <td>Chicago Blues 31–7<div class="cell-sub">(7 titles) · PS/PA: 112.3 / 101.7</div></td>
+        <td>Miami Flamingos 5–33<div class="cell-sub">(7x last) · PS/PA: 98.7 / 110.4</div></td>
+      </tr>
+      <tr>
+        <td>97</td>
+        <td class="champ-cell">Atlanta Peaches <span class="seed">(4 seed)</span> 40–16<div class="cell-sub">(4 titles, 7 finals) · PS/PA: 104.1 / 98.8</div></td>
+        <td>Las Vegas Dealers <span class="seed">(6 seed)</span> 34–20<div class="cell-sub">(18 finals) · PS/PA: 107.6 / 103.9</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">112–97</td>
+        <td>Charlotte Crown 32–6<div class="cell-sub">(1 title) · PS/PA: 114.6 / 102.1</div></td>
+        <td>Austin Outlaws 7–31<div class="cell-sub">(3x last) · PS/PA: 100.2 / 108.4</div></td>
+      </tr>
+      <tr>
+        <td>98</td>
+        <td class="champ-cell">Toronto Ice <span class="seed">(4 seed)</span> 41–12<div class="cell-sub">(6 titles, 12 finals) · PS/PA: 111.3 / 103.7</div></td>
+        <td>Charlotte Crown <span class="seed">(3 seed)</span> 38–17<div class="cell-sub">(2 finals) · PS/PA: 113.5 / 104.8</div></td>
+        <td class="fin-score">4–0</td>
+        <td class="fin-score">120–117</td>
+        <td>Tampa Storm 31–7<div class="cell-sub">(4 titles) · PS/PA: 113.3 / 103.1</div></td>
+        <td>Austin Outlaws 7–31<div class="cell-sub">(4x last) · PS/PA: 100.2 / 107.5</div></td>
+      </tr>
+      <tr>
+        <td>99</td>
+        <td class="champ-cell">Tampa Storm <span class="seed">(7 seed)</span> 38–16<div class="cell-sub">(2 titles, 3 finals) · PS/PA: 114.8 / 106.8</div></td>
+        <td>Toronto Ice <span class="seed">(1 seed)</span> 41–16<div class="cell-sub">(13 finals) · PS/PA: 113.0 / 104.9</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">111–110</td>
+        <td>Toronto Ice 32–6<div class="cell-sub">(8 titles) · PS/PA: 114.0 / 101.6</div></td>
+        <td>Boston Common 9–29<div class="cell-sub">(5x last) · PS/PA: 97.4 / 108.7</div></td>
+      </tr>
+      <tr>
+        <td>100</td>
+        <td class="champ-cell">Las Vegas Dealers <span class="seed">(2 seed)</span> 42–11<div class="cell-sub">(10 titles, 19 finals) · PS/PA: 115.1 / 104.5</div></td>
+        <td>Tampa Storm <span class="seed">(1 seed)</span> 42–11<div class="cell-sub">(4 finals) · PS/PA: 115.2 / 104.8</div></td>
+        <td class="fin-score">4–1</td>
+        <td class="fin-score">123–114</td>
+        <td>Tampa Storm 33–5<div class="cell-sub">(5 titles) · PS/PA: 114.3 / 102.6</div></td>
+        <td>Philadelphia Fighters 6–32<div class="cell-sub">(3x last) · PS/PA: 99.2 / 111.6</div></td>
+      </tr>
+</tbody>
+</table>
+    </div>
+  </div>
+  <p style="font-size:0.75rem; color:var(--muted); margin-top:0.75rem;">
+    ★ = repeat champion &nbsp;·&nbsp; seed in parentheses = playoff seeding &nbsp;·&nbsp; FIN = finals series score &nbsp;·&nbsp; Avg = league pts/game
+  </p>
+</section>
+
+<!-- ── All-time records ────────────────────────────────────── -->
+<section id="all-time" class="alt">
+  <div class="inner">
+    <div class="section-title">All-Time Records</div>
+    <p class="section-sub">Cumulative stats across all 100 seasons</p>
+
+    <div class="sub-header">Championships</div>
+    <div class="champ-list">
+    <div class="champ-row">
+      <div class="champ-name">Chicago Blues</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:100.0%">
+          <span class="champ-count">12</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Las Vegas Dealers</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:83.33333333333334%">
+          <span class="champ-count">10</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Los Angeles Palms</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:75.0%">
+          <span class="champ-count">9</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Houston Oilers</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:58.333333333333336%">
+          <span class="champ-count">7</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Mexico City Jaguars</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:58.333333333333336%">
+          <span class="champ-count">7</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">New York Empires</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:58.333333333333336%">
+          <span class="champ-count">7</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Denver Blizzards</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:50.0%">
+          <span class="champ-count">6</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Toronto Ice</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:50.0%">
+          <span class="champ-count">6</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Philadelphia Fighters</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:41.66666666666667%">
+          <span class="champ-count">5</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Atlanta Peaches</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:33.33333333333333%">
+          <span class="champ-count">4</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Miami Flamingos</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:25.0%">
+          <span class="champ-count">3</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Vancouver Gales</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:25.0%">
+          <span class="champ-count">3</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Guadalajara Sol</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:25.0%">
+          <span class="champ-count">3</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Detroit Motors</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:25.0%">
+          <span class="champ-count">3</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">New Orleans Voodoo</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Washington Monuments</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Seattle Emeralds</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Phoenix Scorpions</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Boston Common</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Sacramento Rush</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Tampa Storm</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:16.666666666666664%">
+          <span class="champ-count">2</span>
+        </div>
+      </div>
+    </div>
+    <div class="champ-row">
+      <div class="champ-name">Charlotte Crown</div>
+      <div class="champ-bar-wrap">
+        <div class="champ-bar" style="width:8.333333333333332%">
+          <span class="champ-count">1</span>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="two-col" style="margin-top:3rem">
+      <div>
+        <div class="sub-header">Finals Appearances</div>
+        <table class="data-table">
+  <thead><tr><th>Team</th><th class="num">App</th><th class="num">W</th><th class="num">L</th><th class="num">Win%</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Houston Oilers</td>
+      <td class="num">19</td>
+      <td class="num gold">7</td>
+      <td class="num">12</td>
+      <td class="num">37%</td>
+    </tr>
+    <tr>
+      <td>Las Vegas Dealers</td>
+      <td class="num">19</td>
+      <td class="num gold">10</td>
+      <td class="num">9</td>
+      <td class="num">53%</td>
+    </tr>
+    <tr>
+      <td>Chicago Blues</td>
+      <td class="num">17</td>
+      <td class="num gold">12</td>
+      <td class="num">5</td>
+      <td class="num">71%</td>
+    </tr>
+    <tr>
+      <td>Denver Blizzards</td>
+      <td class="num">14</td>
+      <td class="num gold">6</td>
+      <td class="num">8</td>
+      <td class="num">43%</td>
+    </tr>
+    <tr>
+      <td>New York Empires</td>
+      <td class="num">13</td>
+      <td class="num gold">7</td>
+      <td class="num">6</td>
+      <td class="num">54%</td>
+    </tr>
+    <tr>
+      <td>Toronto Ice</td>
+      <td class="num">13</td>
+      <td class="num gold">6</td>
+      <td class="num">7</td>
+      <td class="num">46%</td>
+    </tr>
+    <tr>
+      <td>Philadelphia Fighters</td>
+      <td class="num">12</td>
+      <td class="num gold">5</td>
+      <td class="num">7</td>
+      <td class="num">42%</td>
+    </tr>
+    <tr>
+      <td>Los Angeles Palms</td>
+      <td class="num">12</td>
+      <td class="num gold">9</td>
+      <td class="num">3</td>
+      <td class="num">75%</td>
+    </tr>
+    <tr>
+      <td>Mexico City Jaguars</td>
+      <td class="num">11</td>
+      <td class="num gold">7</td>
+      <td class="num">4</td>
+      <td class="num">64%</td>
+    </tr>
+    <tr>
+      <td>New Orleans Voodoo</td>
+      <td class="num">7</td>
+      <td class="num gold">2</td>
+      <td class="num">5</td>
+      <td class="num">29%</td>
+    </tr>
+    <tr>
+      <td>Atlanta Peaches</td>
+      <td class="num">7</td>
+      <td class="num gold">4</td>
+      <td class="num">3</td>
+      <td class="num">57%</td>
+    </tr>
+    <tr>
+      <td>Vancouver Gales</td>
+      <td class="num">6</td>
+      <td class="num gold">3</td>
+      <td class="num">3</td>
+      <td class="num">50%</td>
+    </tr>
+    <tr>
+      <td>Boston Common</td>
+      <td class="num">6</td>
+      <td class="num gold">2</td>
+      <td class="num">4</td>
+      <td class="num">33%</td>
+    </tr>
+    <tr>
+      <td>Miami Flamingos</td>
+      <td class="num">6</td>
+      <td class="num gold">3</td>
+      <td class="num">3</td>
+      <td class="num">50%</td>
+    </tr>
+    <tr>
+      <td>Seattle Emeralds</td>
+      <td class="num">6</td>
+      <td class="num gold">2</td>
+      <td class="num">4</td>
+      <td class="num">33%</td>
+    </tr>
+    <tr>
+      <td>Sacramento Rush</td>
+      <td class="num">6</td>
+      <td class="num gold">2</td>
+      <td class="num">4</td>
+      <td class="num">33%</td>
+    </tr>
+    <tr>
+      <td>Washington Monuments</td>
+      <td class="num">5</td>
+      <td class="num gold">2</td>
+      <td class="num">3</td>
+      <td class="num">40%</td>
+    </tr>
+    <tr>
+      <td>Phoenix Scorpions</td>
+      <td class="num">5</td>
+      <td class="num gold">2</td>
+      <td class="num">3</td>
+      <td class="num">40%</td>
+    </tr>
+    <tr>
+      <td>Guadalajara Sol</td>
+      <td class="num">5</td>
+      <td class="num gold">3</td>
+      <td class="num">2</td>
+      <td class="num">60%</td>
+    </tr>
+    <tr>
+      <td>Detroit Motors</td>
+      <td class="num">4</td>
+      <td class="num gold">3</td>
+      <td class="num">1</td>
+      <td class="num">75%</td>
+    </tr>
+    <tr>
+      <td>Tampa Storm</td>
+      <td class="num">4</td>
+      <td class="num gold">2</td>
+      <td class="num">2</td>
+      <td class="num">50%</td>
+    </tr>
+    <tr>
+      <td>Charlotte Crown</td>
+      <td class="num">2</td>
+      <td class="num gold">1</td>
+      <td class="num">1</td>
+      <td class="num">50%</td>
+    </tr>
+    <tr>
+      <td>Dallas Smoke</td>
+      <td class="num">1</td>
+      <td class="num gold">0</td>
+      <td class="num">1</td>
+      <td class="num">0%</td>
+    </tr></tbody>
+</table>
+      </div>
+      <div>
+        <div class="sub-header">Regular Season Titles</div>
+        <table class="data-table">
+  <thead><tr><th>Team</th><th class="num">RS Titles</th></tr></thead>
+  <tbody><tr><td>Mexico City Jaguars</td><td class="num gold">12</td></tr><tr><td>Denver Blizzards</td><td class="num gold">11</td></tr><tr><td>Las Vegas Dealers</td><td class="num gold">9</td></tr><tr><td>Toronto Ice</td><td class="num gold">8</td></tr><tr><td>Los Angeles Palms</td><td class="num gold">7</td></tr><tr><td>Vancouver Gales</td><td class="num gold">7</td></tr><tr><td>Chicago Blues</td><td class="num gold">7</td></tr><tr><td>Houston Oilers</td><td class="num gold">6</td></tr><tr><td>Tampa Storm</td><td class="num gold">5</td></tr><tr><td>Seattle Emeralds</td><td class="num gold">4</td></tr><tr><td>Boston Common</td><td class="num gold">4</td></tr><tr><td>Philadelphia Fighters</td><td class="num gold">4</td></tr><tr><td>New York Empires</td><td class="num gold">4</td></tr><tr><td>Detroit Motors</td><td class="num gold">4</td></tr><tr><td>Sacramento Rush</td><td class="num gold">3</td></tr><tr><td>Guadalajara Sol</td><td class="num gold">2</td></tr><tr><td>Miami Flamingos</td><td class="num gold">1</td></tr><tr><td>Atlanta Peaches</td><td class="num gold">1</td></tr><tr><td>Charlotte Crown</td><td class="num gold">1</td></tr></tbody>
+</table>
+      </div>
+    </div>
+
+    <div class="two-col" style="margin-top:3rem">
+      <div>
+        <div class="sub-header">Longest Championship Streaks</div>
+        <table class="data-table">
+  <thead><tr><th>Team</th><th class="num">Length</th><th class="num">Seasons</th></tr></thead>
+  <tbody><tr><td>Toronto Ice</td><td class="num gold">2</td><td class="num">S77–S78</td></tr><tr><td>Chicago Blues</td><td class="num gold">2</td><td class="num">S73–S74</td></tr><tr><td>Mexico City Jaguars</td><td class="num gold">2</td><td class="num">S71–S72</td></tr><tr><td>Chicago Blues</td><td class="num gold">2</td><td class="num">S68–S69</td></tr><tr><td>Los Angeles Palms</td><td class="num gold">2</td><td class="num">S55–S56</td></tr><tr><td>Los Angeles Palms</td><td class="num gold">2</td><td class="num">S36–S37</td></tr><tr><td>New York Empires</td><td class="num gold">2</td><td class="num">S30–S31</td></tr><tr><td>Philadelphia Fighters</td><td class="num gold">2</td><td class="num">S20–S21</td></tr></tbody>
+</table>
+      </div>
+      <div>
+        <div class="sub-header">Longest Championship Droughts</div>
+        <table class="data-table">
+  <thead><tr><th>Team</th><th class="num">Seasons</th><th class="num">Period</th></tr></thead>
+  <tbody><tr><td>Sacramento Rush</td><td class="num">70</td><td class="num">S13–S82</td></tr><tr><td>Seattle Emeralds</td><td class="num">55</td><td class="num">S10–S64</td></tr><tr><td>Phoenix Scorpions</td><td class="num">53</td><td class="num">S48–S100</td></tr><tr><td>Washington Monuments</td><td class="num">48</td><td class="num">S26–S73</td></tr><tr><td>Atlanta Peaches</td><td class="num">47</td><td class="num">S7–S53</td></tr><tr><td>Dallas Smoke</td><td class="num">46</td><td class="num">(never won)</td></tr><tr><td>Charlotte Crown</td><td class="num">45</td><td class="num">S46–S90</td></tr><tr><td>Detroit Motors</td><td class="num">45</td><td class="num">(never won)</td></tr></tbody>
+</table>
+      </div>
+    </div>
+
+    <div style="margin-top:3rem">
+      <div class="sub-header">Finals by Series Length</div>
+      <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">23x</div><div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">Sweep (4–0)</div><div style="font-size:0.75rem;color:var(--muted)">23%</div></div><div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">30x</div><div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">5 games</div><div style="font-size:0.75rem;color:var(--muted)">30%</div></div><div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">23x</div><div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">6 games</div><div style="font-size:0.75rem;color:var(--muted)">23%</div></div><div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--gold)">24x</div><div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem">7 games</div><div style="font-size:0.75rem;color:var(--muted)">24%</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Rivalries ─────────────────────────────────────────── -->
+<section id="rivalries" class="alt">
+  <div class="inner">
+    <div class="section-title">Rivalries</div>
+    <p class="section-sub">Most frequent matchups across all 100 seasons</p>
+    <div class="two-col">
+      <div>
+        <div class="sub-header">Most Common Playoff Matchups</div>
+        <table class="data-table">
+  <thead><tr><th colspan="3">Matchup</th><th class="num">Meetings</th><th>Series Record</th></tr></thead>
+  <tbody><tr><td>Chicago Blues</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Las Vegas Dealers</td><td class="num gold">13</td><td style="color:var(--muted);font-size:0.82em">Las Vegas Dealers leads 8–5</td></tr><tr><td>Las Vegas Dealers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Los Angeles Palms</td><td class="num gold">12</td><td style="color:var(--muted);font-size:0.82em">Las Vegas Dealers leads 8–4</td></tr><tr><td>Mexico City Jaguars</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New York Empires</td><td class="num gold">12</td><td style="color:var(--muted);font-size:0.82em">New York Empires leads 7–5</td></tr><tr><td>Chicago Blues</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Denver Blizzards</td><td class="num gold">11</td><td style="color:var(--muted);font-size:0.82em">Denver Blizzards leads 6–5</td></tr><tr><td>Houston Oilers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Las Vegas Dealers</td><td class="num gold">11</td><td style="color:var(--muted);font-size:0.82em">Las Vegas Dealers leads 8–3</td></tr><tr><td>Houston Oilers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Los Angeles Palms</td><td class="num gold">9</td><td style="color:var(--muted);font-size:0.82em">Los Angeles Palms leads 6–3</td></tr><tr><td>Denver Blizzards</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Toronto Ice</td><td class="num gold">9</td><td style="color:var(--muted);font-size:0.82em">Denver Blizzards leads 7–2</td></tr><tr><td>Chicago Blues</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Seattle Emeralds</td><td class="num gold">9</td><td style="color:var(--muted);font-size:0.82em">Chicago Blues leads 7–2</td></tr><tr><td>Houston Oilers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Mexico City Jaguars</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Houston Oilers leads 6–2</td></tr><tr><td>Houston Oilers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Philadelphia Fighters</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Tied 4–4</td></tr><tr><td>Las Vegas Dealers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Toronto Ice</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Toronto Ice leads 5–3</td></tr><tr><td>Denver Blizzards</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Seattle Emeralds</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Seattle Emeralds leads 7–1</td></tr><tr><td>Las Vegas Dealers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Mexico City Jaguars</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Las Vegas Dealers leads 6–2</td></tr><tr><td>Seattle Emeralds</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Toronto Ice</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Toronto Ice leads 5–3</td></tr><tr><td>Las Vegas Dealers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Philadelphia Fighters</td><td class="num gold">8</td><td style="color:var(--muted);font-size:0.82em">Tied 4–4</td></tr></tbody>
+</table>
+      </div>
+      <div>
+        <div class="sub-header">Most Common Finals Matchups</div>
+        <table class="data-table">
+  <thead><tr><th colspan="3">Matchup</th><th class="num">Finals</th><th>Series Record</th></tr></thead>
+  <tbody><tr><td>Mexico City Jaguars</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New York Empires</td><td class="num gold">4</td><td style="color:var(--muted);font-size:0.82em">Mexico City Jaguars leads 3–1</td></tr><tr><td>Boston Common</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Chicago Blues</td><td class="num gold">4</td><td style="color:var(--muted);font-size:0.82em">Chicago Blues leads 3–1</td></tr><tr><td>Denver Blizzards</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Houston Oilers</td><td class="num gold">3</td><td style="color:var(--muted);font-size:0.82em">Denver Blizzards leads 2–1</td></tr><tr><td>Houston Oilers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Philadelphia Fighters</td><td class="num gold">3</td><td style="color:var(--muted);font-size:0.82em">Philadelphia Fighters leads 2–1</td></tr><tr><td>Houston Oilers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Los Angeles Palms</td><td class="num gold">3</td><td style="color:var(--muted);font-size:0.82em">Los Angeles Palms leads 3–0</td></tr><tr><td>Los Angeles Palms</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Sacramento Rush</td><td class="num gold">3</td><td style="color:var(--muted);font-size:0.82em">Los Angeles Palms leads 3–0</td></tr><tr><td>Las Vegas Dealers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Philadelphia Fighters</td><td class="num gold">3</td><td style="color:var(--muted);font-size:0.82em">Las Vegas Dealers leads 2–1</td></tr><tr><td>Houston Oilers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Las Vegas Dealers</td><td class="num gold">3</td><td style="color:var(--muted);font-size:0.82em">Las Vegas Dealers leads 2–1</td></tr><tr><td>Denver Blizzards</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>New Orleans Voodoo</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Tied 1–1</td></tr><tr><td>Houston Oilers</td><td style="color:var(--muted);padding:0 0.4rem">vs</td><td>Toronto Ice</td><td class="num gold">2</td><td style="color:var(--muted);font-size:0.82em">Tied 1–1</td></tr></tbody>
+</table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Relocations ────────────────────────────────────────── -->
+<section id="relocations">
+  <div class="section-title">Franchise Moves</div>
+  <p class="section-sub">8 relocations across 100 seasons</p>
+  <div class="reloc-list"><div class="reloc-item"><span class="sn">After S12</span>Montreal Royals<span class="arrow">→</span>Sacramento Rush<span class="sn" style="margin-left:0.5rem">(12 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S45</span>Detroit Motors<span class="arrow">→</span>Charlotte Crown<span class="sn" style="margin-left:0.5rem">(9 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S46</span>Dallas Smoke<span class="arrow">→</span>Guadalajara Sol<span class="sn" style="margin-left:0.5rem">(8 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S50</span>New Orleans Voodoo<span class="arrow">→</span>Detroit Motors<span class="sn" style="margin-left:0.5rem">(8 losing, 4 bot-2)</span></div><div class="reloc-item"><span class="sn">After S73</span>Washington Monuments<span class="arrow">→</span>Minneapolis Freeze<span class="sn" style="margin-left:0.5rem">(12 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S82</span>Minneapolis Freeze<span class="arrow">→</span>Tampa Storm<span class="sn" style="margin-left:0.5rem">(9 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S88</span>Seattle Emeralds<span class="arrow">→</span>Austin Outlaws<span class="sn" style="margin-left:0.5rem">(10 losing, 3 bot-2)</span></div><div class="reloc-item"><span class="sn">After S97</span>Houston Oilers<span class="arrow">→</span>Washington Monuments<span class="sn" style="margin-left:0.5rem">(11 losing, 3 bot-2)</span></div></div>
+</section>
+
+<!-- ── How It Works ───────────────────────────────────────── -->
+<section id="how-it-works" class="alt">
+  <div class="inner">
+    <div class="section-title">How It Works</div>
+    <p class="section-sub">Six Python files, ~500 lines total</p>
+    <div class="code-grid">
+      <div class="code-card">
+        <div class="filename">config.py</div>
+        <h3>All the knobs</h3>
+        <p>A single dataclass with every tunable parameter: team count, possessions per game, min/max strength, strength delta, home advantage, playoff bracket size, series length, relocation thresholds, and championship protection windows.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">game.py</div>
+        <h3>The possession engine</h3>
+        <p>The heart of the simulation. Each possession yields <code>floor(random() × strength)</code> points. Play 100 possessions per team, break ties with sudden-death possessions, then adjust both teams' strength by ±0.03 (bounded at 3.0–3.3). Home court adds a configurable bonus to the home team's effective strength.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">season.py</div>
+        <h3>Schedule + playoffs</h3>
+        <p>Generates a full home-and-away round robin (38 games per team). Snapshots records after the regular season so playoff wins don't inflate standings. Runs seeded bracket playoffs — 1v8, 2v7, etc. — in best-of-7 series with the proper home court pattern.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">franchises.py</div>
+        <h3>Cities and nicknames</h3>
+        <p>Defines 20 active franchises (New York Empires through Las Vegas Dealers) and 18 reserve cities — each with a metro population used to enforce relocation market-size rules. No team can move to a market smaller than half its current city.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">team.py</div>
+        <h3>Franchise history</h3>
+        <p>Each team object tracks its full franchise history as a list of (season, Franchise) pairs. The <code>franchise_at(season)</code> method returns the correct city and nickname for any point in history — so the 100-season table shows what teams were <em>actually called</em> when they won.</p>
+      </div>
+      <div class="code-card">
+        <div class="filename">league.py</div>
+        <h3>Multi-season + relocation</h3>
+        <p>Orchestrates all 100 seasons. After each season, checks every team for relocation eligibility: 8 consecutive losing seasons, at least 3 bottom-2 finishes, no championship/finals protection, a viable destination market — and a 50% coin flip. Champions earn 20 seasons of protection; finalists earn 10.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>Built with <a href="https://claude.ai/claude-code">Claude Code</a> · Python · ~500 lines · seed 19</p>
+  <p style="margin-top:0.4rem">Recreating a Visual Basic program from 1998, one season at a time.</p>
+</footer>
+
+</body>
+</html>

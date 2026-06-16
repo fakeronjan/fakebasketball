@@ -1,0 +1,526 @@
+====================================================================
+  FAKE BASKETBALL — COMPLETE LEAGUE REPORT
+  Test League   |   Through Season 3   |   2026-04-28 18:17
+====================================================================
+
+     1. League History
+     2. Team History
+     3. Player Stats
+     4. Rosters
+     5. Power Structure
+     6. Owner Dashboard
+     7. Coach Dashboard & History
+     8. Market Map
+     9. Event Log
+    10. All-Time Records
+    11. Rivalries
+    12. Playoff Analysis
+    13. League Health
+    14. Hall of Fame
+    15. Rival League
+
+====================================================================
+  1. LEAGUE HISTORY  |  Test League
+====================================================================
+    S  Champion                W-L         Runner-up          Pop  Era  Events
+--------------------------------------------------------------------
+    1  *Dallas Smoke            25-17       Palms              39%  BAL
+       MVP Bruno Graham 27.0  |  COY Takuma Fletcho NR +12.5
+    2  *Washington Sentries     25-17       Caimans            38%  BAL
+       MVP Nyla Collins 35.3  |  COY Fitch Singh d+0.0
+    3  *Miami Caimans           25-17       Palms              37%  BAL
+       MVP Nyla Collins 39.7  |  COY Fitch Singh d+0.0
+
+====================================================================
+  2. TEAM HISTORY
+====================================================================
+
+  Atlanta Phoenixes  —  All-time: 61-65  ·  0 titles
+--------------------------------------------------------------------
+    S  W-L             Playoff         Top Scorer
+--------------------------------------------------------------------
+    1  17–25 (40%)     Missed          Peyton Randton  21.4 PPG
+    2  24–18 (57%)     Missed          Peyton Randton  28.2 PPG
+    3  20–22 (48%)     Missed          Peyton Randton  24.2 PPG
+
+  Chicago Foxes  —  All-time: 49-77  ·  0 titles
+--------------------------------------------------------------------
+    S  W-L             Playoff         Top Scorer
+--------------------------------------------------------------------
+    1  17–25 (40%)     Missed          Daiki Pierce-Phe  15.6 PPG
+    2  18–24 (43%)     Missed          Daiki Pierce-Phe  17.6 PPG
+    3  14–28 (33%)     Missed          Daiki Pierce-Phe  20.6 PPG
+
+  Dallas Smoke  —  All-time: 67-59  ·  1 title
+--------------------------------------------------------------------
+    S  W-L             Playoff         Top Scorer
+--------------------------------------------------------------------
+    1  25–17 (60%)     Champion        Kenji Bjelkden  26.2 PPG  *
+    2  20–22 (48%)     Missed          Kenji Bjelkden  28.2 PPG
+    3  22–20 (52%)     Missed          Kenji Bjelkden  28.6 PPG
+
+  Houston Oilers  —  All-time: 68-58  ·  0 titles
+--------------------------------------------------------------------
+    S  W-L             Playoff         Top Scorer
+--------------------------------------------------------------------
+    1  23–19 (55%)     Missed          Alex Holtton  26.9 PPG
+    2  24–18 (57%)     Missed          Alex Holtton  35.5 PPG
+    3  21–21 (50%)     Missed          Alex Holtton  43.2 PPG
+
+  Los Angeles Palms  —  All-time: 66-60  ·  0 titles
+--------------------------------------------------------------------
+    S  W-L             Playoff         Top Scorer
+--------------------------------------------------------------------
+    1  24–18 (57%)     Finals          Morgan Walker-Sp  28.4 PPG
+    2  19–23 (45%)     Missed          Morgan Walker-Sp  28.7 PPG
+    3  23–19 (55%)     Finals          Morgan Walker-Sp  37.0 PPG
+
+  Miami Caimans  —  All-time: 72-54  ·  1 title
+--------------------------------------------------------------------
+    S  W-L             Playoff         Top Scorer
+--------------------------------------------------------------------
+    1  23–19 (55%)     Missed          Bruno Graham  27.0 PPG
+    2  24–18 (57%)     Finals          Bruno Graham  33.7 PPG
+    3  25–17 (60%)     Champion        Bruno Graham  34.7 PPG  *
+
+  New York Gotham  —  All-time: 54-72  ·  0 titles
+--------------------------------------------------------------------
+    S  W-L             Playoff         Top Scorer
+--------------------------------------------------------------------
+    1  20–22 (48%)     Missed          Kiah Verdast  26.7 PPG
+    2  14–28 (33%)     Missed          Kiah Verdast  26.3 PPG
+    3  20–22 (48%)     Missed          Kiah Verdast  27.8 PPG
+
+  Washington Sentries  —  All-time: 67-59  ·  1 title
+--------------------------------------------------------------------
+    S  W-L             Playoff         Top Scorer
+--------------------------------------------------------------------
+    1  19–23 (45%)     Missed          Nyla Collins  25.5 PPG
+    2  25–17 (60%)     Champion        Nyla Collins  35.3 PPG  *
+    3  23–19 (55%)     Missed          Nyla Collins  39.7 PPG
+
+====================================================================
+  3. PLAYER STATS  |  Season 3
+====================================================================
+
+  Season Scoring Leaders
+--------------------------------------------------------------------
+  Player                 Team                  PPG    FG%    3P%    FT%   GP  Miss
+--------------------------------------------------------------------
+  Alex Holtton           Oilers               43.2  43.9%  36.3%  81.7%   42  0
+  Nyla Collins           Sentries             39.7  44.3%  35.8%  81.1%   42  0
+  Morgan Walker-Spenfield Palms                37.0  52.1%  37.9%  83.9%   42  0
+  Bruno Graham           Caimans              34.7  47.7%  41.4%  81.6%   42  0
+  Kenji Bjelkden         Smoke                28.6  43.7%  32.7%  88.5%   27  15
+  Endy Chen              Palms                27.9  55.0%  41.1%  78.2%   27  15
+  Tigist Asantast        Caimans              27.9  52.0%  39.3%  83.9%   34  8
+  Kiah Verdast           Gotham               27.8  43.3%  34.2%  72.7%   42  0
+  Peyton Randton         Phoenixes            24.2  42.8%  33.9%  79.0%   35  7
+  Rodions Pierce         Smoke                23.8  45.8%  34.6%  76.5%   28  14
+  Leilani Thornford      Gotham               22.9  49.7%  43.5%  74.2%   42  0
+  Daiki Pierce-Phelpington Foxes                20.6  40.8%  31.0%  85.2%   42  0
+
+  Season Defensive Leaders  (lower Def Rtg = better)
+--------------------------------------------------------------------
+  Player                 Team                Def Rtg   Poss  Pts Allowed
+--------------------------------------------------------------------
+  Kenji Bjelkden         Smoke                  97.5   1043  1017
+  Endy Chen              Palms                  98.5   1170  1152
+  Kiah Verdast           Gotham                 98.9   1691  1672
+  Nyla Collins           Sentries               99.5   3497  3478
+  Bruno Graham           Caimans                99.8   1993  1990
+  Alex Holtton           Oilers                 99.9   3502  3500
+  Rodions Pierce         Smoke                 100.4   1237  1242
+  Leilani Thornford      Gotham                103.7   1742  1807
+  Morgan Walker-Spenfield Palms                 103.8   2313  2400
+  Peyton Randton         Phoenixes             104.4   1514  1580
+
+  Best Single Seasons All-Time — Scoring
+--------------------------------------------------------------------
+    S  Player                 Team                  PPG    FG%    3P%
+--------------------------------------------------------------------
+    3  Alex Holtton           Oilers               43.2  43.9%  36.3% *
+    3  Nyla Collins           Sentries             39.7  44.3%  35.8% *
+    3  Morgan Walker-Spenfield Palms                37.0  52.1%  37.9% *
+    2  Alex Holtton           Oilers               35.5  47.8%  42.7% *
+    2  Nyla Collins           Sentries             35.3  45.1%  39.7% *
+    3  Bruno Graham           Caimans              34.7  47.7%  41.4% *
+    2  Bruno Graham           Caimans              33.7  49.6%  42.1% *
+    3  Wei Moore-Ortolt       Foxes                32.2  39.8%  32.5% *
+    3  Imani Domlow           Phoenixes            32.0  49.6%  41.8% *
+    1  Wei Moore-Ortolt       Foxes                31.6  44.5%  40.8% *
+    2  Mei Choi-Velkren       Palms                29.7  51.7%  37.3% *
+    2  Morgan Walker-Spenfield Palms                28.7  51.9%  38.0% *
+
+  Best Single Seasons All-Time — Defense  (min 20 poss)
+--------------------------------------------------------------------
+    S  Player                 Team                Def Rtg   Poss
+--------------------------------------------------------------------
+    1  Bruno Graham           Caimans                94.8   1263
+    3  Kenji Bjelkden         Smoke                  97.5   1043
+    3  Endy Chen              Palms                  98.5   1170
+    1  Nyla Collins           Sentries               98.7   1342
+    3  Kiah Verdast           Gotham                 98.9   1691
+    1  Ezi Coulibaly          Caimans                98.9   1104
+    2  Nyla Collins           Sentries               99.2   2568
+    3  Wei Moore-Ortolt       Foxes                  99.3   1808
+    1  Teaira Cook-Gravton    Smoke                  99.4   1266
+    3  Nyla Collins           Sentries               99.5   3497
+
+  Career Scoring Leaders  (min 10 games)
+--------------------------------------------------------------------
+  Player                 Team                  PPG    FG%    3P%    GP
+--------------------------------------------------------------------
+  Alex Holtton           Oilers               35.5  45.5%  39.0%   121
+  Nyla Collins           Sentries             33.5  44.4%  37.5%   126
+  Morgan Walker-Spenfield Palms                31.9  52.2%  37.4%   105
+  Bruno Graham           Caimans              31.8  48.7%  41.2%   126
+  Wei Moore-Ortolt       Foxes                30.5  42.3%  36.8%   126
+  Imani Domlow           Phoenixes            28.0  47.3%  39.5%   126
+  Kenji Bjelkden         Smoke                27.5  44.3%  36.8%   111
+  Kiah Verdast           Gotham               27.0  44.8%  33.6%   126
+  Mei Choi-Velkren       Palms                26.6  52.3%  39.7%    84
+  Tigist Asantast        Caimans              25.9  52.2%  39.8%   118
+  Tremaine Spencer       Oilers               25.0  47.8%  39.7%    84
+  Peyton Randton         Phoenixes            24.6  43.7%  37.8%   119
+
+  Career Defensive Leaders  (min 30 poss defended)
+--------------------------------------------------------------------
+  Player                 Team                Def Rtg   Poss
+--------------------------------------------------------------------
+  Bruno Graham           Caimans                98.7   5135
+  Ezi Coulibaly          Caimans                98.9   1104
+  Nyla Collins           Sentries               99.2   7407
+  Teaira Cook-Gravton    Smoke                  99.4   1266
+  Alex Holtton           Oilers                100.2   6086
+  Endy Chen              Palms                 101.1   2937
+  Kenji Bjelkden         Smoke                 101.4   4321
+  Kiah Verdast           Gotham                102.0   4349
+  Leilani Thornford      Gotham                102.2   2953
+  Imani Domlow           Phoenixes             102.7   4844
+
+====================================================================
+  4. ROSTERS  |  Season 3
+====================================================================
+
+  Miami Caimans  Net +5.2  ORtg 117.3  DRtg 104.7
+  Slot     Name                   Pos   Age   ORtg   DRtg  Yrs    PPG    FG%   GP  Miss  Durability
+--------------------------------------------------------------------
+  Star     Bruno Graham           Guard  34   +7.6   -5.8    2   34.7  47.7%   42  0     Sturdy
+  Co-Star  Tigist Asantast        Big    26   +3.2   -1.3    3   27.9  52.0%   34  8     Glass
+  Starter  — empty
+
+  Houston Oilers  Net +1.8  ORtg 115.8  DRtg 106.7
+  Slot     Name                   Pos   Age   ORtg   DRtg  Yrs    PPG    FG%   GP  Miss  Durability
+--------------------------------------------------------------------
+  Star     Alex Holtton           Wing   31   +4.9   -3.0    3   43.2  43.9%   42  0     Glass
+  Co-Star  — empty
+  Starter  — empty
+
+  Atlanta Phoenixes  Net +1.0  ORtg 114.0  DRtg 105.7
+  Slot     Name                   Pos   Age   ORtg   DRtg  Yrs    PPG    FG%   GP  Miss  Durability
+--------------------------------------------------------------------
+  Star     — empty
+  Co-Star  Peyton Randton         Big    35   +1.7   -2.7    1   24.2  42.8%   35  7     Sturdy
+  Starter  — empty
+
+  Dallas Smoke  Net +0.8  ORtg 115.1  DRtg 107.0
+  Slot     Name                   Pos   Age   ORtg   DRtg  Yrs    PPG    FG%   GP  Miss  Durability
+--------------------------------------------------------------------
+  Star     Kenji Bjelkden         Guard  27   +6.3   -3.5    4   28.6  43.7%   27  15    Average
+  Co-Star  Rodions Pierce         Big    27   +3.6   -1.6    3   23.8  45.8%   28  14    Glass
+  Starter  — empty
+
+  Los Angeles Palms  Net -1.2  ORtg 112.8  DRtg 106.7
+  Slot     Name                   Pos   Age   ORtg   DRtg  Yrs    PPG    FG%   GP  Miss  Durability
+--------------------------------------------------------------------
+  Star     Morgan Walker-Spenfield Wing   35   +2.5   -0.9    2   37.0  52.1%   42  0     Sturdy
+  Co-Star  — empty
+  Starter  Endy Chen              Big    34   +4.4   -2.8    1   27.9  55.0%   27  15    Sturdy
+
+  Washington Sentries  Net -1.3  ORtg 114.8  DRtg 108.8
+  Slot     Name                   Pos   Age   ORtg   DRtg  Yrs    PPG    FG%   GP  Miss  Durability
+--------------------------------------------------------------------
+  Star     Nyla Collins           Guard  32   +2.9   -2.5    2   39.7  44.3%   42  0     Iron
+  Co-Star  — empty
+  Starter  — empty
+
+  Chicago Foxes  Net -2.7  ORtg 113.0  DRtg 108.4
+  Slot     Name                   Pos   Age   ORtg   DRtg  Yrs    PPG    FG%   GP  Miss  Durability
+--------------------------------------------------------------------
+  Star     — empty
+  Co-Star  — empty
+  Starter  Daiki Pierce-Phelpington Big    33   +3.4   -1.7    2   20.6  40.8%   42  0     Glass
+
+  New York Gotham  Net -3.4  ORtg 110.4  DRtg 106.5
+  Slot     Name                   Pos   Age   ORtg   DRtg  Yrs    PPG    FG%   GP  Miss  Durability
+--------------------------------------------------------------------
+  Star     Kiah Verdast           Big    32   +2.0   -1.0    3   27.8  43.3%   42  0     Iron
+  Co-Star  — empty
+  Starter  Leilani Thornford      Wing   31   +1.2   -1.6    1   22.9  49.7%   42  0     Glass
+
+====================================================================
+  5. POWER STRUCTURE
+====================================================================
+  Team                     Star                 Coach              Owner              Risk
+--------------------------------------------------------------------
+  Atlanta Phoenixes        P. Randton uneasy 1y content Motivator  Content winning    star flight
+  Houston Oilers           A. Holtton uneasy 3y content Offensive  Content winning    stable
+  New York Gotham          K. Verdast content 3 uneasy Defensive   Content local he   stable
+  Los Angeles Palms        M. Walker-Spen conte uneasy Offensive   Content money      stable
+  Chicago Foxes            D. Pierce-Phel conte uneasy Whisperer   Content local he   stable
+  Dallas Smoke             K. Bjelkden content  content Motivator  Content winning    stable
+  Miami Caimans            B. Graham uneasy 2yr content Culture    Content money      stable
+  Washington Sentries      N. Collins content 2 uneasy Culture     Content money      stable
+--------------------------------------------------------------------
+  0 fracture  ·  1 at risk  ·  7 stable
+
+====================================================================
+  6. OWNER DASHBOARD
+====================================================================
+  Team                       Owner                  Motivation    Happy       P&L  Threat
+--------------------------------------------------------------------
+  New York Gotham            Cornelia Blackwood III local hero      60%     +0.0M  Content
+  Los Angeles Palms          Thomasina Hanford      money           60%     +0.0M  Content
+  Chicago Foxes              Taft Cranston-Leigh    local hero      60%     +0.0M  Content
+  Dallas Smoke               Clarissa Landry III    winning         60%     +0.0M  Content
+  Houston Oilers             Lesley Bridgewater-Hunt IV winning         60%     +0.0M  Content
+  Miami Caimans              Prescott Bexley        money           60%     +0.0M  Content
+  Atlanta Phoenixes          Theodore Atkinson Jr.  winning         60%     +0.0M  Content
+  Washington Sentries        Mortimer Woodward      money           60%     +0.0M  Content
+--------------------------------------------------------------------
+  Avg happiness: 60%   League P&L: +0.0M   Demanding: 0
+
+====================================================================
+  7. COACH DASHBOARD & HISTORY
+====================================================================
+  Team                     Coach                  Arch         Happy   Yr  COY   ORtg   DRtg  Status
+--------------------------------------------------------------------
+  Miami Caimans            Takuma Fletchoz        Culture        67%    3   x1   +0.6   -0.6  
+  Houston Oilers           Mei Aguken             Offensive      63%    3    —   +1.9   +0.5  
+  Atlanta Phoenixes        Azurá Miller           Motivator      62%    3    —   +0.6   -0.6  
+  Dallas Smoke             Cade Rodrolu           Motivator      62%    3    —   +0.7   -0.7  
+  Los Angeles Palms        Jonquel Abanington     Offensive      59%    3    —   +1.7   +0.5  
+  Washington Sentries      Tanisha Fletchworth    Culture        60%    3    —   +1.2   -1.2  
+  Chicago Foxes            Gabriela Park          Whisperer      58%    3    —   +0.9   +0.2  
+  New York Gotham          Fitch Singh            Defensive      57%    3   x2   -0.5   -1.5  
+
+  Coach of the Year History
+--------------------------------------------------------------------
+    S  Coach                  Team                 Arch         Delta
+--------------------------------------------------------------------
+    1  Takuma Fletchoz        Miami Caimans        Culture      +12.5 NR
+    2  Fitch Singh            New York Gotham      Defensive    +0.0 NR
+    3  Fitch Singh            New York Gotham      Defensive    +0.0 NR
+
+  All Coaches (Career Records)
+--------------------------------------------------------------------
+  Name                   Arch        Seasons  W-L           Rings  COY  Status
+--------------------------------------------------------------------
+  Fitch Singh            Defensive         3  108-144           0    2  Active
+  Jonquel Abanington     Offensive         3  132-120           0    0  Active
+  Gabriela Park          Whisperer         3  98-154            0    0  Active
+  Cade Rodrolu           Motivator         3  134-118           1    0  Active
+  Mei Aguken             Offensive         3  136-116           0    0  Active
+  Takuma Fletchoz        Culture           3  144-108           1    1  Active
+  Azurá Miller           Motivator         3  122-130           0    0  Active
+  Tanisha Fletchworth    Culture           3  134-118           1    0  Active
+
+====================================================================
+  8. MARKET MAP
+====================================================================
+  City               Team                     Pop    FansM    Eng  Metro
+--------------------------------------------------------------------
+  New York           Gotham                   38%     8.0M    11%  21.0M
+  Los Angeles        Palms                    49%     6.2M    13%  12.7M
+  Dallas             Smoke                    50%     4.1M    12%  8.3M
+  Miami              Caimans                  56%     3.6M    13%  6.5M
+  Houston            Oilers                   42%     3.3M    10%  7.8M
+  Chicago            Foxes                    33%     3.1M     9%  9.4M
+  Washington         Sentries                 49%     3.0M    12%  6.2M
+  Atlanta            Phoenixes                36%     2.3M     9%  6.4M
+
+====================================================================
+  9. EVENT LOG
+====================================================================
+  No notable events yet.
+
+====================================================================
+  10. ALL-TIME RECORDS
+====================================================================
+
+  Championships & Finals
+--------------------------------------------------------------------
+   #  Team                         Ttls  Finals   Win%   RS#1    PO  Szns
+--------------------------------------------------------------------
+   1. Miami Caimans               *   1       2    50%      1     2     3
+   2. Dallas Smoke                *   1       1   100%      1     1     3
+   3. Washington Sentries         *   1       1   100%      1     1     3
+   4. Los Angeles Palms               0       2     0%      0     2     3
+   5. New York Gotham                 0       0    —        0     0     3
+   6. Chicago Foxes                   0       0    —        0     0     3
+   7. Houston Oilers                  0       0    —        0     0     3
+   8. Atlanta Phoenixes               0       0    —        0     0     3
+
+  Streaks & Droughts
+--------------------------------------------------------------------
+
+  Championship Dynasties
+--------------------------------------------------------------------
+  Team                          Len  Seasons
+  Dallas Smoke                    1  S1
+  Miami Caimans                   1  S3
+  Washington Sentries             1  S2
+
+  Championship Droughts
+--------------------------------------------------------------------
+  Team                          Len  Seasons
+  New York Gotham                 3  S1-S3
+  Los Angeles Palms               3  S1-S3
+  Chicago Foxes                   3  S1-S3
+  Houston Oilers                  3  S1-S3
+  Atlanta Phoenixes               3  S1-S3
+  Dallas Smoke                    2  S2-S3
+  Miami Caimans                   2  S1-S2
+  Washington Sentries             1  S1
+
+  Longest Playoff Streaks
+--------------------------------------------------------------------
+  Team                          Len  Seasons
+  Miami Caimans                   2  S2-S3
+  Los Angeles Palms               1  S1
+  Dallas Smoke                    1  S1
+  Washington Sentries             1  S2
+
+  Longest Playoff Droughts
+--------------------------------------------------------------------
+  Team                          Len  Seasons
+  New York Gotham                 3  S1-S3
+  Chicago Foxes                   3  S1-S3
+  Houston Oilers                  3  S1-S3
+  Atlanta Phoenixes               3  S1-S3
+  Dallas Smoke                    2  S2-S3
+  Los Angeles Palms               1  S2
+  Miami Caimans                   1  S1
+  Washington Sentries             1  S1
+
+  Best & Worst Seasons
+--------------------------------------------------------------------
+
+  Best Single Seasons
+--------------------------------------------------------------------
+    S  Franchise                 Record          W%
+    1  Dallas Smoke              25–17 (60%)     60% *
+    2  Washington Sentries       25–17 (60%)     60% *
+    3  Miami Caimans             25–17 (60%)     60% *
+    1  Los Angeles Palms         24–18 (57%)     57%
+    2  Houston Oilers            24–18 (57%)     57%
+    2  Miami Caimans             24–18 (57%)     57%
+    2  Atlanta Phoenixes         24–18 (57%)     57%
+    1  Houston Oilers            23–19 (55%)     55%
+    1  Miami Caimans             23–19 (55%)     55%
+    3  Los Angeles Palms         23–19 (55%)     55%
+
+  Worst Single Seasons
+--------------------------------------------------------------------
+    S  Franchise                 Record          W%
+    2  New York Gotham           14–28 (33%)     33%
+    3  Chicago Foxes             14–28 (33%)     33%
+    1  Chicago Foxes             17–25 (40%)     40%
+    1  Atlanta Phoenixes         17–25 (40%)     40%
+    2  Chicago Foxes             18–24 (43%)     43%
+    1  Washington Sentries       19–23 (45%)     45%
+    2  Los Angeles Palms         19–23 (45%)     45%
+    1  New York Gotham           20–22 (48%)     48%
+    2  Dallas Smoke              20–22 (48%)     48%
+    3  New York Gotham           20–22 (48%)     48%
+
+====================================================================
+  11. RIVALRIES
+====================================================================
+
+  Regular Season Head-to-Head
+--------------------------------------------------------------------
+   #  Team A                     Wins  Team B                     Wins  Games
+--------------------------------------------------------------------
+   1. New York Gotham               9  Los Angeles Palms             9     18
+   2. New York Gotham               9  Chicago Foxes                 9     18
+   3. New York Gotham               6  Dallas Smoke                 12     18
+   4. New York Gotham               6  Houston Oilers               12     18
+   5. New York Gotham               8  Miami Caimans                10     18
+   6. New York Gotham               9  Atlanta Phoenixes             9     18
+   7. New York Gotham               7  Washington Sentries          11     18
+   8. Los Angeles Palms            15  Chicago Foxes                 3     18
+   9. Los Angeles Palms             7  Dallas Smoke                 11     18
+  10. Los Angeles Palms             9  Houston Oilers                9     18
+  11. Los Angeles Palms             6  Miami Caimans                12     18
+  12. Los Angeles Palms            10  Atlanta Phoenixes             8     18
+  13. Los Angeles Palms            10  Washington Sentries           8     18
+  14. Chicago Foxes                 9  Dallas Smoke                  9     18
+  15. Chicago Foxes                 4  Houston Oilers               14     18
+  16. Chicago Foxes                 5  Miami Caimans                13     18
+  17. Chicago Foxes                10  Atlanta Phoenixes             8     18
+  18. Chicago Foxes                 9  Washington Sentries           9     18
+  19. Dallas Smoke                 10  Houston Oilers                8     18
+  20. Dallas Smoke                  6  Miami Caimans                12     18
+
+  Playoff Series Head-to-Head
+--------------------------------------------------------------------
+   #  Team A                      W  Team B                      W  Series
+--------------------------------------------------------------------
+   1. Los Angeles Palms           0  Dallas Smoke                1      1
+   2. Miami Caimans               0  Washington Sentries         1      1
+   3. Los Angeles Palms           0  Miami Caimans               1      1
+
+  Finals Matchups
+--------------------------------------------------------------------
+  Team A                      W  Team B                      W  Finals
+--------------------------------------------------------------------
+  Los Angeles Palms           0  Dallas Smoke                1      1
+  Miami Caimans               0  Washington Sentries         1      1
+  Los Angeles Palms           0  Miami Caimans               1      1
+
+====================================================================
+  12. PLAYOFF ANALYSIS
+====================================================================
+
+  Higher-Seed Win%  by Round
+--------------------------------------------------------------------
+  Round             Series   HS Wins   HS Win%
+--------------------------------------------------------------------
+  Finals                 3         3  100%
+--------------------------------------------------------------------
+  All rounds             3         3  100%
+
+  Series Length Distribution
+--------------------------------------------------------------------
+  Round                   3G
+--------------------------------------------------------------------
+  Finals            100%( 3)
+
+  Home Court Advantage
+--------------------------------------------------------------------
+  League overall home win%:  57.3%  (289/504 games)
+
+  By popularity tier:
+    Low (pop<0.33)       49.2%  (63 games)
+    Mid (0.33-0.60)      58.5%  (441 games)
+
+====================================================================
+  13. LEAGUE HEALTH
+====================================================================
+    S  Integrity    Parity       Drama        Entertainment   Pop
+--------------------------------------------------------------------
+    1  A+ 0.97      C  0.63      D  0.45      C+ 0.70         39%
+    2  A+ 0.97      B- 0.72      D  0.45      B- 0.71         38%
+    3  A+ 0.97      B- 0.72      D  0.49      C- 0.57         37%
+
+====================================================================
+  14. HALL OF FAME
+====================================================================
+  No inductees yet.
+
+====================================================================
+  15. RIVAL LEAGUE
+====================================================================
+  No rival league has formed yet.
