@@ -213,33 +213,97 @@ class _QuitSignal(Exception):
 _game_ref: "CommissionerGame | None" = None  # set in CommissionerGame.run()
 
 
+def _intercept(raw: str):
+    """Handle the global 'quit'/'reports' commands.
+
+    Returns the (unstripped) input, or None if a 'reports' command was handled
+    and the caller should re-prompt. Raises _QuitSignal on 'quit'/'q'.
+    """
+    low = raw.strip().lower()
+    if low in ("quit", "q"):
+        raise _QuitSignal()
+    if low in ("reports", "r") and _game_ref is not None:
+        # Use the in-progress season if available (e.g. during playoffs),
+        # otherwise fall back to the last completed season.
+        season = _game_ref._current_season
+        if season is None and _game_ref.league:
+            seasons = _game_ref.league.seasons
+            season  = seasons[-1] if seasons else None
+        if season is not None:
+            _game_ref._show_reports(season)
+        return None
+    return raw
+
+
+# ── Optional structured frontend (mobile touch UI) ────────────────────────────
+# When True (set by the mobile web bootstrap in mobile-worker.js), the input
+# helpers emit a structured prompt-request to the UI — so it can render buttons,
+# a text field, or a Continue button — and read the typed answer back over the
+# existing SharedArrayBuffer channel, instead of drawing a terminal prompt.
+# Default False leaves all terminal behavior byte-for-byte unchanged.
+_frontend_active = False
+
+import re as _re
+_ANSI_RE = _re.compile(r"\x1b\[[0-9;]*m")
+
+def _strip_ansi(text) -> str:
+    return _ANSI_RE.sub("", str(text))
+
+def _fe_emit(meta: dict) -> None:
+    """Post a structured prompt-request to the mobile UI (Pyodide-only)."""
+    from js import webPrompt          # injected by mobile-worker.js
+    import json as _json
+    webPrompt(_json.dumps(meta))
+
+def _fe_read(meta: dict = None) -> str:
+    """Block for one line from the mobile UI, honoring quit/reports intercept.
+
+    If `meta` is given, re-emit it after a 'reports' detour so the original
+    prompt (buttons / field / Continue) re-renders where the user left off.
+    """
+    from js import webReadInput       # injected by mobile-worker.js
+    while True:
+        got = _intercept(str(webReadInput()))
+        if got is not None:
+            return got.strip()
+        if meta is not None:
+            _fe_emit(meta)
+
+
 def prompt(msg: str) -> str:
     """Input helper. Intercepts 'quit'/'q' and 'reports'/'r' globally."""
+    if _frontend_active:
+        meta = {"kind": "text", "msg": _strip_ansi(msg)}
+        _fe_emit(meta)
+        return _fe_read(meta)
     while True:
-        raw = input(f"\n  {CYAN}▶ {msg}{RESET} ").strip()
-        low = raw.lower()
-        if low in ("quit", "q"):
-            raise _QuitSignal()
-        if low in ("reports", "r") and _game_ref is not None:
-            # Use the in-progress season if available (e.g. during playoffs),
-            # otherwise fall back to the last completed season.
-            season = _game_ref._current_season
-            if season is None and _game_ref.league:
-                seasons = _game_ref.league.seasons
-                season  = seasons[-1] if seasons else None
-            if season is not None:
-                _game_ref._show_reports(season)
-            # After returning from reports, re-prompt in context.
-            continue
-        return raw
+        raw = _intercept(input(f"\n  {CYAN}▶ {msg}{RESET} "))
+        if raw is not None:
+            return raw.strip()
 
 
 def press_enter(msg: str = "Press Enter to continue..."):
+    if _frontend_active:
+        meta = {"kind": "enter", "msg": _strip_ansi(msg)}
+        _fe_emit(meta)
+        _fe_read(meta)
+        return
     input(f"\n  {MUTED}{msg}{RESET}")
 
 def choose(options: list[str], title: str = "Choose an option", default: int = -1) -> int:
     """Present numbered options, return 0-based index.
     If default >= 0, pressing Enter selects that option."""
+    if _frontend_active:
+        meta = {"kind": "choose", "title": _strip_ansi(title),
+                "options": [_strip_ansi(o) for o in options], "default": default}
+        _fe_emit(meta)
+        while True:
+            raw = _fe_read(meta)
+            if raw == "" and default >= 0:
+                return default
+            if raw.isdigit() and 1 <= int(raw) <= len(options):
+                return int(raw) - 1
+            _fe_emit(meta)   # invalid (shouldn't happen with buttons) — re-request
     print(f"\n  {title}")
     for i, opt in enumerate(options, 1):
         dflt_tag = f"  {GOLD}← default{RESET}" if i - 1 == default else ""
@@ -5666,7 +5730,7 @@ class CommissionerGame:
                 print(f"  {MUTED}Owner selected based on fit.{RESET}")
             print()
 
-        input(f"  {MUTED}[Enter] continue{RESET}  ")
+        press_enter("[Enter] continue")
 
     # ── Player offseason ──────────────────────────────────────────────────────
 
@@ -6464,7 +6528,7 @@ class CommissionerGame:
         divider()
         n_total = len(self.league.hall_of_fame)
         print(f"\n  {MUTED}Hall of Fame all-time inductees: {n_total}{RESET}")
-        input(f"\n  {MUTED}[Enter] continue{RESET}  ")
+        press_enter("[Enter] continue")
 
     def _show_hall_of_fame(self, season: Season) -> None:
         """Hall of Fame report — rich per-inductee blocks matching the ceremony's celebration."""
@@ -6477,7 +6541,7 @@ class CommissionerGame:
 
         if not hof:
             print(f"\n  {MUTED}No inductees yet. Players become eligible one season after retirement.{RESET}\n")
-            input(f"  {MUTED}[Enter] back{RESET}  ")
+            press_enter("[Enter] back")
             return
 
         players = sorted([e for e in hof if e["type"] == "player"],
@@ -6551,7 +6615,7 @@ class CommissionerGame:
                 divider()
 
         print()
-        input(f"  {MUTED}[Enter] back{RESET}  ")
+        press_enter("[Enter] back")
 
     def _show_generational_prospect_preview(self, season: Season) -> None:
         """Announce next season's generational draft class and show ecosystem reaction.
@@ -6815,7 +6879,7 @@ class CommissionerGame:
 
         print()
         divider()
-        input(f"\n  {MUTED}[Enter] open commissioner's desk{RESET}  ")
+        press_enter("[Enter] open commissioner's desk")
 
     def _commissioner_desk(self, season: Season):
         """Always shown — proactive tools the commissioner can use each season."""

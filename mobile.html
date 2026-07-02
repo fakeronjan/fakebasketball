@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#141414" />
+  <title>Fake Basketball — Commissioner</title>
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:      #141414;
+      --panel:   #1c1c1c;
+      --ink:     #d4d4d4;
+      --muted:   #8a8a8a;
+      --gold:    #e8c56d;
+      --cyan:    #5dbbc1;
+      --green:   #73d08a;
+      --red:     #f47174;
+      --border:  #2c2c2c;
+      --btn:     #262626;
+      --btn-hi:  #313131;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+      overscroll-behavior: none;
+    }
+
+    /* App shell: header / scrollable log / sticky controls */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      max-width: 760px;          /* centers on the unfolded (wide) screen */
+      margin: 0 auto;
+    }
+
+    header {
+      flex: 0 0 auto;
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px calc(10px + env(safe-area-inset-top));
+      padding-top: max(10px, env(safe-area-inset-top));
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    header .title { font-size: 15px; font-weight: 600; color: var(--gold); flex: 1 1 auto; }
+    header button {
+      font: inherit; font-size: 13px;
+      background: var(--btn); color: var(--muted);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 7px 12px; min-height: 38px;
+    }
+    header button:active { background: var(--btn-hi); color: var(--ink); }
+    header button:disabled { opacity: 0.35; }
+
+    /* Game text — monospace, preserves table alignment, horizontally scrollable */
+    #log {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 12px 20px;
+      white-space: pre;
+      font-family: 'Cascadia Mono', 'Fira Mono', 'DejaVu Sans Mono', 'Courier New', monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--ink);
+    }
+
+    /* Controls — sticky bottom panel: buttons / text field / continue */
+    #controls {
+      flex: 0 0 auto;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+      display: flex; flex-direction: column; gap: 8px;
+      max-height: 55dvh; overflow-y: auto;
+    }
+    #controls .prompt-label {
+      font-size: 13px; color: var(--muted);
+      padding: 2px 2px 4px;
+    }
+    .opt-btn {
+      font: inherit; font-size: 15px; text-align: left;
+      background: var(--btn); color: var(--ink);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 13px 14px; min-height: 50px;
+      display: flex; align-items: center; gap: 10px;
+      width: 100%;
+    }
+    .opt-btn:active { background: var(--btn-hi); }
+    .opt-btn .num {
+      flex: 0 0 auto; color: var(--cyan); font-weight: 600;
+      min-width: 20px;
+    }
+    .opt-btn.is-default { border-color: var(--gold); }
+    .opt-btn.is-default .tag { margin-left: auto; color: var(--gold); font-size: 12px; }
+
+    .continue-btn {
+      font: inherit; font-size: 15px; font-weight: 600;
+      background: var(--btn); color: var(--gold);
+      border: 1px solid var(--gold); border-radius: 10px;
+      padding: 14px; min-height: 52px; width: 100%;
+    }
+    .continue-btn:active { background: var(--btn-hi); }
+
+    .text-row { display: flex; gap: 8px; }
+    .text-row input {
+      flex: 1 1 auto; font: inherit; font-size: 16px;   /* 16px avoids mobile zoom */
+      background: var(--bg); color: var(--ink);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; min-height: 50px;
+    }
+    .text-row button {
+      font: inherit; font-size: 15px; font-weight: 600;
+      background: var(--gold); color: #141414;
+      border: none; border-radius: 10px; padding: 0 18px; min-height: 50px;
+    }
+
+    /* Loading overlay */
+    #loading {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: var(--bg); gap: 12px; text-align: center; padding: 24px;
+    }
+    #loading-title  { font-size: 26px; color: var(--gold); letter-spacing: 0.03em; }
+    #loading-status { font-size: 13px; color: var(--muted); }
+    #loading-error  { font-size: 13px; color: var(--red); max-width: 520px; line-height: 1.6; white-space: pre-wrap; display: none; }
+
+    /* Wider layout when unfolded: options in a 2-col grid to use the space */
+    @media (min-width: 620px) {
+      #log { font-size: 13.5px; }
+      #controls.grid-opts { display: grid; grid-template-columns: 1fr 1fr; }
+      #controls.grid-opts .prompt-label { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div id="loading-title">🏀 Fake Basketball</div>
+  <div id="loading-status">Checking browser compatibility…</div>
+  <div id="loading-error"></div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <span class="title">🏀 Commissioner</span>
+    <button id="btn-reports" disabled>Reports</button>
+    <button id="btn-menu"    disabled>Menu</button>
+  </header>
+  <div id="log"></div>
+  <div id="controls"></div>
+</div>
+
+<script>
+// ── Cross-origin isolation setup (SharedArrayBuffer needs COOP/COEP) ──────────
+// On localhost, serve.py sets the headers. On a static host, coi-serviceworker.js
+// injects them and reloads once. Mirrors index.html's proven bootstrap.
+(function setupCOI() {
+  function showErr(msg) {
+    document.getElementById('loading-status').style.display = 'none';
+    const el = document.getElementById('loading-error');
+    el.style.display = 'block';
+    el.textContent = msg;
+  }
+  if (crossOriginIsolated) return;
+  if (location.protocol === 'file:') {
+    showErr('Open this through a web server, not as a local file.\n\n' +
+            'From the repo folder:\n  python3 serve.py\n\nThen open http://<your-computer-ip>:8000/mobile.html on the phone.');
+    return;
+  }
+  if (!('serviceWorker' in navigator)) {
+    showErr('Service workers are unavailable in this browser.');
+    return;
+  }
+  if (navigator.serviceWorker.controller) {
+    if (!sessionStorage.getItem('coi-reload')) {
+      sessionStorage.setItem('coi-reload', '1');
+      location.reload();
+    } else {
+      sessionStorage.removeItem('coi-reload');
+      showErr('Could not establish cross-origin isolation.\nFor local testing run: python3 serve.py');
+    }
+    return;
+  }
+  navigator.serviceWorker.register('./coi-serviceworker.js')
+    .catch((err) => showErr('Service worker registration failed:\n' + err));
+  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+})();
+</script>
+
+<script>
+if (!crossOriginIsolated) {
+  document.getElementById('loading-status').textContent = 'Initializing security context…';
+  throw new Error('Not yet cross-origin isolated — waiting for SW reload.');
+}
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const logEl      = document.getElementById('log');
+const controlsEl = document.getElementById('controls');
+const appEl      = document.getElementById('app');
+const btnReports = document.getElementById('btn-reports');
+const btnMenu    = document.getElementById('btn-menu');
+
+// ── Shared buffers (identical protocol to the terminal port) ──────────────────
+const controlSAB  = new SharedArrayBuffer(4);
+const inputSAB    = new SharedArrayBuffer(4 + 4092);
+const controlArr  = new Int32Array(controlSAB);
+const inputLenI32 = new Int32Array(inputSAB, 0, 1);
+const inputDataU8 = new Uint8Array(inputSAB, 4);
+const enc         = new TextEncoder();
+
+let awaitingInput = false;
+
+/** Send one line of input to the worker (wakes its Atomics.wait). */
+function sendInput(text) {
+  if (!awaitingInput) return;
+  awaitingInput = false;
+  controlsEl.innerHTML = '';
+  controlsEl.classList.remove('grid-opts');
+  btnReports.disabled = true;
+  btnMenu.disabled = true;
+  const encoded = enc.encode(String(text));
+  const len = Math.min(encoded.length, 4092);
+  inputLenI32[0] = len;
+  inputDataU8.set(encoded.subarray(0, len));
+  Atomics.store(controlArr, 0, 1);
+  Atomics.notify(controlArr, 0, 1);
+}
+
+// ── Text rendering (strip ANSI, honor clear) ──────────────────────────────────
+function stripAnsi(s) { return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ''); }
+
+function appendText(s) {
+  if (!s) return;
+  logEl.appendChild(document.createTextNode(stripAnsi(s)));
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function handlePrint(text) {
+  let idx;
+  // \x1b[2J = clear screen → wipe the log, keep what follows
+  while ((idx = text.indexOf('\x1b[2J')) !== -1) {
+    appendText(text.slice(0, idx));
+    logEl.textContent = '';
+    text = text.slice(idx + 4);
+  }
+  appendText(text);
+}
+
+// ── Prompt rendering ──────────────────────────────────────────────────────────
+function renderPrompt(meta) {
+  awaitingInput = true;
+  btnReports.disabled = false;
+  btnMenu.disabled = false;
+  controlsEl.innerHTML = '';
+  controlsEl.classList.remove('grid-opts');
+
+  if (meta.kind === 'choose') {
+    if (meta.title) {
+      const lbl = document.createElement('div');
+      lbl.className = 'prompt-label';
+      lbl.textContent = meta.title;
+      controlsEl.appendChild(lbl);
+    }
+    if (meta.options.length > 6) controlsEl.classList.add('grid-opts');
+    meta.options.forEach((opt, i) => {
+      const b = document.createElement('button');
+      b.className = 'opt-btn' + (i === meta.default ? ' is-default' : '');
+      const num = document.createElement('span');
+      num.className = 'num'; num.textContent = (i + 1);
+      const txt = document.createElement('span');
+      txt.textContent = opt;
+      b.appendChild(num); b.appendChild(txt);
+      if (i === meta.default) {
+        const tag = document.createElement('span');
+        tag.className = 'tag'; tag.textContent = 'default';
+        b.appendChild(tag);
+      }
+      b.addEventListener('click', () => sendInput(String(i + 1)));
+      controlsEl.appendChild(b);
+    });
+
+  } else if (meta.kind === 'text') {
+    const lbl = document.createElement('div');
+    lbl.className = 'prompt-label';
+    lbl.textContent = meta.msg || 'Enter a value';
+    controlsEl.appendChild(lbl);
+    const row = document.createElement('div');
+    row.className = 'text-row';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.autocomplete = 'off'; inp.autocapitalize = 'off';
+    const go = document.createElement('button');
+    go.textContent = 'OK';
+    const submit = () => sendInput(inp.value);
+    go.addEventListener('click', submit);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    row.appendChild(inp); row.appendChild(go);
+    controlsEl.appendChild(row);
+    inp.focus();
+
+  } else { // 'enter'
+    const b = document.createElement('button');
+    b.className = 'continue-btn';
+    b.textContent = (meta.msg && meta.msg.trim()) ? meta.msg.replace(/[\[\]]/g, '').trim() : 'Continue';
+    b.addEventListener('click', () => sendInput(''));
+    controlsEl.appendChild(b);
+  }
+}
+
+// Header shortcuts — only meaningful while the worker is awaiting input.
+btnReports.addEventListener('click', () => { if (awaitingInput) sendInput('reports'); });
+btnMenu.addEventListener('click', () => {
+  if (awaitingInput && confirm('Quit to save and exit the current league?')) sendInput('quit');
+});
+
+// ── Worker ─────────────────────────────────────────────────────────────────────
+const savedData = localStorage.getItem('fakebb_save') || null;
+const worker    = new Worker('./mobile-worker.js?v=20260702a');
+
+worker.onmessage = function (e) {
+  const msg = e.data;
+  switch (msg.type) {
+    case 'print':  handlePrint(msg.text); break;
+    case 'prompt': renderPrompt(JSON.parse(msg.meta)); break;
+    case 'status': document.getElementById('loading-status').textContent = msg.text; break;
+    case 'ready':
+      document.getElementById('loading').style.display = 'none';
+      appEl.style.display = 'flex';
+      break;
+    case 'save':
+      try { localStorage.setItem('fakebb_save', msg.data); } catch (_) {}
+      break;
+    case 'done':
+      awaitingInput = false;
+      controlsEl.innerHTML = '';
+      appendText('\n── Game ended. Refresh the page to start a new league. ──\n');
+      break;
+    case 'error':
+      document.getElementById('loading').style.display = 'none';
+      appEl.style.display = 'flex';
+      awaitingInput = false;
+      appendText('\n── Python error ──\n' + msg.text + '\n');
+      break;
+  }
+};
+worker.onerror = function (e) {
+  document.getElementById('loading').style.display = 'none';
+  appEl.style.display = 'flex';
+  appendText('\nWorker error: ' + (e.message || 'unknown') + '\n');
+};
+
+worker.postMessage({
+  type:          'init',
+  controlBuffer: controlSAB,
+  inputBuffer:   inputSAB,
+  savedData,
+});
+</script>
+
+</body>
+</html>
