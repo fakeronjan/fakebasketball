@@ -21,13 +21,14 @@
       --border:  #2c2c2c;
       --btn:     #262626;
       --btn-hi:  #313131;
+      --mono:    'Cascadia Mono', 'Fira Mono', 'DejaVu Sans Mono', 'Courier New', monospace;
     }
 
     html, body {
       height: 100%;
       background: var(--bg);
       color: var(--ink);
-      font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-family: var(--mono);   /* whole UI matches the terminal aesthetic */
       overscroll-behavior: none;
     }
 
@@ -66,8 +67,8 @@
       -webkit-overflow-scrolling: touch;
       padding: 12px 12px 20px;
       white-space: pre;
-      font-family: 'Cascadia Mono', 'Fira Mono', 'DejaVu Sans Mono', 'Courier New', monospace;
-      font-size: 12.5px;
+      font-family: var(--mono);
+      font-size: 12.5px;               /* starting size; fitLogFont() tunes per screen */
       line-height: 1.5;
       color: var(--ink);
     }
@@ -234,13 +235,43 @@ function sendInput(text) {
   Atomics.notify(controlArr, 0, 1);
 }
 
-// ── Text rendering (strip ANSI, honor clear) ──────────────────────────────────
+// ── Text rendering (strip ANSI, honor clear, auto-fit width) ──────────────────
 function stripAnsi(s) { return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ''); }
 
 function appendText(s) {
   if (!s) return;
   logEl.appendChild(document.createTextNode(stripAnsi(s)));
   logEl.scrollTop = logEl.scrollHeight;
+}
+
+// Measured width (in em) of one monospace character for the log's font.
+let _charEm = null;
+function charEm() {
+  if (_charEm) return _charEm;
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-size:100px';
+  probe.style.fontFamily = getComputedStyle(logEl).fontFamily;
+  probe.textContent = '0'.repeat(80);
+  document.body.appendChild(probe);
+  _charEm = probe.getBoundingClientRect().width / 80 / 100;   // width per char, per px of font-size
+  probe.remove();
+  return _charEm;
+}
+
+// Shrink/grow the log font so the widest line fits the screen (no cut-off).
+// Falls back to horizontal scroll only when even the min size can't fit.
+const LOG_MIN_PX = 8.5, LOG_MAX_PX = 15;
+function fitLogFont() {
+  const text = logEl.textContent;
+  if (!text || !logEl.clientWidth) return;
+  let maxCols = 0;
+  for (const line of text.split('\n')) if (line.length > maxCols) maxCols = line.length;
+  if (!maxCols) return;
+  const cs = getComputedStyle(logEl);
+  const avail = logEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  let px = avail / (maxCols * charEm());
+  px = Math.max(LOG_MIN_PX, Math.min(LOG_MAX_PX, px));
+  logEl.style.fontSize = px.toFixed(2) + 'px';
 }
 
 function handlePrint(text) {
@@ -252,7 +283,11 @@ function handlePrint(text) {
     text = text.slice(idx + 4);
   }
   appendText(text);
+  fitLogFont();
 }
+
+// Re-fit when the Fold opens/closes (viewport width changes).
+window.addEventListener('resize', fitLogFont);
 
 // ── Prompt rendering ──────────────────────────────────────────────────────────
 function renderPrompt(meta) {
@@ -287,7 +322,7 @@ function renderPrompt(meta) {
       controlsEl.appendChild(b);
     });
 
-  } else if (meta.kind === 'text') {
+  } else if (meta.kind === 'text' && !isEnterPrompt(meta.msg)) {
     const lbl = document.createElement('div');
     lbl.className = 'prompt-label';
     lbl.textContent = meta.msg || 'Enter a value';
@@ -305,13 +340,36 @@ function renderPrompt(meta) {
     controlsEl.appendChild(row);
     inp.focus();
 
-  } else { // 'enter'
-    const b = document.createElement('button');
-    b.className = 'continue-btn';
-    b.textContent = (meta.msg && meta.msg.trim()) ? meta.msg.replace(/[\[\]]/g, '').trim() : 'Continue';
-    b.addEventListener('click', () => sendInput(''));
-    controlsEl.appendChild(b);
+  } else {
+    // 'enter', or a text prompt that's really "press Enter to continue"
+    renderContinue(meta.msg);
   }
+}
+
+// A text prompt like "[Enter=next]:" is a continue, not a value entry.
+function isEnterPrompt(msg) { return /\[enter/i.test(msg || ''); }
+
+// Turn terminal continue-copy into a clean mobile button label.
+//   "Press Enter to meet your founding franchises..." → "Meet your founding franchises →"
+//   "[Enter] continue" → "Continue"   ·   "[Enter=next]:" → "Continue"
+function cleanEnterLabel(msg) {
+  if (!msg) return 'Continue';
+  let s = String(msg)
+    .replace(/\[[^\]]*\]/g, '')        // [Enter=next], [q] quit, …
+    .replace(/press enter to /ig, '')
+    .replace(/press enter/ig, '')
+    .replace(/[:.…\s]+$/, '')          // trailing punctuation / whitespace
+    .trim();
+  if (!s) return 'Continue';
+  return s.charAt(0).toUpperCase() + s.slice(1) + ' →';
+}
+
+function renderContinue(msg) {
+  const b = document.createElement('button');
+  b.className = 'continue-btn';
+  b.textContent = cleanEnterLabel(msg);
+  b.addEventListener('click', () => sendInput(''));
+  controlsEl.appendChild(b);
 }
 
 // Header shortcuts — only meaningful while the worker is awaiting input.
