@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Steam Checklist</title>
+  <style>
+    :root {
+      --bg: #141414;
+      --fg: #d8d8d8;
+      --muted: #8a8a8a;
+      --accent: #f0a030;
+      --done: #6fbf73;
+      --rule: #2c2c2c;
+      --mono: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--mono);
+      font-size: 15px;
+      line-height: 1.5;
+      padding: 24px 16px 64px;
+    }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 20px; color: var(--accent); margin-bottom: 12px; text-wrap: balance; }
+    .note { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+    h2 {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      font-size: 15px; margin: 28px 0 8px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--rule); text-wrap: balance;
+    }
+    h2 .count { color: var(--muted); font-weight: normal; font-size: 13px; white-space: nowrap; }
+    h2.complete .count { color: var(--done); }
+    ol { list-style: none; }
+    li label {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 7px 0; cursor: pointer;
+    }
+    li input {
+      appearance: none; flex: none;
+      width: 18px; height: 18px; margin-top: 2px;
+      border: 1px solid var(--muted); border-radius: 3px; background: transparent;
+      cursor: pointer; display: grid; place-content: center;
+    }
+    li input:checked { border-color: var(--done); background: var(--done); }
+    li input:checked::after { content: "✓"; color: var(--bg); font-size: 13px; font-weight: bold; line-height: 1; }
+    li .n { color: var(--muted); flex: none; min-width: 2.2em; text-align: right; }
+    li input:checked ~ .t { color: var(--muted); text-decoration: line-through; }
+    code { color: var(--accent); font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
+    .opt { color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Fake Basketball on Steam</h1>
+  <p class="note">Windows-only launch at $1.99</p>
+  <p class="note">The $100 fee starts a 30-day wait before release. The store page must be public as Coming Soon for at least 2 weeks before release.</p>
+  <p class="note">Checkmarks save in this browser only</p>
+
+  <section>
+    <h2><span>Phase 1: Sign up</span><span class="count"></span></h2>
+    <ol>
+      <li data-id="1">Pick the developer/publisher name shown on the store</li>
+      <li data-id="2">Search Steam to confirm no game is already called "Fake Basketball"</li>
+      <li data-id="3">Create a Steamworks account and sign the distribution agreement</li>
+      <li data-id="4">Enter bank info, W-9 tax form, and identity verification</li>
+      <li data-id="5">Pay the $100 fee (starts the 30-day clock, gives you an App ID)</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>Phase 2: Game work</span><span class="count"></span></h2>
+    <ol>
+      <li data-id="6">Remove the "Lakers" nickname option (<code>franchises.py:71</code>) and "NBA standard" text (<code>commissioner.py:953</code>)</li>
+      <li data-id="7">Decide which interface ships: terminal port, or the mobile touch shell adapted for desktop</li>
+      <li data-id="8">Wrap it in Electron and set the cross-origin headers in the shell</li>
+      <li data-id="9">Bundle Pyodide inside the app so it runs fully offline</li>
+      <li data-id="10">Move saves to the user's AppData folder</li>
+      <li data-id="11">Desktop polish: window title, app icon, resizing/fullscreen, clean quit</li>
+      <li data-id="12">Set up a Windows test machine (free Windows 11 VM via UTM)</li>
+      <li data-id="13">Build the Windows version and test it on that machine from scratch</li>
+      <li data-id="14">Upload the build to Steam with SteamPipe and set launch options</li>
+      <li data-id="15">Install through Steam on the test machine and play a full season</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>Phase 3: Store page</span><span class="count"></span></h2>
+    <ol>
+      <li data-id="16">Capsule art: header, small, main, vertical, library capsule, hero, logo</li>
+      <li data-id="17">At least 5 screenshots at 1920x1080</li>
+      <li data-id="18">Short and long descriptions</li>
+      <li data-id="19">Tags, genre, system requirements, $1.99 price</li>
+      <li data-id="20">Content-rating questionnaire</li>
+      <li data-id="21">Trailer <span class="opt">(optional)</span></li>
+      <li data-id="22">Submit the store page for review (Coming Soon starts the 2-week clock)</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span>Phase 4: Release</span><span class="count"></span></h2>
+    <ol>
+      <li data-id="23">Free Steam keys or a beta branch for a few friends <span class="opt">(optional)</span></li>
+      <li data-id="24">Submit the build for Valve's review</li>
+      <li data-id="25">Set the release date (at least 30 days after the fee and 2 weeks after Coming Soon)</li>
+      <li data-id="26">Release</li>
+      <li data-id="27">After launch: patch pipeline, read reviews and discussions</li>
+    </ol>
+  </section>
+</main>
+<script>
+  const KEY = "fb-steam-checklist";
+  let state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function updateCounts() {
+    document.querySelectorAll("section").forEach(sec => {
+      const boxes = sec.querySelectorAll("input");
+      const done = [...boxes].filter(b => b.checked).length;
+      sec.querySelector(".count").textContent = done + "/" + boxes.length;
+      sec.querySelector("h2").classList.toggle("complete", done === boxes.length);
+    });
+  }
+
+  document.querySelectorAll("li[data-id]").forEach(li => {
+    const id = li.dataset.id;
+    const label = document.createElement("label");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = !!state[id];
+    box.addEventListener("change", () => {
+      if (box.checked) state[id] = true; else delete state[id];
+      save();
+      updateCounts();
+    });
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = id + ".";
+    const t = document.createElement("span");
+    t.className = "t";
+    t.innerHTML = li.innerHTML;
+    label.append(box, n, t);
+    li.replaceChildren(label);
+  });
+  updateCounts();
+</script>
+</body>
+</html>
