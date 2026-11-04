@@ -7,7 +7,7 @@ Two Steam clocks set the order: paying the $100 fee starts a 30-day wait before 
 **Fee paid 2026-11-04. Earliest possible release: 2026-12-04.** Releasing that day means the store page goes public (Coming Soon) by 2026-11-20.
 
 ## Phase 1: Sign up (outside the game, do first)
-1. [ ] Pick the developer/publisher name shown on the store (e.g. "fakeronjan")
+1. [x] Pick the developer/publisher name shown on the store: fakeronjan for both
 2. [x] Search Steam to confirm no game is already called "Fake Basketball" (none found 2026-11-04)
 3. [x] Create a Steamworks account and sign the distribution agreement (https://partner.steamgames.com/steamdirect)
 4. [ ] Enter bank info, W-9 tax form, and identity verification (bank + tax done 2026-11-04, identity pending review)
