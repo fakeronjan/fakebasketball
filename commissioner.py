@@ -4,6 +4,7 @@
 import os
 import pickle
 import random
+import textwrap
 from collections import Counter
 
 from config import Config
@@ -8535,7 +8536,11 @@ class CommissionerGame:
         while True:
             clear()
             header("OWNER MEETING", f"After Season {sn}")
-            print(f"\n  {MUTED}{'':4}{'Owner':<22} {'Team':<20} {'Motivation':<12} {'Mood':<10} {'P&L':>8}  Status{RESET}\n")
+            # Column widths grow to fit the longest owner/team name on screen.
+            name_w = max([22] + [len(o.name) for _, o in owners_with_teams])
+            team_w = max([20] + [len(t.name) for t, _ in owners_with_teams])
+            idx_w  = len(str(len(owners_with_teams))) + 2   # "[1]" / "[10]"
+            print(f"\n  {MUTED}{'':{idx_w + 1}}{'Owner':<{name_w}} {'Team':<{team_w}} {'Motivation':<12} {'Mood':<10} {'P&L':>8}  Status{RESET}\n")
 
             for i, (team, owner) in enumerate(owners_with_teams, 1):
                 mood_c  = (GREEN if owner.happiness >= 0.55 else
@@ -8559,7 +8564,8 @@ class CommissionerGame:
                 else:
                     flag = ""
 
-                print(f"  {CYAN}[{i}]{RESET} {owner.name:<22} {MUTED}{team.name:<20} {mot_str:<12}{RESET} "
+                idx = f"[{i}]"
+                print(f"  {CYAN}{idx:<{idx_w}}{RESET} {owner.name:<{name_w}} {MUTED}{team.name:<{team_w}} {mot_str:<12}{RESET} "
                       f"{mood_c}{owner_happiness_label(owner.happiness):<10}{RESET} "
                       f"{pl_str:>18}  {status}{flag}")
 
@@ -8593,7 +8599,8 @@ class CommissionerGame:
                 print(f"\n  {GOLD}Watching — grievances on record:{RESET}")
                 for team, owner in lean_with_grievance:
                     print(f"  {MUTED}{owner.name} ({team.name}):{RESET}")
-                    print(f"    {owner.grievance}")
+                    for line in textwrap.wrap(owner.grievance, 76):
+                        print(f"    {line}")
 
             print()
             n_pending = len(self._owner_actions)

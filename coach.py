@@ -133,6 +133,10 @@ class Coach:
         return "her" if self.gender == "female" else "his"
 
     @property
+    def pronoun_obj(self) -> str:
+        return "her" if self.gender == "female" else "him"
+
+    @property
     def pronoun_cap(self) -> str:
         return "She" if self.gender == "female" else "He"
 

@@ -438,19 +438,19 @@ class League:
             flight_risk = star.happiness < 0.55 and star.motivation != MOT_LOYALTY
             if flight_risk and owner.motivation == OWNER_MOT_WINNING:
                 return (f"{p} is alarmed. {pp.capitalize()} franchise player is in the final year of {spp} deal "
-                        f"and {sp} does not look happy. Losing {sp} would mean starting over.")
+                        f"and {sp} does not look happy. Losing {star.pronoun_obj} would mean starting over.")
             elif flight_risk:
                 return (f"{p} is nervous about the roster. The best player on this team could walk "
                         f"at the end of the year and {owner.pronoun} has no clear plan.")
             elif owner.motivation == OWNER_MOT_WINNING:
                 return (f"{p} is watching {pp} star's contract situation closely. "
-                        f"The front office needs to show it can build around {sp}.")
+                        f"The front office needs to show it can build around {star.pronoun_obj}.")
 
         if star is not None and star.age >= 33 and owner.motivation == OWNER_MOT_WINNING:
             sp  = star.pronoun
             spp = star.pronoun_pos
             return (f"{p} knows the window is closing. {pp.capitalize()} best player won't be "
-                    f"at this level much longer, and the pipeline behind {sp} looks thin.")
+                    f"at this level much longer, and the pipeline behind {star.pronoun_obj} looks thin.")
 
         if roster and not any(pl.overall >= 6 for pl in roster):
             if owner.motivation == OWNER_MOT_WINNING:
@@ -466,7 +466,7 @@ class League:
                 return (f"{p} lost ${abs(owner.last_net_profit):.1f}M this season. "
                         f"{p} needs a bigger market or a leaner operation.")
             else:
-                return f"{p} is watching {pp} margins shrink. The economics of this market concern {owner.pronoun}."
+                return f"{p} is watching {pp} margins shrink. The economics of this market concern {owner.pronoun_obj}."
 
         elif owner.motivation == OWNER_MOT_WINNING:
             streak = team._consecutive_losing_seasons
