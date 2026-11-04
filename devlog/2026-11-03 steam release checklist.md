@@ -15,7 +15,7 @@ Two Steam clocks set the order: paying the $100 fee starts a 30-day wait before 
 
 ## Phase 2: Game work (during the 30 days)
 6. [ ] Remove the "Lakers" nickname option (`franchises.py:71`) and "NBA standard" text (`commissioner.py:953`)
-7. [ ] Decide which interface ships: terminal port, or the mobile touch shell adapted for desktop
+7. [x] Decide which interface ships: terminal version (decided 2026-11-04; touch UI can follow as a later update)
 8. [ ] Wrap it in Electron and set the cross-origin headers in the shell (drops the service-worker workaround)
 9. [ ] Bundle Pyodide inside the app so it runs fully offline
 10. [ ] Move saves to the user's AppData folder
