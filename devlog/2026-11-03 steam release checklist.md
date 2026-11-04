@@ -4,12 +4,14 @@ Plan: Windows-only launch at $1.99. Live copy at fakebasketball.com/checklist/ (
 
 Two Steam clocks set the order: paying the $100 fee starts a 30-day wait before release, and the store page must be public as "Coming Soon" for at least 2 weeks before release. Start both early and do the game work while they run.
 
+**Fee paid 2026-11-04. Earliest possible release: 2026-12-04.**
+
 ## Phase 1: Sign up (outside the game, do first)
 1. [ ] Pick the developer/publisher name shown on the store (e.g. "fakeronjan")
-2. [ ] Search Steam to confirm no game is already called "Fake Basketball"
-3. [ ] Create a Steamworks account and sign the distribution agreement
+2. [x] Search Steam to confirm no game is already called "Fake Basketball" (none found 2026-11-04)
+3. [x] Create a Steamworks account and sign the distribution agreement (https://partner.steamgames.com/steamdirect)
 4. [ ] Enter bank info, W-9 tax form, and identity verification
-5. [ ] Pay the $100 fee (starts the 30-day clock, gives you an App ID)
+5. [x] Pay the $100 fee (starts the 30-day clock, gives you an App ID)
 
 ## Phase 2: Game work (during the 30 days)
 6. [ ] Remove the "Lakers" nickname option (`franchises.py:71`) and "NBA standard" text (`commissioner.py:953`)

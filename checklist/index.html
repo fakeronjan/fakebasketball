@@ -51,6 +51,7 @@
     li input:checked ~ .t { color: var(--muted); text-decoration: line-through; }
     code { color: var(--accent); font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     .opt { color: var(--muted); }
+    a { color: var(--accent); overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
@@ -58,16 +59,17 @@
   <h1>Fake Basketball on Steam</h1>
   <p class="note">Windows-only launch at $1.99</p>
   <p class="note">The $100 fee starts a 30-day wait before release. The store page must be public as Coming Soon for at least 2 weeks before release.</p>
+  <p class="note">Fee paid 11/4/2026. Earliest possible release is 12/4/2026.</p>
   <p class="note">Checkmarks save in this browser only</p>
 
   <section>
     <h2><span>Phase 1: Sign up</span><span class="count"></span></h2>
     <ol>
       <li data-id="1">Pick the developer/publisher name shown on the store</li>
-      <li data-id="2">Search Steam to confirm no game is already called "Fake Basketball"</li>
-      <li data-id="3">Create a Steamworks account and sign the distribution agreement</li>
-      <li data-id="4">Enter bank info, W-9 tax form, and identity verification</li>
-      <li data-id="5">Pay the $100 fee (starts the 30-day clock, gives you an App ID)</li>
+      <li data-id="2" data-done>Search Steam to confirm no game is already called "Fake Basketball" (none found 11/4/2026)</li>
+      <li data-id="3" data-done>Create a Steamworks account and sign the distribution agreement at <a href="https://partner.steamgames.com/steamdirect">partner.steamgames.com/steamdirect</a></li>
+      <li data-id="4">Enter bank info, W-9 tax form, and identity verification in the <a href="https://partner.steamgames.com/">Steamworks dashboard</a></li>
+      <li data-id="5" data-done>Pay the $100 fee (starts the 30-day clock, gives you an App ID)</li>
     </ol>
   </section>
 
@@ -134,9 +136,9 @@
     const label = document.createElement("label");
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.checked = !!state[id];
+    box.checked = id in state ? state[id] : li.hasAttribute("data-done");
     box.addEventListener("change", () => {
-      if (box.checked) state[id] = true; else delete state[id];
+      state[id] = box.checked;
       save();
       updateCounts();
     });
