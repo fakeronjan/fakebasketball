@@ -14,7 +14,7 @@ Two Steam clocks set the order: paying the $100 fee starts a 30-day wait before 
 5. [x] Pay the $100 fee (starts the 30-day clock, gives you an App ID)
 
 ## Phase 2: Game work (during the 30 days)
-6. [ ] Remove the "Lakers" nickname option (`franchises.py:71`) and "NBA standard" text (`commissioner.py:953`)
+6. [x] Replace real team names and remove "NBA standard" text (done 2026-11-04). Rule: replace any name matching an ACTIVE team in the same city (any sport/level) or a DEFUNCT BASKETBALL team in the same city; college names replaced; defunct non-basketball names are OK to keep. Rival leagues block exact real city+name pairs (`_REAL_TEAM_PAIRS` in `rival.py`).
 7. [x] Decide which interface ships: terminal version (decided 2026-11-04; touch UI can follow as a later update)
 8. [ ] Wrap it in Electron and set the cross-origin headers in the shell (drops the service-worker workaround)
 9. [ ] Bundle Pyodide inside the app so it runs fully offline
