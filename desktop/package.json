@@ -1,0 +1,20 @@
+{
+  "name": "fake-basketball",
+  "productName": "Fake Basketball",
+  "version": "1.0.0",
+  "description": "Fake Basketball desktop build (Electron wrapper around the web port)",
+  "author": "fakeronjan",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "build-app": "node build-app.mjs",
+    "start": "node build-app.mjs && electron ."
+  },
+  "devDependencies": {
+    "electron": "44.9.2",
+    "electron-builder": "26.18.0",
+    "pyodide": "0.27.0",
+    "xterm": "5.3.0",
+    "xterm-addon-fit": "0.8.0"
+  }
+}

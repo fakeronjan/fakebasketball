@@ -16,9 +16,9 @@ Two Steam clocks set the order: paying the $100 fee starts a 30-day wait before 
 ## Phase 2: Game work (during the 30 days)
 6. [x] Replace real team names and remove "NBA standard" text (done 2026-11-04). Rule: replace any name matching an ACTIVE team in the same city (any sport/level) or a DEFUNCT BASKETBALL team in the same city; college names replaced; defunct non-basketball names are OK to keep. Rival leagues block exact real city+name pairs (`_REAL_TEAM_PAIRS` in `rival.py`).
 7. [x] Decide which interface ships: terminal version (decided 2026-11-04; touch UI can follow as a later update)
-8. [ ] Wrap it in Electron and set the cross-origin headers in the shell (drops the service-worker workaround)
-9. [ ] Bundle Pyodide inside the app so it runs fully offline
-10. [ ] Move saves to the user's AppData folder
+8. [x] Wrap it in Electron and set the cross-origin headers in the shell (done 2026-11-04: `desktop/`, Electron 44.9.2, app:// scheme with COOP/COEP; run with `cd desktop && npm start`)
+9. [x] Bundle Pyodide inside the app so it runs fully offline (done 2026-11-04: `desktop/build-app.mjs` vendors Pyodide 0.27.0 + xterm.js into `desktop/app/`; tested with all external requests blocked)
+10. [ ] Move saves to the user's AppData folder (already lands there via Electron's localStorage; a real save file is only needed for Steam Cloud)
 11. [ ] Desktop polish: window title, app icon, resizing/fullscreen, clean quit (no leftover "[q] quit" hints)
 12. [ ] Set up a Windows test machine (free Windows 11 VM via UTM)
 13. [ ] Build the Windows version and test it on that machine from scratch

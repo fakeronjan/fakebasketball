@@ -281,6 +281,8 @@ worker.onmessage = function (e) {
       break;
 
     case 'done':
+      // Desktop (Electron) build: close the app when the game exits.
+      if (window.fbDesktop) { window.fbDesktop.quit(); break; }
       term.write('\r\n\x1b[93m── Game ended. Refresh the page to start a new league. ──\x1b[0m\r\n');
       awaitingInput = false;
       break;
