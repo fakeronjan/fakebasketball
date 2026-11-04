@@ -47,6 +47,30 @@ _RIVAL_NICKNAMES = [
     "Monarchs", "Imperials", "Centurions", "Legions", "Raiders",
 ]
 
+# City + nickname pairs that match real teams (current or defunct). Each name
+# is fine on its own; only these exact combinations are skipped.
+_REAL_TEAM_PAIRS = {
+    ("Oklahoma City", "Thunder"), ("Oklahoma City", "Barons"),
+    ("Kansas City", "Monarchs"), ("Louisville", "Colonels"),
+    ("Nashville", "Titans"), ("Salt Lake City", "Stars"),
+    ("San Antonio", "Stars"), ("Memphis", "Express"),
+    ("Charlotte", "Knights"), ("Charlotte", "Eagles"),
+    ("Cleveland", "Barons"), ("Cleveland", "Rebels"),
+    ("Indianapolis", "Jets"), ("Detroit", "Titans"), ("Detroit", "Express"),
+    ("Minneapolis", "Wolves"), ("Tampa", "Bandits"),
+    ("Milwaukee", "Admirals"), ("Milwaukee", "Hawks"),
+    ("Omaha", "Lancers"), ("Boise", "Hawks"), ("Albuquerque", "Dukes"),
+    ("Sacramento", "Monarchs"), ("Denver", "Pioneers"), ("Denver", "Outlaws"),
+    ("Portland", "Thunder"),
+}
+
+
+def _pick_rival_nick(city: str, used_nicks: set) -> str:
+    pool = [n for n in _RIVAL_NICKNAMES if n not in used_nicks] or list(_RIVAL_NICKNAMES)
+    pool = [n for n in pool if (city, n) not in _REAL_TEAM_PAIRS] or pool
+    return random.choice(pool)
+
+
 # ── Rival player name pool (distinct from main league) ───────────────────────
 
 _FIRST_NAMES = [
@@ -188,10 +212,7 @@ def generate_rival_league(
     used_nicks: set[str] = set()
     teams: list[RivalTeam] = []
     for city in avail_cities[:n_teams]:
-        nick_pool = [n for n in _RIVAL_NICKNAMES if n not in used_nicks]
-        if not nick_pool:
-            nick_pool = list(_RIVAL_NICKNAMES)
-        nick = random.choice(nick_pool)
+        nick = _pick_rival_nick(city, used_nicks)
         used_nicks.add(nick)
         # Spread team strengths around the funding level
         t_strength = max(0.10, min(0.90, funding + random.gauss(0, 0.15)))
@@ -278,10 +299,7 @@ def generate_walkout_league(
     used_nicks: set[str] = set()
     teams: list[RivalTeam] = []
     for city in avail_cities[:n_teams]:
-        nick_pool = [n for n in _RIVAL_NICKNAMES if n not in used_nicks]
-        if not nick_pool:
-            nick_pool = list(_RIVAL_NICKNAMES)
-        nick = random.choice(nick_pool)
+        nick = _pick_rival_nick(city, used_nicks)
         used_nicks.add(nick)
         t_strength = max(0.20, min(0.75, 0.45 + random.gauss(0, 0.12)))
         teams.append(RivalTeam(city=city, nickname=nick, strength=t_strength))

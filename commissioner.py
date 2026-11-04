@@ -950,7 +950,7 @@ class CommissionerGame:
         print(f"\n  {BOLD}How long is each playoff series?{RESET}\n")
         series_opts = [
             (5, f"Best-of-5  {MUTED}(first to 3 wins){RESET}"),
-            (7, f"Best-of-7  {MUTED}(first to 4 wins · NBA standard){RESET}"),
+            (7, f"Best-of-7  {MUTED}(first to 4 wins){RESET}"),
         ]
         s_choice = choose([label for _, label in series_opts], default=1)
         series_length = series_opts[s_choice][0]
