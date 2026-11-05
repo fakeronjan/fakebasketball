@@ -8669,12 +8669,23 @@ class CommissionerGame:
                 prompt_suffix = f"  {RED}({n_pending} item(s) must be addressed){RESET}"
             else:
                 prompt_suffix = ""
-            raw = prompt(f"Enter an owner number to meet, or Enter to continue:{prompt_suffix}")
+            if n_pending:
+                raw = prompt(f"Enter an owner number to meet, or Enter for the next item:{prompt_suffix}")
+            else:
+                raw = prompt(f"Enter an owner number to meet, or Enter to continue:")
             if not raw:
                 if n_pending:
-                    # Cannot proceed until all pending actions are cleared
-                    continue
-                break   # proceed to agenda
+                    # Enter always advances: open the next item that needs a
+                    # response, in table order. Each item's own screen takes
+                    # Enter as its default decision.
+                    raw = next((str(i) for i, (t, _) in enumerate(owners_with_teams, 1)
+                                if t.team_id in self._owner_actions), "")
+                    if not raw:
+                        # Items for teams not on this list can't be opened here; drop them
+                        self._owner_actions.clear()
+                        break
+                else:
+                    break   # proceed to agenda
             if raw.isdigit():
                 idx = int(raw) - 1
                 if 0 <= idx < len(owners_with_teams):
