@@ -20,8 +20,8 @@ Two Steam clocks set the order: paying the $100 fee starts a 30-day wait before 
 9. [x] Bundle Pyodide inside the app so it runs fully offline (done 2026-11-04: `desktop/build-app.mjs` vendors Pyodide 0.27.0 + xterm.js into `desktop/app/`; tested with all external requests blocked)
 10. [x] Move saves to the user's AppData folder (done 2026-11-04: Electron keeps the save in %APPDATA%\Fake Basketball; closing the window saves first. A real save file is only needed if we add Steam Cloud)
 11. [x] Desktop polish (done 2026-11-04): app icon (`desktop/assets/`), bundled Cascadia Mono font, F11 / Alt+Enter fullscreen, Ctrl +/-/0 text size (remembered), window size/position remembered, single instance, closing the window saves first, standings W-L column fits 100+ wins
-12. [ ] Set up a Windows test machine (free Windows 11 VM via UTM)
-13. [ ] Build the Windows version and test it on that machine from scratch (build: `cd desktop && npm run dist:win` -> `desktop/dist/win-unpacked/`; builds on the Mac, icon embedded; not yet run on Windows)
+12. [x] Set up a Windows test machine (done 2026-11-05: UTM VM "Windows 11", Windows 11 ARM build 26300, ISO in `desktop/vm/`; `utmctl exec`/`file push`/`file pull` work via the guest agent)
+13. [x] Build the Windows version and test it on that machine from scratch (done 2026-11-05 in the VM: offline load, font, F11/Alt+Enter/Esc, Ctrl +/-/0, resize/maximize reflow, full season on Enter only, close-with-X saves in 0.6s, relaunch restores save + text size + window, Continue resumes at Season 2, single instance. Launch to menu ~9s in the VM under x64 emulation. Test runner lives at C:\fbtest in the VM)
 14. [ ] Upload the build to Steam with SteamPipe and set launch options
 15. [ ] Install through Steam on the test machine and play a full season
 
