@@ -6955,7 +6955,7 @@ class CommissionerGame:
             # Reason and note wrap in their own column (sized for the default
             # ~120-column window) so long text never breaks mid-word.
             name_w  = _TW(22)
-            indent  = 2 + name_w + 2 + 2 + 2 + 12 + 2
+            indent  = 2 + name_w + 2 + 1 + 2 + 12 + 2   # the terminal draws these emoji one cell wide
             text_w  = max(40, 118 - indent)
             lines   = textwrap.wrap(reason, text_w) or [""]
             if note:
