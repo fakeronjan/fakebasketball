@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Fake Basketball app icon: ball on the game's terminal background -->
+  <rect x="32" y="32" width="960" height="960" rx="200" fill="#141414"/>
+  <rect x="32" y="32" width="960" height="960" rx="200" fill="none" stroke="#2a2a2a" stroke-width="12"/>
+  <defs>
+    <radialGradient id="ball" cx="38%" cy="34%" r="70%">
+      <stop offset="0%" stop-color="#f29a4a"/>
+      <stop offset="70%" stop-color="#d9742a"/>
+      <stop offset="100%" stop-color="#b85a1c"/>
+    </radialGradient>
+    <clipPath id="c"><circle cx="512" cy="512" r="330"/></clipPath>
+  </defs>
+  <circle cx="512" cy="512" r="330" fill="url(#ball)"/>
+  <g clip-path="url(#c)" fill="none" stroke="#141414" stroke-width="22" stroke-linecap="round">
+    <line x1="512" y1="170" x2="512" y2="854"/>
+    <line x1="170" y1="512" x2="854" y2="512"/>
+    <path d="M 290 230 C 400 360, 400 664, 290 794"/>
+    <path d="M 734 230 C 624 360, 624 664, 734 794"/>
+  </g>
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#141414" stroke-width="10"/>
+  <!-- terminal cursor in the game's gold -->
+  <rect x="770" y="776" width="86" height="120" rx="10" fill="#e8c56d"/>
+</svg>

@@ -1335,7 +1335,9 @@ class CommissionerGame:
             top_p, top_s = max(candidates, key=lambda x: x[1].ppg)
             return top_p.name[:22], round(top_s.ppg, 1)
 
-        print(f"\n  {BOLD}{'#':>2}  {'Team':<{_TW(28)}} {'W–L':>5}  {'%':>4}  "
+        # Record column grows for 100+ win seasons ("100–44")
+        rec_w = max([5] + [len(f"{season.reg_wins(t)}–{season.reg_losses(t)}") for t in standings])
+        print(f"\n  {BOLD}{'#':>2}  {'Team':<{_TW(28)}} {'W–L':>{rec_w}}  {'%':>4}  "
               f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  {'Top Scorer':<26}{RESET}")
         divider()
         for i, team in enumerate(standings):
@@ -1352,13 +1354,13 @@ class CommissionerGame:
 
             # Record column — highlight best/worst
             if team is best_record:
-                rec_str = f"{GREEN}{BOLD}{record:>5}{RESET}"
+                rec_str = f"{GREEN}{BOLD}{record:>{rec_w}}{RESET}"
                 pct_str = f"{GREEN}{BOLD}{win_pct:.0%}{RESET}"
             elif team is worst_record:
-                rec_str = f"{RED}{record:>5}{RESET}"
+                rec_str = f"{RED}{record:>{rec_w}}{RESET}"
                 pct_str = f"{RED}{win_pct:.0%}{RESET}"
             else:
-                rec_str = f"{record:>5}"
+                rec_str = f"{record:>{rec_w}}"
                 pct_str = f"{MUTED}{win_pct:.0%}{RESET}"
 
             # PS/G — highlight top offense

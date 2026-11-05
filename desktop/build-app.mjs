@@ -37,6 +37,9 @@ html = replaceOnce(html, 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css
 html = replaceOnce(html, 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js', 'vendor/xterm/xterm.js', 'index.html');
 html = replaceOnce(html, 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js', 'vendor/xterm/xterm-addon-fit.js', 'index.html');
 if (/https?:\/\/cdn\./.test(html)) throw new Error('index.html still references a CDN');
+// Bundled font (Cascadia Mono, SIL OFL 1.1) and desktop-only behavior.
+html = replaceOnce(html, '</head>', '  <link rel="stylesheet" href="vendor/fonts/cascadia-mono.css" />\n</head>', 'index.html');
+html = replaceOnce(html, '</body>', '<script src="desktop-extras.js"></script>\n</body>', 'index.html');
 fs.writeFileSync(path.join(out, 'index.html'), html);
 
 // Vendored runtime files.
@@ -46,5 +49,21 @@ for (const f of ['pyodide.js', 'pyodide.asm.js', 'pyodide.asm.wasm', 'python_std
 fs.copyFileSync(path.join(nm, 'xterm', 'css', 'xterm.css'), path.join(out, 'vendor', 'xterm', 'xterm.css'));
 fs.copyFileSync(path.join(nm, 'xterm', 'lib', 'xterm.js'), path.join(out, 'vendor', 'xterm', 'xterm.js'));
 fs.copyFileSync(path.join(nm, 'xterm-addon-fit', 'lib', 'xterm-addon-fit.js'), path.join(out, 'vendor', 'xterm', 'xterm-addon-fit.js'));
+
+// Font: regular + bold, every unicode subset (box drawing lives in "symbols2").
+const fontPkg = path.join(nm, '@fontsource', 'cascadia-mono');
+const fontOut = path.join(out, 'vendor', 'fonts');
+fs.mkdirSync(path.join(fontOut, 'files'), { recursive: true });
+let css = '';
+for (const weight of ['400', '700']) {
+  const text = fs.readFileSync(path.join(fontPkg, `${weight}.css`), 'utf8');
+  css += text.replace(/, url\(\.\/files\/[^)]+\.woff\) format\('woff'\)/g, '') + '\n';
+  for (const m of text.matchAll(/url\(\.\/files\/([^)]+\.woff2)\)/g)) {
+    fs.copyFileSync(path.join(fontPkg, 'files', m[1]), path.join(fontOut, 'files', m[1]));
+  }
+}
+fs.writeFileSync(path.join(fontOut, 'cascadia-mono.css'), css);
+fs.copyFileSync(path.join(fontPkg, 'LICENSE'), path.join(fontOut, 'LICENSE-CascadiaMono.txt'));
+fs.copyFileSync(path.join(here, 'desktop-extras.js'), path.join(out, 'desktop-extras.js'));
 
 console.log(`app/ built: ${pyList.length} game files + Pyodide + xterm.js`);
