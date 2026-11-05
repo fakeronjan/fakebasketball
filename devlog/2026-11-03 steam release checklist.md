@@ -6,6 +6,8 @@ Two Steam clocks set the order: paying the $100 fee starts a 30-day wait before 
 
 **Fee paid 2026-11-04. Earliest possible release: 2026-12-04.** Releasing that day means the store page goes public (Coming Soon) by 2026-11-20.
 
+**Paused 2026-11-05 until Steam identity verification clears.** On resume: rebuild the Windows zip first (the current one predates the 11/5 polish fixes), then steps 14-15, then 18-20.
+
 ## Phase 1: Sign up (outside the game, do first)
 1. [x] Pick the developer/publisher name shown on the store: fakeronjan for both
 2. [x] Search Steam to confirm no game is already called "Fake Basketball" (none found 2026-11-04)
