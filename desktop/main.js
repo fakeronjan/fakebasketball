@@ -77,8 +77,8 @@ function serveApp(request) {
 function createWindow() {
   const saved = loadBounds() || {};
   win = new BrowserWindow({
-    width: saved.width || 1100,
-    height: saved.height || 760,
+    width: saved.width || 1280,
+    height: saved.height || 800,
     x: saved.x,
     y: saved.y,
     minWidth: 720,

@@ -2161,9 +2161,9 @@ class CommissionerGame:
                     if ps and ps.games > 0:
                         stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
                                     f"{ps.spg:.1f} SPG  {ps.bpg:.1f} BPG  "
-                                    f"({ppg_sign}{season.mip_ppg_delta:.1f} PPG vs last season)")
+                                    f"({ppg_sign}{season.mip_ppg_delta:.1f} PPG)")
                     else:
-                        stat_str = f"({ppg_sign}{season.mip_ppg_delta:.1f} PPG vs last season)"
+                        stat_str = f"({ppg_sign}{season.mip_ppg_delta:.1f} PPG)"
                 elif lbl == "ROY":
                     if ps and ps.games > 0:
                         stat_str = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  "
@@ -2192,7 +2192,7 @@ class CommissionerGame:
                 badge = _award_badge(lbl, p.player_id)
                 print(f"  {emoji} {GOLD}{lbl:<12}{RESET} "
                       f"{tc}{BOLD}{p.name:<{_PW(22)}}{RESET}  "
-                      f"{p.position} · {tname:<{_TW(24)}}"
+                      f"{p.position:<5} · {tname:<{_TW(24)}}"
                       f"  {MUTED}{stat_str}{RESET}  {p.trend}  {badge}")
 
             if season.coy:
@@ -5166,7 +5166,11 @@ class CommissionerGame:
                 self._defection_warning_shown.add(sn)
                 clear()
                 header("OWNERSHIP ALERT", f"Season {sn} — Confidential")
-                print(f"\n  {GOLD}⚠  {warning_msg}{RESET}\n")
+                wl = textwrap.wrap(warning_msg, 108) or [""]
+                print(f"\n  {GOLD}⚠  {wl[0]}{RESET}")
+                for extra in wl[1:]:
+                    print(f"     {GOLD}{extra}{RESET}")
+                print()
                 print(f"  You have one offseason to act. Keeping unhappy owners satisfied")
                 print(f"  or forcing an ownership change may prevent the split.")
                 press_enter()
@@ -5236,7 +5240,8 @@ class CommissionerGame:
             clear()
             header("RIVAL LEAGUE INTEL", f"Season {sn}")
             print(f"\n  {CYAN}Intelligence report — {rival.name}{RESET}\n")
-            print(f"  {intel}")
+            for iline in textwrap.wrap(str(intel), 110) or [""]:
+                print(f"  {iline}")
             if rival.funding_revealed and rival.formation_type == "external":
                 fl = rival_funding_label(rival.funding)
                 fc = RED if rival.funding >= 0.65 else (GOLD if rival.funding >= 0.40 else MUTED)
@@ -6947,12 +6952,17 @@ class CommissionerGame:
                 print()
             prev_sev = severity
 
-            name_col = f"{BOLD}{fname}{RESET}"
-            label_col = f"{color}{label}{RESET}"
-            reason_str = reason
+            # Reason and note wrap in their own column (sized for the default
+            # ~120-column window) so long text never breaks mid-word.
+            name_w  = _TW(22)
+            indent  = 2 + name_w + 2 + 2 + 2 + 12 + 2
+            text_w  = max(40, 118 - indent)
+            lines   = textwrap.wrap(reason, text_w) or [""]
             if note:
-                reason_str += f"  {MUTED}· {note}{RESET}"
-            print(f"  {name_col:<32}  {emoji}  {label_col:<22}  {MUTED}{reason_str}{RESET}")
+                lines += textwrap.wrap(f"· {note}", text_w)
+            print(f"  {BOLD}{fname:<{name_w}}{RESET}  {emoji}  {color}{label:<12}{RESET}  {MUTED}{lines[0]}{RESET}")
+            for extra in lines[1:]:
+                print(f"{' ' * indent}{MUTED}{extra}{RESET}")
 
         print()
         divider()
@@ -6997,16 +7007,21 @@ class CommissionerGame:
             options  = []
             handlers = []
 
+            def desk_row(label, key, val, val_c, risk, risk_c, reward, reward_c):
+                # Fixed-width columns so every row lines up
+                return (f"{label:<18}"
+                        f"{MUTED}{key:<6}{RESET}{val_c}{val:<9}{RESET}"
+                        f"{MUTED}Risk:{RESET} {risk_c}{risk:<8}{RESET}"
+                        f"{MUTED}Reward:{RESET} {reward_c}{reward}{RESET}")
+
             if not rule_change_used:
                 n_prev   = self._rule_changes_made
                 leg_cost = 0.02 + 0.01 * min(6, n_prev)
                 risk_c   = GREEN if n_prev < 3 else (GOLD if n_prev < 6 else RED)
                 risk_lbl = "Low" if n_prev < 3 else ("Medium" if n_prev < 6 else "High")
                 options.append(
-                    f"Rule change      "
-                    f"{MUTED}Leg:{RESET} {risk_c}-{leg_cost:.0%}    {RESET}"
-                    f"{MUTED}Risk:{RESET} {risk_c}{risk_lbl:<7}{RESET}"
-                    f"{MUTED}Reward:{RESET} {GOLD}Strong{RESET}"
+                    desk_row("Rule change", "Leg:", f"-{leg_cost:.0%}", risk_c,
+                             risk_lbl, risk_c, "Strong", GOLD)
                     + (f"  {MUTED}({n_prev} prior changes){RESET}" if n_prev > 0 else "")
                 )
                 handlers.append("rule_change")
@@ -7015,11 +7030,8 @@ class CommissionerGame:
                 can_showcase = self._treasury >= 25.0
                 budget_tag = "" if can_showcase else f"  {RED}(need $25M){RESET}"
                 options.append(
-                    f"Showcase event   "
-                    f"{MUTED}Cost:{RESET} {RED}$25M     {RESET}"
-                    f"{MUTED}Risk:{RESET} {GREEN}Low      {RESET}"
-                    f"{MUTED}Reward:{RESET} {GOLD}Medium{RESET}"
-                    f"{budget_tag}"
+                    desk_row("Showcase event", "Cost:", "$25M", RED, "Low", GREEN, "Medium", GOLD)
+                    + budget_tag
                 )
                 handlers.append("showcase" if can_showcase else None)
 
@@ -7027,28 +7039,19 @@ class CommissionerGame:
                 can_invest = self._treasury >= 75.0
                 budget_tag = "" if can_invest else f"  {RED}(need $75M){RESET}"
                 options.append(
-                    f"Invest in talent "
-                    f"{MUTED}Cost:{RESET} {RED}$75M     {RESET}"
-                    f"{MUTED}Risk:{RESET} {GREEN}Low      {RESET}"
-                    f"{MUTED}Reward:{RESET} {GREEN}High{RESET}"
-                    f"{budget_tag}"
+                    desk_row("Invest in talent", "Cost:", "$75M", RED, "Low", GREEN, "High", GREEN)
+                    + budget_tag
                 )
                 handlers.append("invest" if can_invest else None)
 
             if not revenue_sharing_set:
                 options.append(
-                    f"Revenue sharing  "
-                    f"{MUTED}Cost:{RESET} {GOLD}Varies   {RESET}"
-                    f"{MUTED}Risk:{RESET} {GREEN}Low      {RESET}"
-                    f"{MUTED}Reward:{RESET} {CYAN}Owner mood{RESET}"
+                    desk_row("Revenue sharing", "Cost:", "Varies", GOLD, "Low", GREEN, "Owner mood", CYAN)
                 )
                 handlers.append("revenue_sharing")
 
             options.append(
-                f"Schedule & format"
-                f"{MUTED}Cost:{RESET} {GREEN}Free     {RESET}"
-                f"{MUTED}Risk:{RESET} {GREEN}None     {RESET}"
-                f"{MUTED}Reward:{RESET} {MUTED}Config{RESET}"
+                desk_row("Schedule & format", "Cost:", "Free", GREEN, "None", GREEN, "Config", MUTED)
             )
             handlers.append("format")
 
@@ -8134,9 +8137,9 @@ class CommissionerGame:
   in talent this offseason — my money, not the league's. But I need
   your public endorsement to make it official.{RESET}"
 
-  {GREEN}[1] Endorse ($20M owner investment){RESET}  Talent boost next season. Owner {GREEN}+happy{RESET}.
+  {GREEN}[1] Endorse ($20M owner investment){RESET}     Talent boost next season. Owner {GREEN}+happy{RESET}.
   {GOLD}[2] Encourage without endorsing ($10M){RESET}  Smaller boost. Modest happiness.  {GOLD}← default{RESET}
-  {RED}[3] Decline{RESET}                            Owner {GOLD}frustrated{RESET}.
+  {RED}[3] Decline{RESET}                             Owner {GOLD}frustrated{RESET}.
 """)
             while True:
                 r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
@@ -8216,7 +8219,7 @@ class CommissionerGame:
   "{MUTED}Our community isn't fully behind us yet. A real promotional push —
   events, local media, outreach — could change that. I need you to fund it.{RESET}"
 
-  {GREEN}[1] Fund it ($8M){RESET}   Popularity {GREEN}+6%{RESET} · Engagement {GREEN}+3%{RESET} · Owner {GREEN}happy{RESET}.
+  {GREEN}[1] Fund it ($8M){RESET}    Popularity {GREEN}+6%{RESET} · Engagement {GREEN}+3%{RESET} · Owner {GREEN}happy{RESET}.
   {GOLD}[2] Half-fund ($4M){RESET}  Smaller boost.  {GOLD}← default{RESET}
   {RED}[3] Decline{RESET}          Owner {GOLD}disappointed{RESET}.
 """)
@@ -8255,8 +8258,8 @@ class CommissionerGame:
   "{MUTED}I've been thinking hard about my future here. This isn't working the
   way I hoped. I may be ready to step back and let someone else take over.{RESET}"
 
-  {GREEN}[1] Begin sale process{RESET}         Ownership transition initiated.
-  {GOLD}[2] Talk them out of it ($5M){RESET}   Show of confidence. Owner reconsiders.
+  {GREEN}[1] Begin sale process{RESET}           Ownership transition initiated.
+  {GOLD}[2] Talk them out of it ($5M){RESET}    Show of confidence. Owner reconsiders.
   {RED}[3] Acknowledge, delay{RESET}           Noted. Revisit next season.  {GOLD}← default{RESET}
 """)
             while True:
@@ -8357,7 +8360,7 @@ class CommissionerGame:
   tax incentives, infrastructure support. Your public backing would
   close this. It's good for the city and good for the franchise.{RESET}"
 
-  {GREEN}[1] Endorse publicly{RESET}   Treasury {GREEN}+$10M{RESET} (subsidy flows to league). Legitimacy {RED}−5%{RESET}.
+  {GREEN}[1] Endorse publicly{RESET}    Treasury {GREEN}+$10M{RESET} (subsidy flows to league). Legitimacy {RED}−5%{RESET}.
   {GOLD}[2] Stay neutral{RESET}        No effect either way.  {GOLD}← default{RESET}
   {RED}[3] Distance yourself{RESET}   Owner {GOLD}frustrated{RESET}. Small legitimacy signal.
 """)
@@ -8391,9 +8394,9 @@ class CommissionerGame:
 
   {RED}[1] Suspend & fine heavily{RESET}   Owner suspended 1 season. Legitimacy {GREEN}+8%{RESET}.
                                Owner {RED}furious{RESET}. Strong public message.
-  {GOLD}[2] Fine only{RESET}               Public fine, no suspension.  {GOLD}← default{RESET}
+  {GOLD}[2] Fine only{RESET}                Public fine, no suspension.  {GOLD}← default{RESET}
                                Legitimacy {GREEN}+3%{RESET}. Owner {RED}unhappy{RESET}.
-  {MUTED}[3] Ignore / bury it{RESET}        Legitimacy {RED}−12%{RESET}. League looks complicit.
+  {MUTED}[3] Ignore / bury it{RESET}         Legitimacy {RED}−12%{RESET}. League looks complicit.
 """)
             while True:
                 r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
@@ -8434,10 +8437,10 @@ class CommissionerGame:
   {incident.capitalize()}.
   {context}
 
-  {RED}[1] Public sanction{RESET}     Required apology + remediation program.
+  {RED}[1] Public sanction{RESET}      Required apology + remediation program.
                            Legitimacy {GREEN}+5%{RESET}. Players {GREEN}notice the response{RESET}. Owner {RED}unhappy{RESET}.
-  {GOLD}[2] Private reprimand{RESET}   Handle behind closed doors. No immediate effect.  {GOLD}← default{RESET}
-  {MUTED}[3] Ignore{RESET}             Legitimacy {RED}−8%{RESET}. Player morale {RED}−3%{RESET}. League looks complicit.
+  {GOLD}[2] Private reprimand{RESET}    Handle behind closed doors. No immediate effect.  {GOLD}← default{RESET}
+  {MUTED}[3] Ignore{RESET}               Legitimacy {RED}−8%{RESET}. Player morale {RED}−3%{RESET}. League looks complicit.
 """)
             while True:
                 r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
@@ -8466,11 +8469,11 @@ class CommissionerGame:
   The allegation: embezzlement of franchise funds for personal use.
 
   {RED}[1] Force immediate sale{RESET}      Ownership transition now.
-                               Legitimacy {GREEN}+10%{RESET}. Sends a clear message.
-  {GOLD}[2] Suspend pending review{RESET}   Owner suspended during investigation.  {GOLD}← default{RESET}
-                               Legitimacy {GREEN}+4%{RESET}. Outcome TBD.
-  {MUTED}[3] Ignore{RESET}                  Legitimacy {RED}−15%{RESET}.
-                               If fraud is later confirmed: catastrophic.
+                                Legitimacy {GREEN}+10%{RESET}. Sends a clear message.
+  {GOLD}[2] Suspend pending review{RESET}    Owner suspended during investigation.  {GOLD}← default{RESET}
+                                Legitimacy {GREEN}+4%{RESET}. Outcome TBD.
+  {MUTED}[3] Ignore{RESET}                    Legitimacy {RED}−15%{RESET}.
+                                If fraud is later confirmed: catastrophic.
 """)
             while True:
                 r = prompt("Decision [1/2/3] or Enter for [2]:").strip() or "2"
@@ -8742,7 +8745,10 @@ class CommissionerGame:
         mood_c = RED if owner.happiness < 0.35 else GOLD
         print(f"\n  {mood_c}{BOLD}{owner.name}{RESET}  {MUTED}— {fname} · {owner.motivation_label()}{RESET}\n")
         if owner.grievance:
-            print(f"  \"{owner.grievance}\"\n")
+            gl = textwrap.wrap(f"\"{owner.grievance}\"", 76) or [""]
+            for gline in gl:
+                print(f"  {gline}")
+            print()
 
         # Build options based on motivation
         options = []
@@ -9629,12 +9635,11 @@ class CommissionerGame:
                 inc_pop = incumbent.popularity if incumbent else 0.0
                 new_pop  = inc_pop * 0.20
                 kept_pop = inc_pop * 0.80
-                split_note = (
-                    f"  {RED}⚠ splits {f.city} market{RESET}  "
-                    f"{MUTED}{incumbent.franchise_at(sn).name} {inc_pop:.0%}→{kept_pop:.0%} · "
-                    f"new team starts ~{new_pop:.0%}{RESET}"
-                )
-                print(f"  {CYAN}[{i:2}]{RESET} {f.name:<{_TW(28)}} {metro:>5.1f}  {f.draw_factor:>4.2f}{split_note}")
+                # The split details go on their own line so the row never wraps
+                print(f"  {CYAN}[{i:2}]{RESET} {f.name:<{_TW(28)}} {metro:>5.1f}  {f.draw_factor:>4.2f}"
+                      f"  {RED}⚠ splits {f.city} market{RESET}")
+                print(f"       {MUTED}{incumbent.franchise_at(sn).name} {inc_pop:.0%}→{kept_pop:.0%} · "
+                      f"new team starts ~{new_pop:.0%}{RESET}")
             else:
                 print(f"  {CYAN}[{i:2}]{RESET} {f.name:<{_TW(28)}} {metro:>5.1f}  {f.draw_factor:>4.2f}")
 
