@@ -8434,7 +8434,7 @@ class CommissionerGame:
             print(f"""
   {RED}{BOLD}SCANDAL: {owner.name.upper()}{RESET}
 
-  {incident.capitalize()}.
+  {incident[:1].upper() + incident[1:]}.
   {context}
 
   {RED}[1] Public sanction{RESET}      Required apology + remediation program.
