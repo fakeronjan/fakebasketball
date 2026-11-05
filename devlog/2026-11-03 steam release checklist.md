@@ -26,7 +26,7 @@ Two Steam clocks set the order: paying the $100 fee starts a 30-day wait before 
 15. [ ] Install through Steam on the test machine and play a full season
 
 ## Phase 3: Store page (alongside Phase 2)
-16. [ ] Capsule art: header, small, main, vertical, library capsule, hero, logo (exact sizes in Steamworks)
+16. [x] Capsule art: header, small, main, vertical, library capsule, hero, logo (done 2026-11-05: direction A "Terminal", all 9 assets in `steam/capsules/`, generator in `steam/capsules/src/`)
 17. [x] At least 5 screenshots at 1920x1080 (done 2026-11-05: 9 picked, in `steam/screenshots/`)
 18. [ ] Short and long descriptions
 19. [ ] Tags, genre, system requirements, $1.99 price
