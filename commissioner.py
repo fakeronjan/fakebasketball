@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Commissioner Mode — interactive season-by-season league management."""
 
+import dataclasses
 import os
 import pickle
 import random
@@ -40,6 +41,7 @@ W = 58  # display width
 # ── Terminal helpers ──────────────────────────────────────────────────────────
 
 def clear():
+    _name_w_cache["key"] = None
     os.system("cls" if os.name == "nt" else "clear")
 
 def header(title: str, subtitle: str = ""):
@@ -55,6 +57,61 @@ def header(title: str, subtitle: str = ""):
     )
     hint = "[q] save & quit  ·  [r] reports" if has_reports else "[q] quit"
     print(f"  {MUTED}{hint}{RESET}")
+
+CUSTOM_NICKNAME_MAX = 24
+
+def _prompt_custom_nickname(city: str) -> str:
+    """Ask for a typed nickname. Returns "" if the player backs out with Enter."""
+    while True:
+        custom = prompt(f"{city} nickname (up to {CUSTOM_NICKNAME_MAX} characters, Enter to go back):").strip()
+        if not custom:
+            return ""
+        if len(custom) > CUSTOM_NICKNAME_MAX:
+            print(f"  {RED}That's {len(custom)} characters. Keep it to {CUSTOM_NICKNAME_MAX} or fewer.{RESET}")
+            continue
+        return custom
+
+
+# ── Name column widths ──────────────────────────────────────────────────────
+# Table columns that hold names widen to fit the longest name in the current
+# league, so long or custom names are never cut off or pushed out of line.
+# Each helper takes the column's original width as its minimum.
+_name_w_cache: dict = {"key": None, "w": {}}
+
+def _name_widths() -> dict:
+    lg = _game_ref.league if (_game_ref is not None and getattr(_game_ref, "league", None)) else None
+    if lg is None:
+        return {}
+    teams = list(lg.teams)
+    key = (id(lg), len(lg.seasons), len(teams), len(lg.free_agent_pool), len(lg.draft_pool),
+           len(lg.retired_players), tuple(t.franchise.nickname for t in teams))
+    if _name_w_cache["key"] == key:
+        return _name_w_cache["w"]
+    franchises = [f for t in teams for _, f in getattr(t, "franchise_history", [(0, t.franchise)])]
+    franchises += [t.franchise for t in teams] + list(getattr(lg, "reserve_pool", []))
+    rival_names = []
+    for rl in [getattr(lg, "rival_league", None)] + list(getattr(lg, "rival_league_history", [])):
+        if rl is not None:
+            rival_names += [f"{rt.city} {rt.nickname}" for rt in rl.teams]
+    players = [p for t in teams for p in t.roster if p is not None]
+    players += list(lg.free_agent_pool) + list(lg.draft_pool) + list(lg.retired_players)
+    coaches = list(getattr(lg, "_all_coaches", [])) + [t.coach for t in teams if getattr(t, "coach", None)]
+    owners = [t.owner for t in teams if getattr(t, "owner", None)]
+    w = {
+        "team":   max([len(f.name) for f in franchises] + [len(n) for n in rival_names] + [0]),
+        "nick":   max([len(f.nickname) for f in franchises] + [0]),
+        "player": max([len(p.name) for p in players] + [0]),
+        "coach":  max([len(c.name) for c in coaches] + [0]),
+        "owner":  max([len(o.name) for o in owners] + [0]),
+    }
+    _name_w_cache["key"], _name_w_cache["w"] = key, w
+    return w
+
+def _TW(n: int) -> int: return max(n, _name_widths().get("team", 0))
+def _NW(n: int) -> int: return max(n, _name_widths().get("nick", 0))
+def _PW(n: int) -> int: return max(n, _name_widths().get("player", 0))
+def _CW(n: int) -> int: return max(n, _name_widths().get("coach", 0))
+def _OW(n: int) -> int: return max(n, _name_widths().get("owner", 0))
 
 def divider():
     print(f"{MUTED}{'─' * W}{RESET}")
@@ -806,13 +863,13 @@ class CommissionerGame:
                         print()
                         pick = prompt(f"Pick 1–{len(opts)}, [c] for custom, or Enter to keep:").strip().lower()
                         if pick == "c":
-                            custom = prompt(f"{f.city} nickname:").strip()
+                            custom = _prompt_custom_nickname(f.city)
                             if custom:
                                 f.nickname = custom
                         elif pick.isdigit() and 1 <= int(pick) <= len(opts):
                             f.nickname = opts[int(pick) - 1]
                     else:
-                        custom = prompt(f"{f.city} nickname (Enter to keep):").strip()
+                        custom = _prompt_custom_nickname(f.city)
                         if custom:
                             f.nickname = custom
 
@@ -1017,7 +1074,7 @@ class CommissionerGame:
                           f"{MUTED}{flex_lbl} · {hor_lbl} · rating {c.rating:.0%}{fp_note}{RESET}")
 
                 print(f"  {MUTED}{'─' * 80}{RESET}")
-                print(f"  {'Slot':<9} {'Name':<22} {'Pos':<5} {'Age':>3}  "
+                print(f"  {'Slot':<9} {'Name':<{_PW(22)}} {'Pos':<5} {'Age':>3}  "
                       f"{'ORtg':>5}  {'DRtg':>5}  {'Zone':<6}  {'Ceiling':<7}  {'Mood':<4}  Motivation")
 
                 for idx, player in enumerate(t.roster):
@@ -1029,7 +1086,7 @@ class CommissionerGame:
                         mot_c = (GREEN if player.motivation == MOT_WINNING
                                  else GOLD if player.motivation == MOT_MARKET else CYAN)
                         print(f"  {MUTED}{slot_lbl:<9}{RESET}"
-                              f"{tc}{player.name:<22}{RESET}"
+                              f"{tc}{player.name:<{_PW(22)}}{RESET}"
                               f" {player.position:<5} {player.age:>3}"
                               f"  {player.ortg_contrib:>+5.1f}  {player.drtg_contrib:>+5.1f}"
                               f"  {player.preferred_zone:<6}"
@@ -1278,7 +1335,7 @@ class CommissionerGame:
             top_p, top_s = max(candidates, key=lambda x: x[1].ppg)
             return top_p.name[:22], round(top_s.ppg, 1)
 
-        print(f"\n  {BOLD}{'#':>2}  {'Team':<28} {'W–L':>5}  {'%':>4}  "
+        print(f"\n  {BOLD}{'#':>2}  {'Team':<{_TW(28)}} {'W–L':>5}  {'%':>4}  "
               f"{'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  {'Top Scorer':<26}{RESET}")
         divider()
         for i, team in enumerate(standings):
@@ -1287,7 +1344,7 @@ class CommissionerGame:
             fname = team.franchise_at(sn).name
             record   = f"{rw}–{rl}"
             win_pct  = rw / (rw + rl) if (rw + rl) else 0.0
-            padded   = f"{fname:<28}"
+            padded   = f"{fname:<{_TW(28)}}"
             ppg  = season.team_ppg(team)
             papg = season.team_papg(team)
             diff = ppg - papg
@@ -1344,7 +1401,7 @@ class CommissionerGame:
                 for p, t, s in ranked:
                     tc    = GOLD if p is season.mvp else (CYAN if p.peak_overall >= 14 else "")
                     val   = fmt.format(key_fn(s))
-                    tname = t.franchise_at(season.number).nickname[:14]
+                    tname = t.franchise_at(season.number).nickname
                     parts.append(f"{tc}{p.name}{RESET}  {MUTED}{val}  {tname}{RESET}")
                 print(f"  {GOLD}{label:<6}{RESET}  " + "   ".join(parts))
 
@@ -1371,17 +1428,17 @@ class CommissionerGame:
         if injured:
             print()
             print(f"  {BOLD}{'NOTABLE INJURIES':^60}{RESET}")
-            print(f"  {MUTED}{'Player':<22} {'Team':<20} {'Slot':<8} {'Missed':>6}  {'Dur':<7}  {'Nrg':>5}{RESET}")
+            print(f"  {MUTED}{'Player':<{_PW(22)}} {'Team':<{_NW(20)}} {'Slot':<8} {'Missed':>6}  {'Dur':<7}  {'Nrg':>5}{RESET}")
             divider()
             for p, t, gm in sorted(injured, key=lambda x: -x[2]):
-                tname = t.franchise_at(sn).nickname[:18]
+                tname = t.franchise_at(sn).nickname
                 dur_c = (GREEN if p.durability >= 0.88 else
                          CYAN  if p.durability >= 0.75 else
                          MUTED if p.durability >= 0.62 else RED)
                 nrg = (1 - p.fatigue) * 100
                 fat_c = RED if nrg < 60 else (GOLD if nrg < 80 else MUTED)
                 slot_lbl = t.slot_label(t.roster.index(p)) if p in t.roster else "—"
-                print(f"  {p.name:<22} {MUTED}{tname:<20}{RESET}"
+                print(f"  {p.name:<{_PW(22)}} {MUTED}{tname:<{_NW(20)}}{RESET}"
                       f" {MUTED}{slot_lbl:<8}{RESET}"
                       f" {RED}{gm:>5} gms{RESET}"
                       f"  {dur_c}{durability_label(p.durability):<7}{RESET}"
@@ -1400,10 +1457,10 @@ class CommissionerGame:
         if fatigue_rows:
             print()
             print(f"  {BOLD}{'PLAYOFF-BOUND READINESS':^60}{RESET}")
-            print(f"  {MUTED}{'Player':<22} {'Team':<20} {'Slot':<8}  {'Nrg':>5}  {'Dur':<7}  {'Form':<4}{RESET}")
+            print(f"  {MUTED}{'Player':<{_PW(22)}} {'Team':<{_NW(20)}} {'Slot':<8}  {'Nrg':>5}  {'Dur':<7}  {'Form':<4}{RESET}")
             divider()
             for p, t, fat in fatigue_rows:
-                tname = t.franchise_at(sn).nickname[:18]
+                tname = t.franchise_at(sn).nickname
                 slot_lbl = t.slot_label(t.roster.index(p)) if p in t.roster else "—"
                 nrg = (1 - fat) * 100
                 fat_c = RED if nrg < 60 else (GOLD if nrg < 80 else MUTED)
@@ -1414,7 +1471,7 @@ class CommissionerGame:
                 form_c = (GREEN if flbl == "Hot" else
                           RED   if flbl == "Cold" else
                           GOLD  if flbl == "Cool" else MUTED)
-                print(f"  {p.name:<22} {MUTED}{tname:<20}{RESET}"
+                print(f"  {p.name:<{_PW(22)}} {MUTED}{tname:<{_NW(20)}}{RESET}"
                       f" {MUTED}{slot_lbl:<8}{RESET}"
                       f"  {fat_c}🔋 {nrg:>3.0f}%{RESET}"
                       f"  {dur_c}{durability_label(p.durability):<7}{RESET}"
@@ -1521,7 +1578,7 @@ class CommissionerGame:
                       RED   if flbl == "Cold" else
                       GOLD  if flbl == "Cool" else MUTED)
             form_s = f"{form_c}{flbl}{RESET}"
-            return (f"{indent}{lbl}  {tc}{p.name:<22}{RESET}  "
+            return (f"{indent}{lbl}  {tc}{p.name:<{_PW(22)}}{RESET}  "
                     f"{MUTED}{p.position:<3}{RESET}  {stat_str}{miss_s}  {fat_s}  {form_s}")
 
         def _coach_row(t: Team, indent: str) -> str:
@@ -1536,7 +1593,7 @@ class CommissionerGame:
             coy_s     = f"  {GOLD}{c.coy_wins}× COY{RESET}" if c.coy_wins else ""
             hot_s     = f"  {RED}🔥 hot seat{RESET}" if c.hot_seat else ""
             fp_s      = f"  {MUTED}ex-player{RESET}" if c.former_player else ""
-            return (f"{indent}📋  {CYAN}{c.name:<22}{RESET}  "
+            return (f"{indent}📋  {CYAN}{c.name:<{_CW(22)}}{RESET}  "
                     f"{arch:<22}  {net_c}{net_delta:>+.1f} net{RESET}{coy_s}{hot_s}{fp_s}")
 
         def _team_block(t: Team, seed_idx: int, indent: str) -> None:
@@ -1715,7 +1772,7 @@ class CommissionerGame:
                         fat_c = RED if _nrg < 60 else (GOLD if _nrg < 80 else MUTED)
                         fat_str = f"  {fat_c}🔋 {_nrg:>3.0f}%{RESET}"
                         print(f"       {MUTED}{lbl:<9}{RESET}"
-                              f"{happiness_emoji(player.happiness)} {tc}{player.name:<22}{RESET}"
+                              f"{happiness_emoji(player.happiness)} {tc}{player.name:<{_PW(22)}}{RESET}"
                               f"  {player.position:<5} {player.age:>2}"
                               f"{stat_str}"
                               f"{gm_str}"
@@ -1871,8 +1928,8 @@ class CommissionerGame:
             upset = bool(w_seed and l_seed and w_seed > l_seed)
             upset_tag = f"  {RED}UPSET{RESET}" if upset else ""
 
-            print(f"  {wseed_tag}{BOLD}{wname:<24}{RESET} def. "
-                  f"{lseed_tag}{lname:<24} "
+            print(f"  {wseed_tag}{BOLD}{wname:<{_TW(24)}}{RESET} def. "
+                  f"{lseed_tag}{lname:<{_TW(24)}} "
                   f"{GOLD}{w_wins}–{l_wins}{RESET}{drama_tag}{upset_tag}")
 
         # If this is the Finals, crown the champion
@@ -1959,7 +2016,7 @@ class CommissionerGame:
             diff   = ppg - papg
             diff_c = GREEN if diff > 0 else (RED if diff < 0 else MUTED)
 
-            padded = f"{fname:<28}"
+            padded = f"{fname:<{_TW(28)}}"
             if team is champ:
                 name_str   = f"{GOLD}{BOLD}{padded}{RESET}"
                 result_str = f"{GOLD}★ Champion{RESET}"
@@ -2002,8 +2059,8 @@ class CommissionerGame:
                     w_score = clinch.home_score if clinch.home is winner else clinch.away_score
                     l_score = clinch.away_score if clinch.home is winner else clinch.home_score
                     upset_tag = f"  {RED}UPSET{RESET}" if (w_seed < 99 and l_seed < 99 and w_seed > l_seed) else ""
-                    print(f"    {CYAN}({w_seed}){RESET} {wname:<24} def. "
-                          f"{CYAN}({l_seed}){RESET} {lname:<24} "
+                    print(f"    {CYAN}({w_seed}){RESET} {wname:<{_TW(24)}} def. "
+                          f"{CYAN}({l_seed}){RESET} {lname:<{_TW(24)}} "
                           f"{GOLD}{w_wins}–{l_wins}{RESET}  "
                           f"{MUTED}clinch {w_score}–{l_score}{RESET}{upset_tag}")
 
@@ -2120,8 +2177,8 @@ class CommissionerGame:
 
                 badge = _award_badge(lbl, p.player_id)
                 print(f"  {emoji} {GOLD}{lbl:<12}{RESET} "
-                      f"{tc}{BOLD}{p.name:<22}{RESET}  "
-                      f"{p.position} · {tname:<24}"
+                      f"{tc}{BOLD}{p.name:<{_PW(22)}}{RESET}  "
+                      f"{p.position} · {tname:<{_TW(24)}}"
                       f"  {MUTED}{stat_str}{RESET}  {p.trend}  {badge}")
 
             if season.coy:
@@ -2135,8 +2192,8 @@ class CommissionerGame:
                               else f"{season.coy_delta:>+.1f} net rtg improvement")
                 coy_badge = _award_badge("COY", coy.coach_id)
                 print(f"  📋 {GOLD}{'Coach of Yr':<12}{RESET} "
-                      f"{CYAN}{BOLD}{coy.name:<22}{RESET}  "
-                      f"{arch_lbl} · {ctname:<24}"
+                      f"{CYAN}{BOLD}{coy.name:<{_CW(22)}}{RESET}  "
+                      f"{arch_lbl} · {ctname:<{_TW(24)}}"
                       f"  {MUTED}{coy_metric}{RESET}{fp_note}  {coy_badge}")
 
         # ── Award runners-up ──────────────────────────────────────────────────
@@ -2171,8 +2228,8 @@ class CommissionerGame:
                 stat = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG  ({seed}) seed"
                         if ps else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
-                lines.append(f"  {'MVP' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
-                              f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
+                lines.append(f"  {'MVP' if rank==2 else '':<16} {rank}. {tc}{p.name:<{_PW(22)}}{RESET}  "
+                              f"{MUTED}{t.franchise_at(sn).name:<{_TW(24)}}  {stat}{RESET}")
 
             # OPOY runners-up
             opoy_pool = sorted(pool, key=lambda pt: _ppg(pt[0]), reverse=True)
@@ -2181,8 +2238,8 @@ class CommissionerGame:
                 stat = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG"
                         if ps else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
-                lines.append(f"  {'OPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
-                              f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
+                lines.append(f"  {'OPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<{_PW(22)}}{RESET}  "
+                              f"{MUTED}{t.franchise_at(sn).name:<{_TW(24)}}  {stat}{RESET}")
 
             # DPOY runners-up (exclude OPOY winner)
             dpoy_pool = sorted(
@@ -2194,8 +2251,8 @@ class CommissionerGame:
                 stat = (f"{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG"
                         if (ps and ps.games > 0) else "")
                 tc = GOLD if p.peak_overall >= 14 else CYAN
-                lines.append(f"  {'DPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<22}{RESET}  "
-                              f"{MUTED}{t.franchise_at(sn).name:<24}  {stat}{RESET}")
+                lines.append(f"  {'DPOY' if rank==2 else '':<16} {rank}. {tc}{p.name:<{_PW(22)}}{RESET}  "
+                              f"{MUTED}{t.franchise_at(sn).name:<{_TW(24)}}  {stat}{RESET}")
 
             return lines
 
@@ -2835,24 +2892,24 @@ class CommissionerGame:
             w("  No player stats yet.")
         else:
             sub("Season Scoring Leaders")
-            w(f"  {'Player':<22} {'Team':<18}  {'PPG':>5}  {'FG%':>5}  "
+            w(f"  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  {'PPG':>5}  {'FG%':>5}  "
               f"{'3P%':>5}  {'FT%':>5}  {'GP':>3}  Miss")
             sep("-")
             for p, t, st in sorted(scored, key=lambda x: -x[2].ppg)[:12]:
-                tn  = _s(t.franchise_at(sn).nickname)[:16]
+                tn  = _s(t.franchise_at(sn).nickname)
                 fg3 = f"{st.fg3_pct:.1%}" if st.fga_3 > 0 else "  —  "
                 ft  = f"{st.ft_pct:.1%}"  if st.fta  > 0 else "  —  "
-                w(f"  {p.name:<22} {tn:<18}  {st.ppg:>5.1f}  {st.fg_pct:>5.1%}  "
+                w(f"  {p.name:<{_PW(22)}} {tn:<{_NW(18)}}  {st.ppg:>5.1f}  {st.fg_pct:>5.1%}  "
                   f"{fg3:>5}  {ft:>5}  {st.games:>3}  {st.games_missed}")
 
             def_sc = [(p, t, st) for p, t, st in scored if st.games >= 5]
             if def_sc:
                 sub("Season Defensive Leaders  (STL + BLK)")
-                w(f"  {'Player':<22} {'Team':<18}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  {'TOV':>5}")
+                w(f"  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  {'TOV':>5}")
                 sep("-")
                 for p, t, st in sorted(def_sc, key=lambda x: -(x[2].stl + x[2].blk))[:10]:
-                    tn = _s(t.franchise_at(sn).nickname)[:16]
-                    w(f"  {p.name:<22} {tn:<18}  {st.rpg:>5.1f}  {st.spg:>5.1f}  {st.bpg:>5.1f}  {st.topg:>5.1f}")
+                    tn = _s(t.franchise_at(sn).nickname)
+                    w(f"  {p.name:<{_PW(22)}} {tn:<{_NW(18)}}  {st.rpg:>5.1f}  {st.spg:>5.1f}  {st.bpg:>5.1f}  {st.topg:>5.1f}")
 
         # All-time best single seasons
         all_rec: list = []
@@ -2866,21 +2923,21 @@ class CommissionerGame:
 
         if all_rec:
             sub("Best Single Seasons All-Time — Scoring")
-            w(f"  {'S':>3}  {'Player':<22} {'Team':<18}  "
+            w(f"  {'S':>3}  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  "
               f"{'PPG':>5}  {'FG%':>5}  {'3P%':>5}")
             sep("-")
             for snum, pn, tn, champ_t, st in sorted(all_rec, key=lambda x: -x[4].ppg)[:12]:
                 champ = " *" if champ_t is not None else ""
                 fg3 = f"{st.fg3_pct:.1%}" if st.fga_3 > 0 else "  —  "
-                w(f"  {snum:>3}  {pn:<22} {tn:<18}  "
+                w(f"  {snum:>3}  {pn:<{_PW(22)}} {tn:<{_NW(18)}}  "
                   f"{st.ppg:>5.1f}  {st.fg_pct:>5.1%}  {fg3:>5}{champ}")
 
             sub("Best Single Seasons All-Time — Rebounds/Steals/Blocks")
-            w(f"  {'S':>3}  {'Player':<22} {'Team':<18}  "
+            w(f"  {'S':>3}  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  "
               f"{'RPG':>5}  {'SPG':>5}  {'BPG':>5}")
             sep("-")
             for snum, pn, tn, _, st in sorted(all_rec, key=lambda x: -x[4].rpg)[:10]:
-                w(f"  {snum:>3}  {pn:<22} {tn:<18}  "
+                w(f"  {snum:>3}  {pn:<{_PW(22)}} {tn:<{_NW(18)}}  "
                   f"{st.rpg:>5.1f}  {st.spg:>5.1f}  {st.bpg:>5.1f}")
 
         # Career leaders
@@ -2908,21 +2965,21 @@ class CommissionerGame:
             def _cbpg(pid): return c_blk[pid] / c_gms[pid] if c_gms[pid] else 0.0
 
             sub("Career Scoring Leaders  (min 10 games)")
-            w(f"  {'Player':<22} {'Team':<18}  "
+            w(f"  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  "
               f"{'PPG':>5}  {'FG%':>5}  {'3P%':>5}  {'GP':>4}")
             sep("-")
             for pid in sorted(qual, key=lambda p: -_cppg(p))[:12]:
                 n = p2n.get(pid, f"P{pid}"); t = p2t.get(pid, "—")
                 fg3s = f"{_c3p(pid):.1%}" if c_fa3[pid] else "  —  "
-                w(f"  {n:<22} {t:<18}  "
+                w(f"  {n:<{_PW(22)}} {t:<{_NW(18)}}  "
                   f"{_cppg(pid):>5.1f}  {_cfg(pid):>5.1%}  {fg3s:>5}  {c_gms[pid]:>4}")
 
             sub("Career Rebounds / Steals / Blocks  (min 10 games)")
-            w(f"  {'Player':<22} {'Team':<18}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  {'GP':>4}")
+            w(f"  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  {'GP':>4}")
             sep("-")
             for pid in sorted(qual, key=lambda p: -_crpg(p))[:10]:
                 n = p2n.get(pid, f"P{pid}"); t = p2t.get(pid, "—")
-                w(f"  {n:<22} {t:<18}  "
+                w(f"  {n:<{_PW(22)}} {t:<{_NW(18)}}  "
                   f"{_crpg(pid):>5.1f}  {_cspg(pid):>5.1f}  {_cbpg(pid):>5.1f}  {c_gms[pid]:>4}")
 
         # ── 4. ROSTERS ────────────────────────────────────────────────────────
@@ -2936,7 +2993,7 @@ class CommissionerGame:
             w()
             w(f"  {_s(team.franchise_at(sn).name)}  "
               f"Net {net:+.1f}  ORtg {team.ortg:.1f}  DRtg {team.drtg:.1f}")
-            w(f"  {'Slot':<8} {'Name':<22} {'Pos':<5} {'Age':>3}  "
+            w(f"  {'Slot':<8} {'Name':<{_PW(22)}} {'Pos':<5} {'Age':>3}  "
               f"{'ORtg':>5}  {'DRtg':>5}  {'Yrs':>3}  {'PPG':>5}  "
               f"{'FG%':>5}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  {'GP':>3}  Miss  Durability")
             sep("-")
@@ -2954,7 +3011,7 @@ class CommissionerGame:
                     gms   = f"{pst.games:>3}"      if (pst and pst.games > 0) else "  0"
                     miss  = str(pst.games_missed)  if (pst and pst.games_missed > 0) else "0"
                     dur   = _s(durability_label(player.durability))
-                    w(f"  {slot_lbl:<8} {player.name:<22} {player.position:<5}"
+                    w(f"  {slot_lbl:<8} {player.name:<{_PW(22)}} {player.position:<5}"
                       f" {player.age:>3}"
                       f"  {player.ortg_contrib:>+5.1f}  {player.drtg_contrib:>+5.1f}"
                       f"  {player.contract_years_remaining:>3}"
@@ -2989,10 +3046,10 @@ class CommissionerGame:
             return score, "stable"
 
         ps_teams = sorted(league.teams, key=lambda t: -_risk_label(t)[0])
-        w(f"  {'Team':<24} {'Star':<20} {'Coach':<18} {'Owner':<18} Risk")
+        w(f"  {'Team':<{_TW(24)}} {'Star':<20} {'Coach':<18} {'Owner':<18} Risk")
         sep("-")
         for t in ps_teams:
-            tname = _s(t.franchise_at(sn).name)[:22]
+            tname = _s(t.franchise_at(sn).name)
             _, risk_lbl = _risk_label(t)
 
             star = next((p for p in t.roster if p is not None), None)
@@ -3023,7 +3080,7 @@ class CommissionerGame:
             else:
                 owner_col = "— no owner"
 
-            w(f"  {tname:<24} {star_col:<20} {coach_col:<18} {owner_col:<18} {risk_lbl}")
+            w(f"  {tname:<{_TW(24)}} {star_col:<20} {coach_col:<18} {owner_col:<18} {risk_lbl}")
 
         n_fracture = sum(1 for t in league.teams if _risk_label(t)[1] == "FRACTURE")
         n_atrisk   = sum(1 for t in league.teams if _risk_label(t)[1] not in ("stable",))
@@ -3035,16 +3092,16 @@ class CommissionerGame:
         section("6. OWNER DASHBOARD")
         own_teams = sorted(league.teams,
                            key=lambda t: -(t.owner.happiness if t.owner else 0))
-        w(f"  {'Team':<26} {'Owner':<22} {'Motivation':<12} {'Happy':>6}  "
+        w(f"  {'Team':<{_TW(26)}} {'Owner':<{_OW(22)}} {'Motivation':<12} {'Happy':>6}  "
           f"{'P&L':>8}  Threat")
         sep("-")
         for t in own_teams:
             o = t.owner
-            tname = _s(t.franchise_at(sn).name)[:24]
+            tname = _s(t.franchise_at(sn).name)
             if o is None:
-                w(f"  {tname:<26} — no owner"); continue
+                w(f"  {tname:<{_TW(26)}} — no owner"); continue
             thr_lbl = {0: "Content", 1: "Watching", 2: "Demanding"}.get(o.threat_level, "")
-            w(f"  {tname:<26} {o.name:<22} {o.motivation_label()[:12]:<12} "
+            w(f"  {tname:<{_TW(26)}} {o.name:<{_OW(22)}} {o.motivation_label()[:12]:<12} "
               f"{o.happiness:>6.0%}  {o.last_net_profit:>+7.1f}M  {thr_lbl}")
         sep("-")
         owners = [t.owner for t in league.teams if t.owner]
@@ -3063,20 +3120,20 @@ class CommissionerGame:
             "motivator": "Motivator",
         }
         co_teams = sorted(league.teams, key=lambda t: -t.net_rating())
-        w(f"  {'Team':<24} {'Coach':<22} {'Arch':<11} "
+        w(f"  {'Team':<{_TW(24)}} {'Coach':<{_CW(22)}} {'Arch':<11} "
           f"{'Happy':>6}  {'Yr':>3}  {'COY':>3}  {'ORtg':>5}  {'DRtg':>5}  Status")
         sep("-")
         for t in co_teams:
-            tname = _s(t.franchise_at(sn).name)[:22]
+            tname = _s(t.franchise_at(sn).name)
             c = t.coach
             if c is None:
-                w(f"  {tname:<24} — no coach"); continue
+                w(f"  {tname:<{_TW(24)}} — no coach"); continue
             mods    = c.compute_modifiers()
             arch_s  = _ARCH_S.get(c.archetype, c.archetype[:10])
             h_lbl   = f"{c.happiness:.0%}"
             coy_lbl = f"x{c.coy_wins}" if c.coy_wins else " —"
             status  = "HOT SEAT" if c.hot_seat else ""
-            w(f"  {tname:<24} {c.name:<22} {arch_s:<11} "
+            w(f"  {tname:<{_TW(24)}} {c.name:<{_CW(22)}} {arch_s:<11} "
               f"{h_lbl:>6}  {c.tenure:>3}  {coy_lbl:>3}  "
               f"{mods['ortg_mod']:>+5.1f}  {mods['drtg_mod']:>+5.1f}  {status}")
 
@@ -3085,16 +3142,16 @@ class CommissionerGame:
                        for s in league.seasons if s.coy]
         if coy_seasons:
             sub("Coach of the Year History")
-            w(f"  {'S':>3}  {'Coach':<22} {'Team':<20} {'Arch':<11}  Delta")
+            w(f"  {'S':>3}  {'Coach':<{_CW(22)}} {'Team':<{_TW(20)}} {'Arch':<11}  Delta")
             sep("-")
             for s_num, coy, coy_t, delta in coy_seasons:
-                ct = _s(coy_t.franchise_at(s_num).name)[:18] if coy_t else "—"
+                ct = _s(coy_t.franchise_at(s_num).name) if coy_t else "—"
                 arch_s = _ARCH_S.get(coy.archetype, coy.archetype)
-                w(f"  {s_num:>3}  {coy.name:<22} {ct:<20} {arch_s:<11}  +{delta:.1f} NR")
+                w(f"  {s_num:>3}  {coy.name:<{_CW(22)}} {ct:<{_TW(20)}} {arch_s:<11}  +{delta:.1f} NR")
 
         # All coaches (history)
         sub("All Coaches (Career Records)")
-        w(f"  {'Name':<22} {'Arch':<11} {'Seasons':>7}  {'W-L':<12}  {'Rings':>5}  "
+        w(f"  {'Name':<{_CW(22)}} {'Arch':<11} {'Seasons':>7}  {'W-L':<12}  {'Rings':>5}  "
           f"{'COY':>3}  Status")
         sep("-")
         for c in sorted(league._all_coaches, key=lambda c: -(c.seasons_coached or 0)):
@@ -3105,7 +3162,7 @@ class CommissionerGame:
             coy_n = getattr(c, 'coy_wins', 0)
             status = "Retired" if getattr(c, 'retired', False) else "Active"
             fp = " (ex-player)" if c.former_player else ""
-            w(f"  {c.name:<22} {arch_s:<11} {c.seasons_coached:>7}  {wl:<12}  "
+            w(f"  {c.name:<{_CW(22)}} {arch_s:<11} {c.seasons_coached:>7}  {wl:<12}  "
               f"{rings:>5}  {coy_n:>3}  {status}{fp}")
 
         # ── 8. MARKET MAP ─────────────────────────────────────────────────────
@@ -3117,18 +3174,18 @@ class CommissionerGame:
             city_teams.items(),
             key=lambda x: -sum(_fans_millions(t) for t in x[1]),
         )
-        w(f"  {'City':<18} {'Team':<22} {'Pop':>5}  {'Fans':>6}M  {'Eng':>5}  Metro")
+        w(f"  {'City':<18} {'Team':<{_NW(22)}} {'Pop':>5}  {'Fans':>6}M  {'Eng':>5}  Metro")
         sep("-")
         for city, teams_c in active_cities:
             metro = max(t.franchise.effective_metro for t in teams_c)
             for i, t in enumerate(sorted(teams_c, key=lambda x: x.franchise.secondary)):
                 fans = _fans_millions(t)
                 if i == 0:
-                    w(f"  {city:<18} {_s(t.franchise.nickname):<22} "
+                    w(f"  {city:<18} {_s(t.franchise.nickname):<{_NW(22)}} "
                       f"{t.popularity:>5.0%}  {fans:>6.1f}M  "
                       f"{t.market_engagement:>5.0%}  {metro:.1f}M")
                 else:
-                    w(f"  {'':18} {_s(t.franchise.nickname):<22} "
+                    w(f"  {'':18} {_s(t.franchise.nickname):<{_NW(22)}} "
                       f"{t.popularity:>5.0%}  {fans:>6.1f}M  "
                       f"{t.market_engagement:>5.0%}")
         grudge_cities = [(c2, sc) for c2, sc in league.market_grudges.items()
@@ -3193,11 +3250,11 @@ class CommissionerGame:
         all_teams_s = sorted(league.teams,
                              key=lambda t: (-titles2[t], -finals_apps2[t],
                                             -len(po_sets.get(t, set()))))
-        w(f"  {'#':>2}  {'Team':<26}  {'Ttls':>5}  {'Finals':>6}  "
+        w(f"  {'#':>2}  {'Team':<{_TW(26)}}  {'Ttls':>5}  {'Finals':>6}  "
           f"{'Win%':>5}  {'RS#1':>5}  {'PO':>4}  Szns")
         sep("-")
         for rank, t in enumerate(all_teams_s, 1):
-            name2  = _s(t.franchise.name)[:26]
+            name2  = _s(t.franchise.name)
             fmr    = (f" (fmr. {_s(t.franchise_history[0][1].city)})"
                       if len(t.franchise_history) > 1 else "")
             ttls   = titles2[t]
@@ -3207,7 +3264,7 @@ class CommissionerGame:
             po     = len(po_sets.get(t, set()))
             sp     = seasons_in2[t]
             star2  = "*" if ttls else " "
-            w(f"  {rank:>2}. {name2:<26}  {star2}{ttls:>4}  "
+            w(f"  {rank:>2}. {name2:<{_TW(26)}}  {star2}{ttls:>4}  "
               f"{fa:>6}  {wpct:>5}  {rs1:>5}  {po:>4}  {sp:>4}{fmr}")
 
         # Streaks & Droughts
@@ -3242,14 +3299,14 @@ class CommissionerGame:
             def _show_streak_block(title, rows, n=8):
                 w(f"\n  {title}")
                 sep("-")
-                w(f"  {'Team':<26}  {'Len':>5}  Seasons")
+                w(f"  {'Team':<{_TW(26)}}  {'Len':>5}  Seasons")
                 for t, length, start, end in rows[:n]:
                     if not length: continue
                     ww = (f"S{start}-S{end}" if start != end else f"S{start}") if start else "—"
-                    name2 = _s(t.franchise.name)[:26]
+                    name2 = _s(t.franchise.name)
                     fmr   = (f" (fmr. {_s(t.franchise_history[0][1].city)})"
                              if len(t.franchise_history) > 1 else "")
-                    w(f"  {name2:<26}  {length:>5}  {ww}{fmr}")
+                    w(f"  {name2:<{_TW(26)}}  {length:>5}  {ww}{fmr}")
 
             dynasty  = sorted([(t, *_best_streak(played_sn[t], won_sn[t]))
                                 for t in league.teams if won_sn[t]], key=lambda x: -x[1])
@@ -3276,12 +3333,12 @@ class CommissionerGame:
             def _bw_block(title, rows):
                 w(f"\n  {title}")
                 sep("-")
-                w(f"  {'S':>3}  {'Franchise':<24}  {'Record':<14}  W%")
+                w(f"  {'S':>3}  {'Franchise':<{_TW(24)}}  {'Record':<14}  W%")
                 for s, t, ww, ll, pct in rows:
-                    name2  = _s(t.franchise_at(s.number).name)[:24]
+                    name2  = _s(t.franchise_at(s.number).name)
                     record = _wl(ww, ll)
                     champ_t = " *" if t is s.champion else ""
-                    w(f"  {s.number:>3}  {name2:<24}  {record:<14}  {pct:.0%}{champ_t}")
+                    w(f"  {s.number:>3}  {name2:<{_TW(24)}}  {record:<14}  {pct:.0%}{champ_t}")
             _bw_block("Best Single Seasons",
                       sorted(records_bw, key=lambda x: (-x[4], -x[2]))[:10])
             _bw_block("Worst Single Seasons",
@@ -3306,14 +3363,14 @@ class CommissionerGame:
 
         def _tname(tid):
             t = team_by_id.get(tid)
-            return _s(t.franchise.name)[:24] if t else f"Team {tid}"
+            return _s(t.franchise.name) if t else f"Team {tid}"
 
         sub("Regular Season Head-to-Head")
-        w(f"  {'#':>2}  {'Team A':<25} {'Wins':>5}  {'Team B':<25} {'Wins':>5}  Games")
+        w(f"  {'#':>2}  {'Team A':<{_TW(25)}} {'Wins':>5}  {'Team B':<{_TW(25)}} {'Wins':>5}  Games")
         sep("-")
         for i, ((aid, bid), (wa, wb)) in enumerate(rs_sorted, 1):
-            w(f"  {i:>2}. {_tname(aid):<25} {wa:>5}  "
-              f"{_tname(bid):<25} {wb:>5}  {wa+wb:>5}")
+            w(f"  {i:>2}. {_tname(aid):<{_TW(25)}} {wa:>5}  "
+              f"{_tname(bid):<{_TW(25)}} {wb:>5}  {wa+wb:>5}")
 
         po_wins_r: dict = defaultdict(lambda: defaultdict(int))
         for s in league.seasons:
@@ -3324,13 +3381,13 @@ class CommissionerGame:
         po_sorted = sorted(po_wins_r.items(), key=lambda x: -sum(x[1].values()))[:20]
 
         sub("Playoff Series Head-to-Head")
-        w(f"  {'#':>2}  {'Team A':<25} {'W':>3}  {'Team B':<25} {'W':>3}  Series")
+        w(f"  {'#':>2}  {'Team A':<{_TW(25)}} {'W':>3}  {'Team B':<{_TW(25)}} {'W':>3}  Series")
         sep("-")
         for i, (key, wins) in enumerate(po_sorted, 1):
             aid, bid = key
             wa = wins.get(aid, 0); wb = wins.get(bid, 0)
-            w(f"  {i:>2}. {_tname(aid):<25} {wa:>3}  "
-              f"{_tname(bid):<25} {wb:>3}  {wa+wb:>5}")
+            w(f"  {i:>2}. {_tname(aid):<{_TW(25)}} {wa:>3}  "
+              f"{_tname(bid):<{_TW(25)}} {wb:>3}  {wa+wb:>5}")
 
         finals_wins_r: dict = defaultdict(lambda: defaultdict(int))
         for s in league.seasons:
@@ -3342,12 +3399,12 @@ class CommissionerGame:
 
         if finals_sorted:
             sub("Finals Matchups")
-            w(f"  {'Team A':<25} {'W':>3}  {'Team B':<25} {'W':>3}  Finals")
+            w(f"  {'Team A':<{_TW(25)}} {'W':>3}  {'Team B':<{_TW(25)}} {'W':>3}  Finals")
             sep("-")
             for (aid, bid), wins in finals_sorted:
                 wa = wins.get(aid, 0); wb = wins.get(bid, 0)
-                w(f"  {_tname(aid):<25} {wa:>3}  "
-                  f"{_tname(bid):<25} {wb:>3}  {wa+wb:>5}")
+                w(f"  {_tname(aid):<{_TW(25)}} {wa:>3}  "
+                  f"{_tname(bid):<{_TW(25)}} {wb:>3}  {wa+wb:>5}")
 
         # ── 12. PLAYOFF ANALYSIS ──────────────────────────────────────────────
         section("12. PLAYOFF ANALYSIS")
@@ -3508,7 +3565,7 @@ class CommissionerGame:
                 w()
                 w(f"  Teams ({len(r.teams)}):")
                 for rt in r.teams:
-                    w(f"    - {rt.name:<30}  strength {rt.strength:.0%}")
+                    w(f"    - {rt.name:<{_TW(30)}}  strength {rt.strength:.0%}")
             else:
                 w("  No active rival league.")
             if r_hist:
@@ -3526,7 +3583,7 @@ class CommissionerGame:
                     w(f"  S{rec.season}  Champion: {rec.champion}")
                     for i, (tname, ww, ll) in enumerate(rec.standings[:6]):
                         tot = ww + ll; pct = ww / tot if tot else 0
-                        w(f"    {i+1:>2}. {tname:<28} {ww:>3}-{ll:>3}  {pct:.1%}")
+                        w(f"    {i+1:>2}. {tname:<{_TW(28)}} {ww:>3}-{ll:>3}  {pct:.1%}")
 
         # ── Write file ────────────────────────────────────────────────────────
         slug = _re.sub(r'[^a-zA-Z0-9]+', '_', self.league_name).strip('_').lower()
@@ -3605,10 +3662,10 @@ class CommissionerGame:
 
         clear()
         header("TEAM POWER STRUCTURE", f"After Season {sn}  ·  {len(teams)} teams")
-        print(f"\n  {MUTED}{'Team':<24} {'Star':<26} {'Coach':<22} {'Owner':<20} {'Risk'}{RESET}\n")
+        print(f"\n  {MUTED}{'Team':<{_TW(24)}} {'Star':<26} {'Coach':<22} {'Owner':<20} {'Risk'}{RESET}\n")
 
         for t in teams:
-            tname = t.franchise_at(sn).name[:22]
+            tname = t.franchise_at(sn).name
             _, risk_lbl, risk_c = _risk(t)
 
             # ── Star column ───────────────────────────────────────────────────
@@ -3663,7 +3720,7 @@ class CommissionerGame:
             else:
                 owner_col = f"{MUTED}— no owner{RESET}"
 
-            print(f"  {tname:<24} {_vpad(star_col, 26)} {_vpad(coach_col, 22)} "
+            print(f"  {tname:<{_TW(24)}} {_vpad(star_col, 26)} {_vpad(coach_col, 22)} "
                   f"{_vpad(owner_col, 20)} {risk_c}{risk_lbl}{RESET}")
 
         # ── Summary footer ────────────────────────────────────────────────────
@@ -3914,7 +3971,7 @@ class CommissionerGame:
             clear()
             header("TEAM HISTORY",
                    f"Select a franchise  ·  {len(active_idents)} active  ·  {len(defunct_idents)} defunct")
-            print(f"\n  {'#':>3}  {'Franchise':<28} {'Seasons':>7}  {'Titles':>6}  {'Span':>11}")
+            print(f"\n  {'#':>3}  {'Franchise':<{_TW(28)}} {'Seasons':>7}  {'Titles':>6}  {'Span':>11}")
             divider()
 
             if active_idents:
@@ -3923,7 +3980,7 @@ class CommissionerGame:
                 titles = sum(1 for s in ss if s.champion is t)
                 title_str = f"{GOLD}{titles}★{RESET}" if titles else f"{MUTED}—{RESET}"
                 span = f"S{ss[0].number}–now" if ss else "no seasons"
-                print(f"  {i:>3}. {fran.name:<28} {len(ss):>7}  {title_str:>6}  {MUTED}{span:>11}{RESET}")
+                print(f"  {i:>3}. {fran.name:<{_TW(28)}} {len(ss):>7}  {title_str:>6}  {MUTED}{span:>11}{RESET}")
 
             if defunct_idents:
                 print(f"\n  {MUTED}  — Defunct —{RESET}")
@@ -3931,7 +3988,7 @@ class CommissionerGame:
                 titles = sum(1 for s in ss if s.champion is t)
                 title_str = f"{GOLD}{titles}★{RESET}" if titles else f"{MUTED}—{RESET}"
                 span = (f"S{ss[0].number}–S{ss[-1].number}" if ss else "no seasons")
-                print(f"  {j:>3}. {MUTED}{fran.name:<28}{RESET} {len(ss):>7}  {title_str:>6}  "
+                print(f"  {j:>3}. {MUTED}{fran.name:<{_TW(28)}}{RESET} {len(ss):>7}  {title_str:>6}  "
                       f"{MUTED}{span:>11}{RESET}")
 
             print(f"\n  {CYAN}[0]{RESET} {MUTED}Back{RESET}")
@@ -4047,7 +4104,7 @@ class CommissionerGame:
                 last_season = league.seasons[-1] if league.seasons else None
                 last_stats = last_season.player_stats if last_season else {}
 
-                print(f"  {'Slot':<8} {'Name':<22} {'Pos':<5} {'Age':>3}  "
+                print(f"  {'Slot':<8} {'Name':<{_PW(22)}} {'Pos':<5} {'Age':>3}  "
                       f"{'ORtg':>5}  {'DRtg':>5}  {'Zone':<6}  "
                       f"{'Yrs':>3}  {'Tr':>2}  {'Mood':<4}  {'PPG':>5}  {'FG%':>5}  "
                       f"{'RPG':>5}  {'SPG':>5}  {'BPG':>5}  "
@@ -4074,7 +4131,7 @@ class CommissionerGame:
                         _nrg2   = (1 - player.fatigue) * 100
                         fat_c   = RED if _nrg2 < 60 else (GOLD if _nrg2 < 80 else MUTED)
                         print(f"  {MUTED}{slot_lbl:<8}{RESET}"
-                              f" {tc}{player.name:<22}{RESET}"
+                              f" {tc}{player.name:<{_PW(22)}}{RESET}"
                               f" {player.position:<5} {player.age:>3}"
                               f"  {player.ortg_contrib:>+5.1f}  {player.drtg_contrib:>+5.1f}"
                               f"  {player.preferred_zone:<6}"
@@ -4132,7 +4189,7 @@ class CommissionerGame:
         # Active markets
         print(f"\n  {BOLD}Active markets{RESET}  "
               f"{MUTED}Bar = popularity (market-agnostic)  ·  sorted by fan count{RESET}\n")
-        print(f"  {'City':<18} {'Team':<22} {'Popularity / Fans':<26}  {'Eng':>5}  Metro")
+        print(f"  {'City':<18} {'Team':<{_NW(22)}} {'Popularity / Fans':<26}  {'Eng':>5}  Metro")
         divider()
         for city, teams in active_cities:
             metro = max(t.franchise.effective_metro for t in teams)
@@ -4142,10 +4199,10 @@ class CommissionerGame:
                 grudge_tag = (f"  {RED}grudge{RESET}"
                               if t.franchise.city in league.market_grudges else "")
                 if i == 0:
-                    print(f"  {city:<18} {t.franchise.nickname:<22} {pd_str}  "
+                    print(f"  {city:<18} {t.franchise.nickname:<{_NW(22)}} {pd_str}  "
                           f"{MUTED}{eng_pct:>5}{RESET}  {MUTED}{metro:.1f}M{RESET}{grudge_tag}")
                 else:
-                    print(f"  {'':18} {t.franchise.nickname:<22} {pd_str}  "
+                    print(f"  {'':18} {t.franchise.nickname:<{_NW(22)}} {pd_str}  "
                           f"{MUTED}{eng_pct:>5}{RESET}")
 
         # Grudge markets
@@ -4280,11 +4337,11 @@ class CommissionerGame:
 
         clear()
         header("CHAMPIONSHIPS & FINALS", self.league_name)
-        print(f"\n  {'#':>2}  {'Team':<26}  {'Ttls':>5}  {'Finals':>6}  "
+        print(f"\n  {'#':>2}  {'Team':<{_TW(26)}}  {'Ttls':>5}  {'Finals':>6}  "
               f"{'Win%':>5}  {'RS#1':>5}  {'PO':>4}  {'Szns':>5}")
         divider()
         for rank, t in enumerate(all_teams, 1):
-            name   = t.franchise.name[:26]
+            name   = t.franchise.name
             fmr    = _fmr_tag(t)
             ttls   = titles[t]
             fa     = finals_apps[t]
@@ -4294,7 +4351,7 @@ class CommissionerGame:
             sp     = seasons_in[t]
             star   = f"{GOLD}★{RESET}" if ttls else " "
             ttl_c  = GOLD if ttls else RESET
-            print(f"  {rank:>2}. {name:<26}  {star}{ttl_c}{ttls:>4}{RESET}  "
+            print(f"  {rank:>2}. {name:<{_TW(26)}}  {star}{ttl_c}{ttls:>4}{RESET}  "
                   f"{fa:>6}  {wpct:>5}  {rs1:>5}  {po:>4}  {sp:>5}{fmr}")
         press_enter()
 
@@ -4349,15 +4406,15 @@ class CommissionerGame:
 
         def show_block(title, color, rows, n=8):
             print(f"\n  {BOLD}{title}{RESET}\n")
-            print(f"  {'Team':<26}  {'Len':>5}  Seasons")
+            print(f"  {'Team':<{_TW(26)}}  {'Len':>5}  Seasons")
             divider()
             for t, length, start, end in rows[:n]:
                 if length == 0:
                     continue
-                name   = t.franchise.name[:26]
+                name   = t.franchise.name
                 fmr    = _fmr_tag(t)
                 window = (f"S{start}–S{end}" if start != end else f"S{start}") if start else "—"
-                print(f"  {name:<26}  {color}{length:>5}{RESET}  {MUTED}{window}{RESET}{fmr}")
+                print(f"  {name:<{_TW(26)}}  {color}{length:>5}{RESET}  {MUTED}{window}{RESET}{fmr}")
 
         clear()
         header("STREAKS & DROUGHTS", self.league_name)
@@ -4388,10 +4445,10 @@ class CommissionerGame:
 
         def show_block(title, rows):
             print(f"\n  {BOLD}{title}{RESET}\n")
-            print(f"  {'S':>3}  {'Franchise':<24}  {'Record':<14}  {'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  Top Scorer")
+            print(f"  {'S':>3}  {'Franchise':<{_TW(24)}}  {'Record':<14}  {'PS/G':>5}  {'PA/G':>5}  {'Diff':>5}  Top Scorer")
             divider()
             for s, t, w, lo, pct, ppg, papg in rows:
-                fname    = t.franchise_at(s.number).name[:24]
+                fname    = t.franchise_at(s.number).name
                 fmr      = _fmr_tag(t)
                 champ_t  = f" {GOLD}★{RESET}" if t is s.champion else ""
                 record   = _wl(w, lo)
@@ -4411,7 +4468,7 @@ class CommissionerGame:
                         pname = next((p.name[:14] for p in t.roster
                                       if p is not None and p.player_id == best_pid), "")
                         top_str = f"{MUTED}{pname} {best_st.ppg:.1f}{RESET}"
-                print(f"  {s.number:>3}  {fname:<24}  "
+                print(f"  {s.number:>3}  {fname:<{_TW(24)}}  "
                       f"{pct_c}{record:<14}{RESET}  {ppg:>5.1f}  {papg:>5.1f}  "
                       f"{diff_c}{diff:>+5.1f}{RESET}{champ_t}{fmr}  {top_str}")
 
@@ -4473,26 +4530,26 @@ class CommissionerGame:
 
         def team_name(tid):
             t = team_by_id.get(tid)
-            return t.franchise.name[:24] if t else f"(id {tid})"
+            return t.franchise.name if t else f"(id {tid})"
 
         while True:
             clear()
             if page == 0:
                 header("RIVALRIES — Regular Season", self.league_name)
                 print(f"\n  Head-to-head records (all regular-season games)\n")
-                print(f"  {'#':>2}  {'Team A':<25} {'Wins':>5}  {'Team B':<25} {'Wins':>5}  Games")
+                print(f"  {'#':>2}  {'Team A':<{_TW(25)}} {'Wins':>5}  {'Team B':<{_TW(25)}} {'Wins':>5}  Games")
                 divider()
                 for i, ((aid, bid), (wa, wb)) in enumerate(rs_sorted, 1):
                     na, nb = team_name(aid), team_name(bid)
                     lead_a = GREEN if wa > wb else (RED if wa < wb else MUTED)
                     lead_b = GREEN if wb > wa else (RED if wb < wa else MUTED)
-                    print(f"  {i:>2}. {na:<25} {lead_a}{wa:>5}{RESET}  "
-                          f"{nb:<25} {lead_b}{wb:>5}{RESET}  {wa+wb:>5}")
+                    print(f"  {i:>2}. {na:<{_TW(25)}} {lead_a}{wa:>5}{RESET}  "
+                          f"{nb:<{_TW(25)}} {lead_b}{wb:>5}{RESET}  {wa+wb:>5}")
 
             elif page == 1:
                 header("RIVALRIES — Playoff Series", self.league_name)
                 print(f"\n  All-time series record between each pair\n")
-                print(f"  {'#':>2}  {'Team A':<25} {'W':>3}  {'Team B':<25} {'W':>3}  Series")
+                print(f"  {'#':>2}  {'Team A':<{_TW(25)}} {'W':>3}  {'Team B':<{_TW(25)}} {'W':>3}  Series")
                 divider()
                 for i, (key, wins) in enumerate(po_sorted, 1):
                     aid, bid = key
@@ -4501,8 +4558,8 @@ class CommissionerGame:
                     total    = wa + wb
                     lead_a   = GOLD if wa > wb else (MUTED if wa == wb else RED)
                     lead_b   = GOLD if wb > wa else (MUTED if wa == wb else RED)
-                    print(f"  {i:>2}. {na:<25} {lead_a}{wa:>3}{RESET}  "
-                          f"{nb:<25} {lead_b}{wb:>3}{RESET}  {total:>5}")
+                    print(f"  {i:>2}. {na:<{_TW(25)}} {lead_a}{wa:>3}{RESET}  "
+                          f"{nb:<{_TW(25)}} {lead_b}{wb:>3}{RESET}  {total:>5}")
 
             elif page == 2:
                 header("RIVALRIES — Finals Matchups", self.league_name)
@@ -4510,15 +4567,15 @@ class CommissionerGame:
                 if not finals_sorted:
                     print(f"  {MUTED}No Finals data yet.{RESET}")
                 else:
-                    print(f"  {'Team A':<25} {'W':>3}  {'Team B':<25} {'W':>3}  Finals")
+                    print(f"  {'Team A':<{_TW(25)}} {'W':>3}  {'Team B':<{_TW(25)}} {'W':>3}  Finals")
                     divider()
                     for (aid, bid), wins in finals_sorted:
                         na, nb = team_name(aid), team_name(bid)
                         wa, wb = wins.get(aid, 0), wins.get(bid, 0)
                         lead_a = GOLD if wa > wb else (MUTED if wa == wb else RED)
                         lead_b = GOLD if wb > wa else (MUTED if wa == wb else RED)
-                        print(f"  {na:<25} {lead_a}{wa:>3}{RESET}  "
-                              f"{nb:<25} {lead_b}{wb:>3}{RESET}  {wa+wb:>5}")
+                        print(f"  {na:<{_TW(25)}} {lead_a}{wa:>3}{RESET}  "
+                              f"{nb:<{_TW(25)}} {lead_b}{wb:>3}{RESET}  {wa+wb:>5}")
 
             divider()
             nav = []
@@ -4659,21 +4716,21 @@ class CommissionerGame:
         if team_rates:
             team_rates.sort(key=lambda x: -x[1])
             print(f"\n  Best home records (min 20 games):")
-            print(f"  {'Team':<26} {'HW%':>6}  W–G")
+            print(f"  {'Team':<{_TW(26)}} {'HW%':>6}  W–G")
             divider()
             for tid, rate, hw, hg in team_rates[:5]:
                 t = team_by_id.get(tid)
-                name = t.franchise.name[:26] if t else f"Team {tid}"
+                name = t.franchise.name if t else f"Team {tid}"
                 rc = GREEN if rate >= 0.58 else MUTED
-                print(f"  {name:<26} {rc}{rate:.1%}{RESET}  {hw}–{hg}")
+                print(f"  {name:<{_TW(26)}} {rc}{rate:.1%}{RESET}  {hw}–{hg}")
             if len(team_rates) > 5:
                 print(f"  {MUTED}…{RESET}")
                 worst = team_rates[-3:]
                 for tid, rate, hw, hg in worst:
                     t = team_by_id.get(tid)
-                    name = t.franchise.name[:26] if t else f"Team {tid}"
+                    name = t.franchise.name if t else f"Team {tid}"
                     rc = RED if rate < 0.48 else MUTED
-                    print(f"  {name:<26} {rc}{rate:.1%}{RESET}  {hw}–{hg}")
+                    print(f"  {name:<{_TW(26)}} {rc}{rate:.1%}{RESET}  {hw}–{hg}")
 
         press_enter()
 
@@ -4707,14 +4764,14 @@ class CommissionerGame:
                 else:
                     def _show_cat(title, rows, cols):
                         print(f"\n  {BOLD}{title}{RESET}")
-                        hdr = f"  {'Player':<22} {'Team':<18}"
+                        hdr = f"  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}"
                         for c in cols: hdr += f"  {c[0]:>{c[2]}}"
                         print(hdr)
                         divider()
                         for p, t, s in rows[:8]:
-                            tname = t.franchise_at(sn).nickname[:16]
+                            tname = t.franchise_at(sn).nickname
                             tc = GOLD if p is season.mvp or p is season.opoy or p is season.dpoy else ""
-                            row = f"  {tc}{p.name:<22}{RESET} {MUTED}{tname:<18}{RESET}"
+                            row = f"  {tc}{p.name:<{_PW(22)}}{RESET} {MUTED}{tname:<{_NW(18)}}{RESET}"
                             for c in cols:
                                 row += f"  {c[1](s):>{c[2]}}"
                             print(row)
@@ -4771,11 +4828,11 @@ class CommissionerGame:
                 else:
                     def _show_alltime(title, records, key_fn, col_fn, col_hdr):
                         print(f"\n  {BOLD}{title}{RESET}")
-                        print(f"  {'S':>3}  {'Player':<22} {'Team':<18}  {col_hdr}")
+                        print(f"  {'S':>3}  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  {col_hdr}")
                         divider()
                         for snum, pname, tname, champ_team, st in sorted(records, key=key_fn)[:8]:
                             champ = f" {GOLD}★{RESET}" if champ_team is not None else ""
-                            print(f"  {snum:>3}  {pname:<22} {MUTED}{tname:<18}{RESET}  "
+                            print(f"  {snum:>3}  {pname:<{_PW(22)}} {MUTED}{tname:<{_NW(18)}}{RESET}  "
                                   f"{col_fn(st)}{champ}")
 
                     _show_alltime("Best PPG Seasons",
@@ -4861,7 +4918,7 @@ class CommissionerGame:
                         return career_blk[pid] / g if g else 0.0
 
                     print(f"\n  {BOLD}Career Scoring (min 10 games){RESET}")
-                    print(f"  {'Player':<22} {'Team':<18}  {'PPG':>5}  {'FG%':>5}  {'3P%':>5}  GP")
+                    print(f"  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  {'PPG':>5}  {'FG%':>5}  {'3P%':>5}  GP")
                     divider()
                     top_scorers = sorted([p for p, _ in qualified], key=lambda p: -career_ppg(p))[:10]
                     for pid in top_scorers:
@@ -4870,19 +4927,19 @@ class CommissionerGame:
                         gp    = career_games[pid]
                         fg3_str = (f"{career_fgm3[pid]/career_fga3[pid]:.1%}"
                                    if career_fga3[pid] else "  —  ")
-                        print(f"  {name:<22} {MUTED}{tname:<18}{RESET}  "
+                        print(f"  {name:<{_PW(22)}} {MUTED}{tname:<{_NW(18)}}{RESET}  "
                               f"{career_ppg(pid):>5.1f}  {career_fg(pid):>5.1%}  "
                               f"{fg3_str:>5}  {gp}")
 
                     print(f"\n  {BOLD}Career Rebounds / Steals / Blocks (min 10 games){RESET}")
-                    print(f"  {'Player':<22} {'Team':<18}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  GP")
+                    print(f"  {'Player':<{_PW(22)}} {'Team':<{_NW(18)}}  {'RPG':>5}  {'SPG':>5}  {'BPG':>5}  GP")
                     divider()
                     top_rebounders = sorted([p for p, _ in qualified], key=lambda p: -career_rpg(p))[:10]
                     for pid in top_rebounders:
                         name  = pid_to_name.get(pid, f"P{pid}")
                         tname = pid_to_team.get(pid, "—")
                         gp    = career_games[pid]
-                        print(f"  {name:<22} {MUTED}{tname:<18}{RESET}  "
+                        print(f"  {name:<{_PW(22)}} {MUTED}{tname:<{_NW(18)}}{RESET}  "
                               f"{career_rpg(pid):>5.1f}  {career_spg(pid):>5.1f}  "
                               f"{career_bpg(pid):>5.1f}  {gp}")
 
@@ -4911,15 +4968,15 @@ class CommissionerGame:
         clear()
         header("OWNER DASHBOARD", f"After Season {sn}  ·  {len(teams)} teams")
 
-        print(f"\n  {'Team':<26} {'Owner':<22} {'Mot':<12} {'Happy':>6}  "
+        print(f"\n  {'Team':<{_TW(26)}} {'Owner':<{_OW(22)}} {'Mot':<12} {'Happy':>6}  "
               f"{'Comp':>5}  {'P&L':>8}  {'Threat':<10}  Rev Eff")
         divider()
 
         for t in teams:
             owner = t.owner
-            tname = t.franchise_at(sn).name[:24]
+            tname = t.franchise_at(sn).name
             if owner is None:
-                print(f"  {MUTED}{tname:<26} — no owner{RESET}")
+                print(f"  {MUTED}{tname:<{_TW(26)}} — no owner{RESET}")
                 continue
 
             # Motivation color
@@ -4951,7 +5008,7 @@ class CommissionerGame:
             rev_eff = owner.revenue_efficiency
             re_c = GREEN if rev_eff >= 0.85 else (GOLD if rev_eff >= 0.70 else RED)
 
-            print(f"  {tname:<26} {owner.name:<22} {mot_c}{mot_lbl:<12}{RESET} "
+            print(f"  {tname:<{_TW(26)}} {owner.name:<{_OW(22)}} {mot_c}{mot_lbl:<12}{RESET} "
                   f"{h_lbl:>6}  "
                   f"{comp_c}{comp_bars}{RESET}  "
                   f"{p_str}  "
@@ -5000,15 +5057,15 @@ class CommissionerGame:
         clear()
         header("COACHING DASHBOARD", f"After Season {sn}  ·  {len(teams)} teams")
 
-        print(f"\n  {'Team':<24} {'Coach':<22} {'Arch':<11} {'Flex':<9} {'Hor':<10} "
+        print(f"\n  {'Team':<{_TW(24)}} {'Coach':<{_CW(22)}} {'Arch':<11} {'Flex':<9} {'Hor':<10} "
               f"{'Yr':>3}  {'COY':>3}  {'Mood':>5}  {'ORtg':>5}  {'DRtg':>5}  {'Net':>5}  Status")
         divider()
 
         for t in teams:
-            tname = t.franchise_at(sn).name[:22]
+            tname = t.franchise_at(sn).name
             coach = t.coach
             if coach is None:
-                print(f"  {MUTED}{tname:<24} — no coach{RESET}")
+                print(f"  {MUTED}{tname:<{_TW(24)}} — no coach{RESET}")
                 continue
 
             mods      = coach.compute_modifiers()
@@ -5031,7 +5088,7 @@ class CommissionerGame:
             coy_lbl  = f"{GOLD}★{coach.coy_wins}{RESET}" if coach.coy_wins else f"{MUTED} — {RESET}"
             fp_lbl   = f" {MUTED}ex-player{RESET}" if coach.former_player else ""
 
-            print(f"  {tname:<24} {coach.name:<22} {CYAN}{arch_s:<11}{RESET} "
+            print(f"  {tname:<{_TW(24)}} {coach.name:<{_CW(22)}} {CYAN}{arch_s:<11}{RESET} "
                   f"{flex_lbl:<9} {hor_lbl:<10} "
                   f"{coach.tenure:>3}  {coy_lbl}  {h_lbl}  "
                   f"{o_c}{ortg_delta:>+5.1f}{RESET}  "
@@ -5069,11 +5126,11 @@ class CommissionerGame:
             print(f"\n  {GOLD}{BOLD}Coach of the Year History{RESET}")
             divider()
             for s_num, coy, coy_team, delta in coy_seasons[-10:]:
-                ctname   = coy_team.franchise_at(s_num).name[:18] if coy_team else "—"
+                ctname   = coy_team.franchise_at(s_num).name if coy_team else "—"
                 arch_s   = _ARCH_SHORT.get(coy.archetype, coy.archetype)
                 fp_tag   = f" {MUTED}(ex-player){RESET}" if coy.former_player else ""
-                print(f"  {MUTED}Szn {s_num:>3}{RESET}  {GOLD}{coy.name:<22}{RESET}  "
-                      f"{ctname:<20}  {CYAN}{arch_s:<10}{RESET}  {GOLD}+{delta:.1f} NR{RESET}{fp_tag}")
+                print(f"  {MUTED}Szn {s_num:>3}{RESET}  {GOLD}{coy.name:<{_CW(22)}}{RESET}  "
+                      f"{ctname:<{_TW(20)}}  {CYAN}{arch_s:<10}{RESET}  {GOLD}+{delta:.1f} NR{RESET}{fp_tag}")
 
         press_enter()
 
@@ -5199,7 +5256,8 @@ class CommissionerGame:
             self._treasury    = max(0.0, self._treasury - cost)
             league.legitimacy = max(0.0, league.legitimacy - legit_hit)
             print(f"  Treasury: {RED}−${cost:.0f}M{RESET}   Legitimacy: {RED}−{legit_hit:.0%}{RESET}")
-            absorbed = league._absorb_rival_teams(sn, random.randint(2, 4))
+            absorbed = league._absorb_rival_teams(sn, random.randint(2, 4),
+                                                  pick_nickname=self._pick_team_nickname)
             if absorbed:
                 print(f"\n  {MUTED}{len(absorbed)} franchise{'s' if len(absorbed) != 1 else ''} joining next season: "
                       f"{', '.join(absorbed)}{RESET}")
@@ -5267,7 +5325,8 @@ class CommissionerGame:
                       4: "monitor"}
         action = action_map.get(idx, "monitor")
 
-        cost, legit_cost, summary = league.apply_rival_commissioner_action(action, sn)
+        cost, legit_cost, summary = league.apply_rival_commissioner_action(
+            action, sn, pick_nickname=self._pick_team_nickname)
         if cost > 0:       self._treasury = max(0.0, self._treasury - cost)
         if legit_cost > 0: league.legitimacy = max(0.0, league.legitimacy - legit_cost)
 
@@ -5434,7 +5493,7 @@ class CommissionerGame:
                     print(f"  {BOLD}Teams  ({len(r.teams)}){RESET}")
                     for t in r.teams:
                         tc = GOLD if t.strength >= 0.60 else (CYAN if t.strength >= 0.35 else MUTED)
-                        print(f"    {tc}·{RESET}  {t.name:<28}  "
+                        print(f"    {tc}·{RESET}  {t.name:<{_TW(28)}}  "
                               f"strength {tc}{t.strength:.0%}{RESET}")
                     if r.intel_events:
                         print(f"\n  {BOLD}Recent intel{RESET}")
@@ -5458,20 +5517,20 @@ class CommissionerGame:
                     header(f"{r.name}", "Standings & Champions")
                     latest = r.season_records[-1]
                     print(f"\n  {BOLD}Season {latest.season} — Standings{RESET}")
-                    print(f"  {MUTED}{'Team':<30} {'W':>3}  {'L':>3}  {'Pct':>5}{RESET}")
+                    print(f"  {MUTED}{'Team':<{_TW(30)}} {'W':>3}  {'L':>3}  {'Pct':>5}{RESET}")
                     divider()
                     for i, (tname, w, l) in enumerate(latest.standings):
                         total = w + l
                         pct   = w / total if total else 0.0
                         rank_c = GOLD if i == 0 else (CYAN if i < 4 else MUTED)
-                        print(f"  {rank_c}{tname:<30}{RESET}  {w:>3}  {l:>3}  {pct:>5.1%}")
+                        print(f"  {rank_c}{tname:<{_TW(30)}}{RESET}  {w:>3}  {l:>3}  {pct:>5.1%}")
                     print(f"\n  {GOLD}Champion:{RESET}  {latest.champion}")
                     if latest.notable_players:
                         print(f"\n  {BOLD}Top scorers{RESET}")
-                        print(f"  {MUTED}{'Player':<26} {'Team':<26} {'PPG':>5}{RESET}")
+                        print(f"  {MUTED}{'Player':<{_PW(26)}} {'Team':<{_TW(26)}} {'PPG':>5}{RESET}")
                         divider()
                         for pname, tname, ppg in latest.notable_players:
-                            print(f"  {pname:<26} {MUTED}{tname:<26}{RESET}  {ppg:>5.1f}")
+                            print(f"  {pname:<{_PW(26)}} {MUTED}{tname:<{_TW(26)}}{RESET}  {ppg:>5.1f}")
 
                     print(f"\n  {BOLD}All-time {r.short_name} champions{RESET}")
                     for rec in r.season_records:
@@ -5677,14 +5736,14 @@ class CommissionerGame:
             pool = league._coaching_pool
             print(f"\n  {BOLD}Available coaches  ({len(pool)} in pool){RESET}")
             divider()
-            print(f"  {'#':>2}  {'Name':<22} {'Archetype':<22} {'Rating':<18} {'Fit':<16} {'Bio'}")
+            print(f"  {'#':>2}  {'Name':<{_CW(22)}} {'Archetype':<22} {'Rating':<18} {'Fit':<16} {'Bio'}")
             print(f"  {'─'*2}  {'─'*22} {'─'*22} {'─'*18} {'─'*16} {'─'*12}")
             for i, c in enumerate(pool, 1):
                 arch_lbl = _ARCH_SHORT.get(c.archetype, c.archetype)
                 arch_c   = _arch_color(c.archetype)
                 bio      = f"Former player ({c.former_team_name})" if c.former_player else "Lifer coach"
                 fit_lbl  = _fit_label(c, team)
-                print(f"  {i:>2}  {c.name:<22} {arch_c}{arch_lbl:<22}{RESET} "
+                print(f"  {i:>2}  {c.name:<{_CW(22)}} {arch_c}{arch_lbl:<22}{RESET} "
                       f"{_stars(c.rating):<18} {fit_lbl:<16} {MUTED}{bio}{RESET}")
 
             # ── Commissioner choice ───────────────────────────────────────────
@@ -5921,7 +5980,7 @@ class CommissionerGame:
                 ppg_s  = (f"  {MUTED}{ps.ppg:.1f} PPG  {ps.rpg:.1f} RPG  {ps.spg:.1f} SPG  {ps.bpg:.1f} BPG{RESET}"
                           if (ps and ps.games > 0) else "")
                 age_s  = f"Age {p.age}"
-                print(f"  {tc}{'★' if p.ceiling_tier==TIER_ELITE else '·'}  {p.name:<22}{RESET}"
+                print(f"  {tc}{'★' if p.ceiling_tier==TIER_ELITE else '·'}  {p.name:<{_PW(22)}}{RESET}"
                       f"  {p.position}  {age_s}{ppg_s}")
             if retiring_others:
                 print(f"  {MUTED}  + {retiring_others} other player{'s' if retiring_others != 1 else ''} retired{RESET}")
@@ -5933,7 +5992,7 @@ class CommissionerGame:
                 tc    = GOLD if p.ceiling_tier == TIER_ELITE else CYAN
                 tier_s = "Elite ceiling" if p.ceiling_tier == TIER_ELITE else "High ceiling"
                 tname  = t.franchise_at(sn + 1).name if t else "—"
-                print(f"  {tc}{'⭐' if p.ceiling_tier==TIER_ELITE else '◆'}  {p.name:<22}{RESET}"
+                print(f"  {tc}{'⭐' if p.ceiling_tier==TIER_ELITE else '◆'}  {p.name:<{_PW(22)}}{RESET}"
                       f"  {p.position} · Age {p.age}"
                       f"  →  {tname}"
                       f"  {MUTED}{tier_s}{RESET}")
@@ -5947,7 +6006,7 @@ class CommissionerGame:
                 new_name = new_t.franchise_at(sn + 1).nickname
                 slot_lbl = "Star" if p.ceiling_tier == TIER_ELITE else "Co-Star"
                 mot_c    = GREEN if p.motivation == MOT_WINNING else (GOLD if p.motivation == MOT_MARKET else CYAN)
-                print(f"  {tc}{p.name:<22}{RESET}  {MUTED}{slot_lbl}{RESET}"
+                print(f"  {tc}{p.name:<{_PW(22)}}{RESET}  {MUTED}{slot_lbl}{RESET}"
                       f"  {old_name}  →  {new_name}"
                       f"  {MUTED}({mot_c}{p.motivation}{RESET}{MUTED}){RESET}")
 
@@ -5965,7 +6024,7 @@ class CommissionerGame:
                     new_s = f"{CYAN}{new_coach.name}{RESET}  {MUTED}({arch}){RESET}"
                 else:
                     new_s = f"{MUTED}— vacant{RESET}"
-                print(f"  {tname:<28}  {old_s}  →  {new_s}")
+                print(f"  {tname:<{_TW(28)}}  {old_s}  →  {new_s}")
 
         # e) Ownership changes
         if owner_changes:
@@ -5973,7 +6032,7 @@ class CommissionerGame:
             for t, old_name, new_name in owner_changes:
                 tname = t.franchise_at(sn).name
                 mot_s = f"  {MUTED}{t.owner.motivation} · {t.owner.loyalty}{RESET}" if t.owner else ""
-                print(f"  {tname:<28}  {MUTED}{old_name or '—'}{RESET}  →  {BOLD}{new_name or '—'}{RESET}{mot_s}")
+                print(f"  {tname:<{_TW(28)}}  {MUTED}{old_name or '—'}{RESET}  →  {BOLD}{new_name or '—'}{RESET}{mot_s}")
 
         # f) Rule changes
         if rule_changed:
@@ -6090,7 +6149,7 @@ class CommissionerGame:
                 draw_str = f"{draw_c}{draw:>+.2f}{RESET} {MUTED}{arch_short}{RESET}"
             else:
                 draw_str = f"{MUTED}  no coach{RESET}"
-            print(f"  {CYAN}[{i}]{RESET} {t.franchise_at(sn).name:<28}  "
+            print(f"  {CYAN}[{i}]{RESET} {t.franchise_at(sn).name:<{_TW(28)}}  "
                   f"{t.franchise.effective_metro:>6.1f}  {net:>+5.1f}  {pct:>4.0f}%  "
                   f"  {draw_str:<10}  "
                   f"{MUTED}{league.teams[0].slot_label(slot)} slot open{RESET}")
@@ -6110,11 +6169,11 @@ class CommissionerGame:
         handlers = []
         for i, t in enumerate(dest_list[:3], 1):
             if can_nudge:
-                options.append(f"Nudge → {t.franchise_at(sn).name:<24}  "
+                options.append(f"Nudge → {t.franchise_at(sn).name:<{_TW(24)}}  "
                                 f"{MUTED}Cost: ${NUDGE_COST:.0f}M  Leg: -{NUDGE_LEG:.0%}{RESET}")
                 handlers.append(("nudge", t))
             if can_rig:
-                options.append(f"{RED}Rig{RESET}   → {t.franchise_at(sn).name:<24}  "
+                options.append(f"{RED}Rig{RESET}   → {t.franchise_at(sn).name:<{_TW(24)}}  "
                                 f"{MUTED}Cost: ${RIG_COST:.0f}M  Leg: -{RIG_LEG:.0%}{RESET}")
                 handlers.append(("rig", t))
         options.append(f"{MUTED}No intervention — let it play out{RESET}")
@@ -6220,13 +6279,13 @@ class CommissionerGame:
 
         # Show prospects
         tier_colors = {TIER_ELITE: GOLD, TIER_HIGH: CYAN, TIER_MID: "", TIER_LOW: MUTED}
-        print(f"  {'#':>2}  {'Name':<22} {'Pos':<6} {'Age':>3}  {'Ceiling':<7}  "
+        print(f"  {'#':>2}  {'Name':<{_PW(22)}} {'Pos':<6} {'Age':>3}  {'Ceiling':<7}  "
               f"{'ORtg':>5}  {'DRtg':>5}  {'Zone':<6}  Motivation")
         divider()
         for i, p in enumerate(league.draft_pool, 1):
             tc  = tier_colors.get(p.ceiling_tier, "")
             gen = f" {GOLD}★{RESET}" if getattr(p, 'generational', False) else ""
-            print(f"  {i:>2}. {tc}{p.name:<22}{RESET}{gen} {p.position:<6} {p.age:>3}  "
+            print(f"  {i:>2}. {tc}{p.name:<{_PW(22)}}{RESET}{gen} {p.position:<6} {p.age:>3}  "
                   f"{tc}{p.ceiling_tier:<7}{RESET}  "
                   f"{p.ortg_contrib:>+5.1f}  {p.drtg_contrib:>+5.1f}  "
                   f"{p.preferred_zone:<6}  {p.motivation}")
@@ -6237,7 +6296,7 @@ class CommissionerGame:
         for i, t in enumerate(picking_teams, 1):
             empty_slots = [t.slot_label(j) for j, s in enumerate(t.roster) if s is None]
             tank_flag = f"  {RED}[TANKED]{RESET}" if t.team_id in tanking_ids else ""
-            print(f"  {i:>2}. {t.franchise_at(sn).name:<28}  "
+            print(f"  {i:>2}. {t.franchise_at(sn).name:<{_TW(28)}}  "
                   f"{MUTED}open: {', '.join(empty_slots)}{RESET}{tank_flag}")
 
         # Lottery influence — supports up to 2 rig actions in a gen draft
@@ -6285,7 +6344,7 @@ class CommissionerGame:
                     team.roster[slot_idx]         = pick
                     signed.append(pick)
                     tc = tier_colors.get(pick.ceiling_tier, "")
-                    print(f"  {team.franchise_at(sn).name:<28}  selects  "
+                    print(f"  {team.franchise_at(sn).name:<{_TW(28)}}  selects  "
                           f"{tc}{pick.name}{RESET}  "
                           f"{MUTED}({pick.position} · {pick.ceiling_tier} ceiling){RESET}")
                     break
@@ -6423,7 +6482,7 @@ class CommissionerGame:
                 if ps:
                     point_counts[tn] = point_counts.get(tn, 0) + ps.points
                 if s.champion:
-                    champ_nick = s.champion.franchise_at(s.number).nickname[:16]
+                    champ_nick = s.champion.franchise_at(s.number).nickname
                     if champ_nick == tn:
                         champ_counts[tn] = champ_counts.get(tn, 0) + 1
         if not team_order:
@@ -7052,7 +7111,7 @@ class CommissionerGame:
 
         # ── Display struggling teams ──────────────────────────────────────────
         print(f"\n  {len(all_recipients)} team(s) could benefit from support:\n")
-        print(f"  {'Team':<28} {'Owner':<22} {'P&L':>8}  {'Eng':>5}  {'Mood':>6}  Reason")
+        print(f"  {'Team':<{_TW(28)}} {'Owner':<{_OW(22)}} {'P&L':>8}  {'Eng':>5}  {'Mood':>6}  Reason")
         divider()
         for t in sorted(all_recipients,
                         key=lambda t: t.owner.last_net_profit if t.owner else 0):
@@ -7068,7 +7127,7 @@ class CommissionerGame:
                 reason = f"{GOLD}owner crisis{RESET}"
             p_c = RED if o.last_net_profit < 0 else MUTED
             h_c = RED if o.happiness < 0.40 else (GOLD if o.happiness < 0.55 else MUTED)
-            print(f"  {t.franchise_at(sn).name[:26]:<28} {o.name[:20]:<22} "
+            print(f"  {t.franchise_at(sn).name:<{_TW(28)}} {o.name:<{_OW(22)}} "
                   f"{p_c}{o.last_net_profit:>+7.1f}M{RESET}  "
                   f"{t.market_engagement:>4.0%}  "
                   f"{h_c}{o.happiness:>5.0%}{RESET}  {reason}")
@@ -7143,7 +7202,7 @@ class CommissionerGame:
             o.happiness = min(1.0, o.happiness + hap_boost)
             if o.threat_level == THREAT_LEAN and hap_boost >= 0.04:
                 o._seasons_unhappy = max(0, o._seasons_unhappy - 1)
-            print(f"  {t.franchise_at(sn).name[:26]:<28} {MUTED}receives{RESET} "
+            print(f"  {t.franchise_at(sn).name:<{_TW(28)}} {MUTED}receives{RESET} "
                   f"{GREEN}+${share:.1f}M{RESET}  "
                   f"{MUTED}owner mood +{hap_boost:.0%}{RESET}")
 
@@ -7830,7 +7889,7 @@ class CommissionerGame:
             header("PLAYERS' MEETING", f"After Season {sn}")
 
             if reps:
-                print(f"\n  {MUTED}{'':4}{'Player':<22} {'Team':<22} {'Mot':<4} "
+                print(f"\n  {MUTED}{'':4}{'Player':<{_PW(22)}} {'Team':<{_TW(22)}} {'Mot':<4} "
                       f"{'Mood':<10} {'Ctr':>4}  Ask{RESET}\n")
             else:
                 print(f"\n  {MUTED}No elite or high-tier players in the league yet.{RESET}\n")
@@ -7860,7 +7919,7 @@ class CommissionerGame:
                 elif player.happiness >= 0.40:  n_restless += 1
                 else:                           n_unhappy  += 1
 
-                print(f"  {CYAN}[{i}]{RESET} {player.name:<22} {team.name:<22} "
+                print(f"  {CYAN}[{i}]{RESET} {player.name:<{_PW(22)}} {team.name:<{_TW(22)}} "
                       f"{MUTED}{mot_str:<4}{RESET} "
                       f"{mood_c}{mood_str:<10}{RESET} "
                       f"{ctr_str} {exp_tag}  {ask_str}")
@@ -8904,7 +8963,7 @@ class CommissionerGame:
             grudge     = league.market_grudges.get(f.city, 0.0)
             grudge_note = (f"  {RED}⚠ grudge {grudge:.0%}{RESET}" if grudge > 0 else "")
             dest_opts.append(
-                f"{pref_star} {f.name:<28} {MUTED}mkt {f.effective_metro:.1f}  draw {f.draw_factor:.2f}{RESET}"
+                f"{pref_star} {f.name:<{_TW(28)}} {MUTED}mkt {f.effective_metro:.1f}  draw {f.draw_factor:.2f}{RESET}"
                 f"{grudge_note}"
             )
 
@@ -8917,6 +8976,7 @@ class CommissionerGame:
             old_city      = team.franchise.city
             old_metro     = team.franchise.effective_metro
             league.reserve_pool.remove(new_franchise)
+            new_franchise = self._name_moving_franchise(new_franchise)
             old_franchise = team.relocate(new_franchise, sn + 1)
             league.reserve_pool.append(old_franchise)
             league.relocation_log.append((
@@ -9096,7 +9156,7 @@ class CommissionerGame:
                 pers = "steady" if b.personality == "steady" else f"{GOLD}renegade{RESET}"
                 mot_c = (GREEN if b.motivation == OWNER_MOT_WINNING else
                          GOLD  if b.motivation == MOT_MONEY else CYAN)
-                print(f"  {CYAN}[{i}]{RESET} {b.name:<26} {mot_c}{b.motivation_label():<12}{RESET} "
+                print(f"  {CYAN}[{i}]{RESET} {b.name:<{_OW(26)}} {mot_c}{b.motivation_label():<12}{RESET} "
                       f"{pers:<20}  {lok}")
 
             choice = choose([f"Choose buyer {i+1}" for i in range(3)],
@@ -9117,27 +9177,37 @@ class CommissionerGame:
             press_enter()
 
     def _pick_team_nickname(self, franchise):
-        """If the franchise has nickname options, let the commissioner choose one.
+        """Let the commissioner name a team that is joining, moving, or rebranding.
 
-        Returns the chosen nickname string, or None to leave the default unchanged.
-        Called interactively just before a new team is added.
+        Shows the franchise's current name, its other nickname options, and a
+        type-your-own choice. Enter keeps the current name. Returns the chosen
+        nickname string.
         """
-        options = getattr(franchise, 'nickname_options', [])
-        if not options:
-            return None
-        # Include the franchise's current default as the first option
+        options = list(getattr(franchise, 'nickname_options', []) or [])
         all_opts = [franchise.nickname] + [n for n in options if n != franchise.nickname]
-        clear_line = f"\n  {BOLD}{franchise.city}{RESET} — choose a team nickname:"
-        print(clear_line)
+        print(f"\n  {BOLD}{franchise.city}{RESET} — choose a team nickname:")
         for i, n in enumerate(all_opts, 1):
-            tag = f"  {MUTED}(current default){RESET}" if i == 1 else ""
-            print(f"  [{i}] {n}{tag}")
+            tag = f"  {MUTED}(current){RESET}" if i == 1 else ""
+            print(f"  [{i}] {franchise.city} {n}{tag}")
+        print(f"  {MUTED}[c]{RESET} Type your own")
         while True:
-            raw = prompt(f"Nickname choice [1–{len(all_opts)}, Enter = keep default]:")
+            raw = prompt(f"Pick 1–{len(all_opts)}, [c] to type your own, or Enter to keep:").strip()
             if raw == "":
                 return all_opts[0]
+            if raw.lower() == "c":
+                custom = _prompt_custom_nickname(franchise.city)
+                if custom:
+                    return custom
+                continue
             if raw.isdigit() and 1 <= int(raw) <= len(all_opts):
                 return all_opts[int(raw) - 1]
+
+    def _name_moving_franchise(self, franchise):
+        """Offer the naming choice for a team arriving in a new city."""
+        nickname = self._pick_team_nickname(franchise)
+        if nickname and nickname != franchise.nickname:
+            franchise = dataclasses.replace(franchise, nickname=nickname)
+        return franchise
 
     def _handle_expansion_format_prompt(self, season: Season, n_added: int = 0):
         """Offer a format review after an expansion wave fires, showing before/after impact."""
@@ -9212,7 +9282,7 @@ class CommissionerGame:
         print(f"  These franchises haven't hit the natural {cfg.relocation_threshold}-season "
               f"threshold yet,\n  but you can push the move now.\n")
         for t in at_risk:
-            print(f"  {RED}{t.franchise_at(sn).name:<30}{RESET}  "
+            print(f"  {RED}{t.franchise_at(sn).name:<{_TW(30)}}{RESET}  "
                   f"{MUTED}{t._consecutive_losing_seasons} losing seasons  "
                   f"pop {t.popularity:.0%}{RESET}")
 
@@ -9271,13 +9341,13 @@ class CommissionerGame:
         tier_colors = {TIER_ELITE: GOLD, TIER_HIGH: CYAN, TIER_MID: "", TIER_LOW: MUTED}
         players = [p for p in team.roster if p is not None]
         if players:
-            print(f"  {'Slot':<9} {'Player':<22} {'Pos':<5} {'ORtg':>5}  {'DRtg':>5}  Mood")
+            print(f"  {'Slot':<9} {'Player':<{_PW(22)}} {'Pos':<5} {'ORtg':>5}  {'DRtg':>5}  Mood")
             for idx, p in enumerate(team.roster):
                 lbl = team.slot_label(idx)
                 if p:
                     tc = tier_colors.get(p.ceiling_tier, "")
                     print(f"  {MUTED}{lbl:<9}{RESET}{happiness_emoji(p.happiness)} "
-                          f"{tc}{p.name:<22}{RESET} {p.position:<5} "
+                          f"{tc}{p.name:<{_PW(22)}}{RESET} {p.position:<5} "
                           f"{p.ortg_contrib:>+5.1f}  {p.drtg_contrib:>+5.1f}")
                 else:
                     print(f"  {MUTED}{lbl:<9} — empty{RESET}")
@@ -9296,7 +9366,7 @@ class CommissionerGame:
             grudge_note = (f"  {RED}⚠ grudge {grudge:.0%} — fans still bitter{RESET}"
                            if grudge > 0 else "")
             dest_opts.append(
-                f"{f.name:<28} {MUTED}mkt {f.effective_metro:.1f}  draw {f.draw_factor:.2f}{RESET}"
+                f"{f.name:<{_TW(28)}} {MUTED}mkt {f.effective_metro:.1f}  draw {f.draw_factor:.2f}{RESET}"
                 f"{size_note}{grudge_note}"
             )
         dest_opts.append(f"{MUTED}Do not relocate {fname}{RESET}")
@@ -9318,6 +9388,7 @@ class CommissionerGame:
         old_city       = team.franchise.city
         old_metro      = team.franchise.effective_metro
         league.reserve_pool.remove(new_franchise)
+        new_franchise = self._name_moving_franchise(new_franchise)
         old_franchise  = team.relocate(new_franchise, sn + 1)
         team.popularity *= (0.4 / 0.6)          # extra haircut: 40% total retention
         league.reserve_pool.append(old_franchise)
@@ -9401,13 +9472,13 @@ class CommissionerGame:
         tier_colors = {TIER_ELITE: GOLD, TIER_HIGH: CYAN, TIER_MID: "", TIER_LOW: MUTED}
         players = [p for p in team.roster if p is not None]
         if players:
-            print(f"  {'Slot':<9} {'Player':<22} {'Pos':<5} {'ORtg':>5}  {'DRtg':>5}  Mood")
+            print(f"  {'Slot':<9} {'Player':<{_PW(22)}} {'Pos':<5} {'ORtg':>5}  {'DRtg':>5}  Mood")
             for idx, p in enumerate(team.roster):
                 lbl = team.slot_label(idx)
                 if p:
                     tc = tier_colors.get(p.ceiling_tier, "")
                     print(f"  {MUTED}{lbl:<9}{RESET}{happiness_emoji(p.happiness)} "
-                          f"{tc}{p.name:<22}{RESET} {p.position:<5} "
+                          f"{tc}{p.name:<{_PW(22)}}{RESET} {p.position:<5} "
                           f"{p.ortg_contrib:>+5.1f}  {p.drtg_contrib:>+5.1f}")
                 else:
                     print(f"  {MUTED}{lbl:<9} — empty{RESET}")
@@ -9427,7 +9498,7 @@ class CommissionerGame:
             grudge_note = (f"  {RED}⚠ grudge {grudge:.0%} — fans still bitter{RESET}"
                            if grudge > 0 else "")
             dest_opts.append(
-                f"{f.name:<28} {MUTED}mkt {f.effective_metro:.1f}  draw {f.draw_factor:.2f}{RESET}"
+                f"{f.name:<{_TW(28)}} {MUTED}mkt {f.effective_metro:.1f}  draw {f.draw_factor:.2f}{RESET}"
                 f"{size_note}{grudge_note}"
             )
         # Surface any cities on relocation cooldown so commissioner knows why they're absent
@@ -9456,6 +9527,7 @@ class CommissionerGame:
             old_city       = team.franchise.city
             old_metro      = team.franchise.effective_metro
             league.reserve_pool.remove(new_franchise)
+            new_franchise = self._name_moving_franchise(new_franchise)
             old_franchise  = team.relocate(new_franchise, sn + 1)
             league.reserve_pool.append(old_franchise)
             league.relocation_log.append((
@@ -9513,7 +9585,7 @@ class CommissionerGame:
   Available markets  {MUTED}Market = relative size · Draw = climate/entertainment/marketability{RESET}
 """)
         top_candidates = candidates[:8]
-        print(f"  {'#':>4}  {'Franchise':<28} {'Market':>6}  {'Draw':>4}")
+        print(f"  {'#':>4}  {'Franchise':<{_TW(28)}} {'Market':>6}  {'Draw':>4}")
         divider()
         for i, f in enumerate(top_candidates, 1):
             metro = f.effective_metro
@@ -9529,9 +9601,9 @@ class CommissionerGame:
                     f"{MUTED}{incumbent.franchise_at(sn).name} {inc_pop:.0%}→{kept_pop:.0%} · "
                     f"new team starts ~{new_pop:.0%}{RESET}"
                 )
-                print(f"  {CYAN}[{i:2}]{RESET} {f.name:<28} {metro:>5.1f}  {f.draw_factor:>4.2f}{split_note}")
+                print(f"  {CYAN}[{i:2}]{RESET} {f.name:<{_TW(28)}} {metro:>5.1f}  {f.draw_factor:>4.2f}{split_note}")
             else:
-                print(f"  {CYAN}[{i:2}]{RESET} {f.name:<28} {metro:>5.1f}  {f.draw_factor:>4.2f}")
+                print(f"  {CYAN}[{i:2}]{RESET} {f.name:<{_TW(28)}} {metro:>5.1f}  {f.draw_factor:>4.2f}")
 
         print(f"\n  {CYAN}[ 0]{RESET} {MUTED}Skip expansion this season{RESET}")
         print(f"  {MUTED}Enter = auto-select {max_add} random market(s){RESET}")
@@ -9929,7 +10001,7 @@ class CommissionerGame:
         top = candidates[:suggested]
         for f in top:
             sec = f"  {MUTED}(shares {f.city}){RESET}" if f.secondary else ""
-            print(f"  • {f.name:<28} {MUTED}{f.city}, {f.effective_metro:.0f}{RESET}{sec}")
+            print(f"  • {f.name:<{_TW(28)}} {MUTED}{f.city}, {f.effective_metro:.0f}{RESET}{sec}")
 
         choice = choose([
             f"Accept merger ({suggested} teams absorbed)",

@@ -2659,6 +2659,7 @@ class League:
         self,
         action: str,            # "monitor" | "talent_war" | "legal" | "merger"
         season_num: int,
+        pick_nickname=None,     # optional callback(franchise) -> nickname for absorbed teams
     ) -> tuple[float, float, str]:
         """Apply a commissioner action against the rival. Returns (treasury_cost, legit_cost, summary).
 
@@ -2707,7 +2708,7 @@ class League:
             n_target = min(len(rival.teams), random.randint(2, 4))
             self._resolve_rival(season_num, resolution="brokered_merger")
             # Actually add teams from the reserve pool
-            absorbed = self._absorb_rival_teams(season_num, n_target)
+            absorbed = self._absorb_rival_teams(season_num, n_target, pick_nickname=pick_nickname)
             absorbed_str = ", ".join(absorbed) if absorbed else "no available markets"
             summary = (
                 f"Merger terms agreed. ${cost:.0f}M paid to dissolve the {rival_name}. "
@@ -2733,7 +2734,8 @@ class League:
             return "forced_merger"
         return None
 
-    def _absorb_rival_teams(self, season_num: int, n_target: int) -> list[str]:
+    def _absorb_rival_teams(self, season_num: int, n_target: int,
+                            pick_nickname=None) -> list[str]:
         """Add up to n_target teams from the reserve pool after a rival merger.
 
         Returns the list of franchise names actually added (may be fewer than
@@ -2744,9 +2746,10 @@ class League:
         joined = season_num + 1
         names = []
         for f in candidates[:n_add]:
-            self._add_merger_team(f, joined)
-            self.merger_log.append((season_num, f.name, f.secondary))
-            names.append(f.name)
+            nickname = pick_nickname(f) if pick_nickname else None
+            final = self._add_merger_team(f, joined, chosen_nickname=nickname).franchise
+            self.merger_log.append((season_num, final.name, final.secondary))
+            names.append(final.name)
         if names:
             self._last_merger_season = season_num
             self.league_popularity = min(1.0, self.league_popularity + self.cfg.merger_league_pop_boost)

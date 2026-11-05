@@ -288,7 +288,7 @@ class Season:
             if p is not None
         }
         self.player_teams: dict[int, str] = {
-            p.player_id: t.franchise_at(number).nickname[:16]
+            p.player_id: t.franchise_at(number).nickname
             for t in teams
             for p in t.roster
             if p is not None
