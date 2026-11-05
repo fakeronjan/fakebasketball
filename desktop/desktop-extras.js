@@ -34,6 +34,49 @@
     applySize();
   });
 
+  // ── Sound: opening jingle + event cues (jingle.js), Ctrl+M toggles ───────
+  const SOUND_KEY = 'fb_sound';
+  let soundOn = true;
+  try { soundOn = localStorage.getItem(SOUND_KEY) !== 'off'; } catch (_) {}
+  let actx = null;
+  let current = null;   // gain node of the cue that is playing
+  const play = (schedule) => {
+    if (!soundOn) return;
+    try {
+      if (!actx) actx = new AudioContext();
+      if (actx.state === 'suspended') actx.resume();
+      const now = actx.currentTime;
+      if (current) {   // a new cue cuts off the one still playing
+        current.gain.setValueAtTime(current.gain.value, now);
+        current.gain.linearRampToValueAtTime(0, now + 0.05);
+        const old = current;
+        setTimeout(() => old.disconnect(), 200);
+      }
+      const g = actx.createGain();
+      g.connect(actx.destination);
+      current = g;
+      schedule(actx, g, now + 0.03);
+    } catch (_) {}
+  };
+  window.fbPlaySound = (name) => play((c, d, t) => fbScheduleCue(c, d, t, name));
+  play((c, d, t) => fbScheduleJingle(c, d, t));
+
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;top:12px;right:16px;padding:6px 12px;'
+    + 'background:#262626;color:#d8d8d8;border:1px solid #3a3a3a;border-radius:4px;'
+    + "font:13px 'Cascadia Mono',monospace;opacity:0;transition:opacity .3s;pointer-events:none;z-index:10";
+  document.body.appendChild(toast);
+  let toastTimer = null;
+  window.fbDesktop.onSoundToggle(() => {
+    soundOn = !soundOn;
+    try { localStorage.setItem(SOUND_KEY, soundOn ? 'on' : 'off'); } catch (_) {}
+    if (!soundOn && current) { current.disconnect(); current = null; }
+    toast.textContent = soundOn ? 'Sound on' : 'Sound off';
+    toast.style.opacity = '1';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 1500);
+  });
+
   // ── Save before closing ───────────────────────────────────────────────────
   // The game's global "q" command saves and exits. Plain "press Enter" screens
   // don't listen for it, so keep answering "q" at each prompt until the game

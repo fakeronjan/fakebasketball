@@ -33,6 +33,9 @@ self.onmessage = async function (e) {
   /** Persist a base64-encoded save snapshot to the main thread → localStorage. */
   self.webSave = (b64) => postMessage({ type: 'save', data: String(b64) });
 
+  /** Ask the page to play a sound cue (the desktop build plays it; the web page ignores it). */
+  self.webSound = (name) => postMessage({ type: 'sound', name: String(name) });
+
   /**
    * Block this worker thread until the user presses Enter on the main thread.
    * Returns the typed line (without the trailing newline).

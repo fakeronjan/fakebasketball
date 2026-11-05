@@ -327,6 +327,17 @@ def _fe_read(meta: dict = None) -> str:
         if meta is not None:
             _fe_emit(meta)
 
+def play_sound(name: str) -> None:
+    """Ask the desktop app to play a cue (see desktop/jingle.js).
+
+    Only the browser/desktop builds define webSound; the plain terminal
+    version stays silent."""
+    try:
+        from js import webSound
+    except ImportError:
+        return
+    webSound(name)
+
 
 def prompt(msg: str) -> str:
     """Input helper. Intercepts 'quit'/'q' and 'reports'/'r' globally."""
@@ -1940,6 +1951,7 @@ class CommissionerGame:
             repeat = (len(self.league.seasons) >= 1
                       and self.league.seasons
                       and champ is getattr(self.league.seasons[-1], 'champion', None))
+            play_sound("champion")
             print(f"\n  {GOLD}{BOLD}🏆  {champ.franchise_at(sn).name} are champions!{RESET}", end="")
             if repeat:
                 print(f"  {GOLD}★ REPEAT{RESET}", end="")
@@ -5191,6 +5203,7 @@ class CommissionerGame:
         if just_spawned_a:
             clear()
             header("RIVAL LEAGUE", f"Season {sn} — Offseason Alert")
+            play_sound("rival")
             print(f"\n  {RED}{BOLD}A rival league has formed.{RESET}\n")
             print(f"  A group of investors has launched the {BOLD}{rival.name}{RESET} ({rival.short_name}).")
             print(f"  They have assembled {len(rival.teams)} franchise(s) across separate cities")
@@ -5204,6 +5217,7 @@ class CommissionerGame:
         if just_spawned_c:
             clear()
             header("PLAYER WALKOUT", f"Season {sn} — Crisis")
+            play_sound("womp")
             print(f"\n  {RED}{BOLD}The work stoppage has escalated.{RESET}\n")
             print(f"  Striking players have organized a barnstorming circuit —")
             print(f"  the {BOLD}{rival.name}{RESET} ({rival.short_name}).")
@@ -5249,6 +5263,7 @@ class CommissionerGame:
         if resolution == "forced_merger":
             clear()
             header("RIVAL LEAGUE", f"Season {sn} — Crisis")
+            play_sound("rival")
             print(f"\n  {RED}{BOLD}Forced merger — the {rival.name} negotiates from strength.{RESET}\n")
             print(f"  With your legitimacy critically low and the rival league dominant,")
             print(f"  you have no choice but to accept their terms.")
@@ -8366,6 +8381,7 @@ class CommissionerGame:
 
         elif atype == "political_bribery":
             clear(); header("SCANDAL — POLITICAL CORRUPTION", f"After Season {sn}")
+            play_sound("scandal")
             print(f"""
   {RED}{BOLD}BREAKING: {owner.name.upper()} PAID OFFICIALS FOR ARENA DEAL{RESET}
 
@@ -8400,6 +8416,7 @@ class CommissionerGame:
 
         elif atype == "personal_misconduct":
             clear(); header("SCANDAL — OWNER MISCONDUCT", f"After Season {sn}")
+            play_sound("scandal")
             incidents = [
                 (f"a recording has surfaced of {owner.name} making discriminatory remarks at a private event",
                  "The comments are circulating widely."),
@@ -8440,6 +8457,7 @@ class CommissionerGame:
 
         elif atype == "financial_fraud":
             clear(); header("SCANDAL — FINANCIAL FRAUD ALLEGATION", f"After Season {sn}")
+            play_sound("scandal")
             print(f"""
   {RED}{BOLD}ALLEGATION: {owner.name.upper()} — EMBEZZLEMENT{RESET}
 
@@ -8947,6 +8965,7 @@ class CommissionerGame:
 
         clear()
         header("RELOCATION — OWNER DEMAND", f"Season {sn}")
+        play_sound("womp")
 
         # Sort by owner preference
         if owner.motivation == MOT_MONEY:
@@ -9465,6 +9484,7 @@ class CommissionerGame:
 
         clear()
         header("RELOCATION REQUEST", f"Season {sn}")
+        play_sound("womp")
         _show_risk_reward("Low", "Medium", "Medium",
                           "Natural relocation: 60% popularity retained. Market will hold a grudge.")
 

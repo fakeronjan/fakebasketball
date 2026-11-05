@@ -280,6 +280,10 @@ worker.onmessage = function (e) {
       try { localStorage.setItem('fakebb_save', msg.data); } catch (_) {}
       break;
 
+    case 'sound':
+      if (window.fbPlaySound) window.fbPlaySound(msg.name);
+      break;
+
     case 'done':
       // Desktop (Electron) build: close the app when the game exits.
       if (window.fbDesktop) { window.fbDesktop.quit(); break; }

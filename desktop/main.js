@@ -93,6 +93,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       devTools: !app.isPackaged,
+      autoplayPolicy: 'no-user-gesture-required',   // opening jingle plays at launch
     },
   });
   if (saved.maximized) win.maximize();
@@ -128,6 +129,10 @@ function createWindow() {
     } else if (mod && input.key === '0') {
       e.preventDefault();
       win.webContents.send('fb:font', 0);
+    } else if (input.control && !input.alt && input.key.toLowerCase() === 'm') {
+      // Ctrl+M would otherwise reach the terminal as Enter
+      e.preventDefault();
+      win.webContents.send('fb:sound-toggle');
     }
   });
 

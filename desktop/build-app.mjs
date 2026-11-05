@@ -39,7 +39,7 @@ html = replaceOnce(html, 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib
 if (/https?:\/\/cdn\./.test(html)) throw new Error('index.html still references a CDN');
 // Bundled font (Cascadia Mono, SIL OFL 1.1) and desktop-only behavior.
 html = replaceOnce(html, '</head>', '  <link rel="stylesheet" href="vendor/fonts/cascadia-mono.css" />\n</head>', 'index.html');
-html = replaceOnce(html, '</body>', '<script src="desktop-extras.js"></script>\n</body>', 'index.html');
+html = replaceOnce(html, '</body>', '<script src="jingle.js"></script>\n<script src="desktop-extras.js"></script>\n</body>', 'index.html');
 fs.writeFileSync(path.join(out, 'index.html'), html);
 
 // Vendored runtime files.
@@ -65,5 +65,6 @@ for (const weight of ['400', '700']) {
 fs.writeFileSync(path.join(fontOut, 'cascadia-mono.css'), css);
 fs.copyFileSync(path.join(fontPkg, 'LICENSE'), path.join(fontOut, 'LICENSE-CascadiaMono.txt'));
 fs.copyFileSync(path.join(here, 'desktop-extras.js'), path.join(out, 'desktop-extras.js'));
+fs.copyFileSync(path.join(here, 'jingle.js'), path.join(out, 'jingle.js'));
 
 console.log(`app/ built: ${pyList.length} game files + Pyodide + xterm.js`);
